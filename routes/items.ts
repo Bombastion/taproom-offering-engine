@@ -18,9 +18,8 @@ export class ItemsRoutes {
 
     this.router.get("/:itemId", (req: Request, res: Response) => {
       const result = this.dataProvider.getItem(parseInt(req.params.itemId))
-      console.log(result);
       if (result !== null) {
-        res.send(this.dataProvider.getItem(parseInt(req.params.itemId)));
+        res.send(result);
         return
       }
       res.sendStatus(404);

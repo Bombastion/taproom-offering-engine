@@ -16,7 +16,13 @@ export class ContainersRoutes {
     });
 
     this.router.get("/:containerId", (req: Request, res: Response) => {
-        res.send(this.dataProvider.getContainer(parseInt(req.params.containerId)));
+      const result = this.dataProvider.getContainer(parseInt(req.params.containerId));
+      if (result !== null) {
+        res.send(result);
+        return
+      }
+      res.sendStatus(404);
+      return
     });
   }
 }
