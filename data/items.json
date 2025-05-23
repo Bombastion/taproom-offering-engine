@@ -1,10 +1,11 @@
 [
     {
         "id": 1,
-        "name": "Zy Light",
+        "internalName": "Zy Light",
+        "displayName": "Zy Light",
         "brewery": "Zymos Brewing",
         "style": "Light Lager",
-        "abv": "4.5",
+        "abv": 4.5,
         "description": "Light, refreshing, and crushable. A perfect easy drinker. Gluten removed",
         "category": "beer",
         "containers": [1, 2, 3]

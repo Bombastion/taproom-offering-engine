@@ -7,6 +7,7 @@ export class MenuItem {
     style: string;
     abv: number;
     description: string;
+    // Which menu this should appear on, e.g., "beer", "NA", or "snacks"
     category: string;
     // Array of IDs to container objects
     containers: Array<number>;

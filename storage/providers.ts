@@ -4,7 +4,10 @@ import { MenuItem } from "../models/items";
 
 
 export abstract class DataProvider {
+    abstract addContainer(container: ItemContainer): ItemContainer;
     abstract getContainer(id: number): ItemContainer | null;
+    
+    abstract addItem(item: MenuItem): MenuItem;
     abstract getItem(id: number): MenuItem | null;
 }
 
@@ -31,8 +34,8 @@ export class LocalDataProvider extends DataProvider {
                     const data = fs.readFileSync(`${this.dataFolder}/${file}`, "utf-8");
                     const parsedData = JSON.parse(data);
                     const itemsMap = this._cache.get(this.ITEMS_KEY)!;
-                    parsedData.forEach((entry: { id: number; internalName: string; displayName: string; brewery: string; style: string; abv: number; description: string; menuCategory: string; containers: number[]; }) => {
-                        const newItem = new MenuItem(entry.id, entry.internalName, entry.displayName, entry.brewery, entry.style, entry.abv, entry.description, entry.menuCategory, entry.containers);
+                    parsedData.forEach((entry: { id: number; internalName: string; displayName: string; brewery: string; style: string; abv: number; description: string; category: string; containers: number[]; }) => {
+                        const newItem = new MenuItem(entry.id, entry.internalName, entry.displayName, entry.brewery, entry.style, entry.abv, entry.description, entry.category, entry.containers);
                         itemsMap.set(newItem.id, newItem);
                     });
                 }
@@ -49,11 +52,50 @@ export class LocalDataProvider extends DataProvider {
         }
     }
 
+    getLatestIdForMap(map: Map<number, any>): number {
+        let highestKey = 0;
+        for (const key of map.keys()) {
+            if (key > highestKey) {
+                highestKey = key;
+            }
+        }
+        return highestKey + 1;
+    }
+
+    addGeneric(toAdd: any, mapName: string): any {
+        /*
+            Adds a new item to the given map and returns the updated item with a new ID
+        */
+        const addMap = this._cache.get(mapName)!;
+        const newId = this.getLatestIdForMap(addMap);
+        toAdd.id = newId;
+        addMap.set(toAdd.id, toAdd);
+
+        return toAdd;
+    }
+
+    getGeneric(id: number, mapName: string): any {
+        const result = this._cache.get(mapName)!.get(id);
+        if (!result) {
+            return null;
+        }
+
+        return result;
+    }
+
+    addContainer(container: ItemContainer): ItemContainer {
+        return this.addGeneric(container, this.CONTAINERS_KEY);
+    }
+
     getContainer(id: number): ItemContainer | null {
-        return this._cache.get(this.CONTAINERS_KEY)!.get(id);
+        return this.getGeneric(id, this.CONTAINERS_KEY);
+    }
+
+    addItem(item: MenuItem): MenuItem {
+        return this.addGeneric(item, this.ITEMS_KEY);
     }
 
     getItem(id: number): MenuItem | null {
-        return this._cache.get(this.ITEMS_KEY)!.get(id);
+        return this.getGeneric(id, this.ITEMS_KEY);
     }
 }
