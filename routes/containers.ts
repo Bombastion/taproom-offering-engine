@@ -1,4 +1,4 @@
-import express, { Request, Response } from 'express';
+import { Request, Response } from 'express';
 import Routes from './common';
 import { ItemContainer } from '../models/containers';
 

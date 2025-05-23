@@ -34,8 +34,8 @@ export class LocalDataProvider extends DataProvider {
                     const data = fs.readFileSync(`${this.dataFolder}/${file}`, "utf-8");
                     const parsedData = JSON.parse(data);
                     const itemsMap = this._cache.get(this.ITEMS_KEY)!;
-                    parsedData.forEach((entry: { id: number; internalName: string; displayName: string; brewery: string; style: string; abv: number; description: string; menuCategory: string; containers: number[]; }) => {
-                        const newItem = new MenuItem(entry.id, entry.internalName, entry.displayName, entry.brewery, entry.style, entry.abv, entry.description, entry.menuCategory, entry.containers);
+                    parsedData.forEach((entry: { id: number; internalName: string; displayName: string; brewery: string; style: string; abv: number; description: string; category: string; containers: number[]; }) => {
+                        const newItem = new MenuItem(entry.id, entry.internalName, entry.displayName, entry.brewery, entry.style, entry.abv, entry.description, entry.category, entry.containers);
                         itemsMap.set(newItem.id, newItem);
                     });
                 }
