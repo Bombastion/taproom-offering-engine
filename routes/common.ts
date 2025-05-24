@@ -17,8 +17,9 @@ abstract class Routes {
     Generically validates inputs.
     Specifically, makes sure that all the keys of requiredFieldsAndTypes are provided, and that the values on req.body
     are the correct types based on the corresponding values in the Record object
+    Updates the response with the appropriate status and errors as a side-effect
 
-    Returns: false if an error was found, true otherwise
+    Returns: false if an error was found, true otherwise.
     */
     let missingFields: Array<string> = [];
     let badTypes: Array<string> = [];

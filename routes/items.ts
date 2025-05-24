@@ -1,11 +1,12 @@
 import { Request, Response } from 'express';
 import Routes from './common';
-import { DataProvider } from "../storage/providers";
-import { MenuItem } from '../models/items';
+import { Item } from '../models/items';
 
 
 export class ItemsRoutes extends Routes {
   registerRoutes(): void {
+    // TODO: This should probably be a paginated list of all items.
+    // Copy/paste that thought to all routes
     this.router.get("/", (_req: Request, res: Response) => {
       res.send("Look at all the beer!");
     });
@@ -35,7 +36,7 @@ export class ItemsRoutes extends Routes {
         return;
       }
 
-      let item = new MenuItem(
+      let item = new Item(
         0,
         req.body.internalName,
         req.body.displayName,
@@ -44,7 +45,6 @@ export class ItemsRoutes extends Routes {
         req.body.abv,
         req.body.description,
         req.body.category,
-        []
       );
       item = this.dataProvider.addItem(item);
 
