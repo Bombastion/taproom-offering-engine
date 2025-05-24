@@ -1,5 +1,5 @@
 import express, { Request, Response } from 'express';
-import { ContainersRoutes } from './routes/containers';
+import { ContainersRoutes, SaleContainersRoutes } from './routes/containers';
 import { ItemsRoutes } from './routes/items';
 import { LocalDataProvider } from './storage/providers';
 
@@ -19,4 +19,5 @@ app.listen(port, () => {
 // Register routers
 const dataProvider = new LocalDataProvider("./data/");
 app.use('/containers', new ContainersRoutes(dataProvider).router)
+app.use('/sale-containers', new SaleContainersRoutes(dataProvider).router)
 app.use('/items', new ItemsRoutes(dataProvider).router);

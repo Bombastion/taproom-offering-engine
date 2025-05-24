@@ -2,19 +2,16 @@
     {
         "id": 1, 
         "containerName": "Libbey Napoli",
-        "displayName": "Full Pour",
-        "price": 5
+        "displayName": "Full Pour"
     },
     {
         "id": 2, 
         "containerName": "Taster",
-        "displayName": "Taster",
-        "price": 3
+        "displayName": "Taster"
     },
     {
         "id": 3, 
         "containerName": "Crowler",
-        "displayName": "32oz Crowler To-Go",
-        "price": 12
+        "displayName": "32oz Crowler To-Go"
     }
 ]
