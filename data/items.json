@@ -3,10 +3,20 @@
         "id": 1,
         "internalName": "Zy Light",
         "displayName": "Zy Light",
-        "brewery": "Zymos Brewing",
+        "breweryId": 1,
         "style": "Light Lager",
         "abv": 4.5,
         "description": "Light, refreshing, and crushable. A perfect easy drinker. Gluten removed",
+        "category": "beer"
+    },
+    {
+        "id": 2,
+        "internalName": "Home By Sunrise",
+        "displayName": "Home By Sunrise",
+        "breweryId": 1,
+        "style": "Amber Ale",
+        "abv": 5,
+        "description": "Malt lovers rejoice!. Out amber ale is full of malt goodness with a touch of caramel sweetness. It's a fan favorite (it's Alex's favorite too!) Gluten removed",
         "category": "beer"
     }
 ]

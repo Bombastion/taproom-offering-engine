@@ -10,4 +10,8 @@ export class Brewery {
         this.name = name;
         this.defaultLogo = b64EncodedLogo;
     }
+
+    static fromJsonEntry(entry: any): Brewery {
+        return new Brewery(entry.id, entry.name, entry.b64EncodedLogo);
+    }
 }

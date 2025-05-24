@@ -9,6 +9,10 @@ export class Menu {
         this.internalName = internalName;
         this.displayName = displayName;
     }
+
+    static fromJsonEntry(entry: any): Menu {
+        return new Menu(entry.id, entry.internalName, entry.displayName);
+    }
 }
 
 // A particular sub-heading on a menu. Used to organize items within a menu
@@ -16,11 +20,17 @@ export class SubMenu {
     id: number;
     internalName: string;
     displayName: string;
+    menuId: number;
     
-    constructor(id: number, internalName: string, displayName: string) {
+    constructor(id: number, internalName: string, displayName: string, menuId: number) {
         this.id = id;
         this.internalName = internalName;
         this.displayName = displayName;
+        this.menuId = menuId;
+    }
+
+    static fromJsonEntry(entry: any): SubMenu {
+        return new SubMenu(entry.id, entry.internalName, entry.displayName, entry.menuId);
     }
 }
 
@@ -38,5 +48,9 @@ export class MenuItem {
         this.itemId = itemId;
         this.subMenuId = subMenuId;
         this.itemLogo = itemLogo;
+    }
+
+    static fromJsonEntry(entry: any): MenuItem {
+        return new MenuItem(entry.id, entry.menuId, entry.itemId, entry.subMenuId, entry.itemLogo);
     }
 }
