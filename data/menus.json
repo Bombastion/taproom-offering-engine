@@ -1,0 +1,12 @@
+[
+    {
+        "id": 1,
+        "internalName": "beer",
+        "displayName": "On Tap"
+    },
+    {
+        "id": 2,
+        "internalName": "na",
+        "displayName": "Non-Alcoholic Options"
+    }
+]

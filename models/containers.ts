@@ -11,6 +11,10 @@ export class ItemContainer {
         this.containerName = containerName;
         this.displayName = displayName;
     }
+
+    static fromJsonEntry(entry: any): ItemContainer {
+        return new ItemContainer(entry.id, entry.containerName, entry.displayName);
+    }
 }
 
 // Represents a specific container of an item marked for sale
@@ -25,5 +29,9 @@ export class SaleContainer {
         this.containerId = containerId;
         this.itemId = itemId;
         this.price = price;
+    }
+
+    static fromJsonEntry(entry: any): SaleContainer {
+        return new SaleContainer(entry.id, entry.containerId, entry.itemId, entry.price);
     }
 }

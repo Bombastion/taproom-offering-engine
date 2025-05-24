@@ -1,9 +1,15 @@
 import fs from 'fs';
 import { ItemContainer, SaleContainer } from '../models/containers';
 import { Item } from "../models/items";
+import { Brewery } from '../models/breweries';
+import { Menu, MenuItem, SubMenu } from '../models/menus';
+import { EntryType } from 'perf_hooks';
 
 
 export abstract class DataProvider {
+    abstract addBrewery(brewery: Brewery): Brewery;
+    abstract getBrewery(id: number): Brewery | null;
+
     abstract addContainer(container: ItemContainer): ItemContainer;
     abstract getContainer(id: number): ItemContainer | null;
 
@@ -14,12 +20,25 @@ export abstract class DataProvider {
 
     abstract addItem(item: Item): Item;
     abstract getItem(id: number): Item | null;
+
+    abstract addMenu(menu: Menu): Menu;
+    abstract getMenu(id: number): Menu | null;
+    
+    abstract addSubMenu(menu: SubMenu): SubMenu;
+    abstract getSubMenu(id: number): SubMenu | null;
+    
+    abstract addMenuItem(item: MenuItem): MenuItem;
+    abstract getMenuItem(id: number): MenuItem | null;
 }
 
 export class LocalDataProvider extends DataProvider {
+    BREWERIES_KEY = "breweries";
     CONTAINERS_KEY = "containers";
     SALE_CONTAINERS_KEY = "saleContainers";
     ITEMS_KEY = "items";
+    MENU_ITEMS_KEY = "menuItems";
+    MENUS_KEY = "menus";
+    SUBMENUS_KEY = "submenus";
 
     dataFolder: string;
     _cache: Map<string, Map<number, any>>;
@@ -28,44 +47,46 @@ export class LocalDataProvider extends DataProvider {
         super();
         this.dataFolder = dataFolder;
         this._cache = new Map;
+        this._cache.set(this.BREWERIES_KEY, new Map);
         this._cache.set(this.CONTAINERS_KEY, new Map);
         this._cache.set(this.SALE_CONTAINERS_KEY, new Map);
         this._cache.set(this.ITEMS_KEY, new Map);
+        this._cache.set(this.MENU_ITEMS_KEY, new Map);
+        this._cache.set(this.MENUS_KEY, new Map);
+        this._cache.set(this.SUBMENUS_KEY, new Map);
         this.loadFromFile();
+    }
+
+    handleListJsonImport(validFileNames: Array<string>, filename: string, objectConstructor: Function, addCallback: Function): void {
+        if (validFileNames.includes(filename)) {
+            const data = fs.readFileSync(`${this.dataFolder}/${filename}`, "utf-8");
+            const parsedData = JSON.parse(data);
+            parsedData.forEach((entry: any) => {
+                const newItem = objectConstructor(entry);
+                addCallback(newItem);
+            });
+        }
     }
 
     loadFromFile() {
         if (fs.existsSync(this.dataFolder)) {
             const filesInFolder = fs.readdirSync(this.dataFolder);
             // Data must be loaded in a particular order to account for join table logic
-            if (filesInFolder.includes("items.json")) {
-                const data = fs.readFileSync(`${this.dataFolder}/items.json`, "utf-8");
-                const parsedData = JSON.parse(data);
-                const itemsMap = this._cache.get(this.ITEMS_KEY)!;
-                parsedData.forEach((entry: { id: number; internalName: string; displayName: string; brewery: string; style: string; abv: number; description: string; category: string; containers: number[]; }) => {
-                    const newItem = new Item(entry.id, entry.internalName, entry.displayName, entry.brewery, entry.style, entry.abv, entry.description, entry.category);
-                    itemsMap.set(newItem.id, newItem);
-                });
-            }
-            if (filesInFolder.includes("containers.json")) {
-                const data = fs.readFileSync(`${this.dataFolder}/containers.json`, "utf-8");
-                const parsedData = JSON.parse(data);
-                const containersMap = this._cache.get(this.CONTAINERS_KEY)!;
-                parsedData.forEach((entry: { id: number, containerName: string, displayName: string }) => {
-                    const newItem = new ItemContainer(entry.id, entry.containerName, entry.displayName);
-                    containersMap.set(newItem.id, newItem);
-                });
-            }
-            if (filesInFolder.includes("saleContainers.json")) {
-                const data = fs.readFileSync(`${this.dataFolder}/saleContainers.json`, "utf-8");
-                const parsedData = JSON.parse(data);
-                const containersMap = this._cache.get(this.SALE_CONTAINERS_KEY)!;
-                parsedData.forEach((entry: { id: number, containerId: number, itemId: number, price: number }) => {
-                    const newItem = new SaleContainer(entry.id, entry.containerId, entry.itemId, entry.price);
-                    containersMap.set(newItem.id, newItem);
-                });
-            }
+            this.handleListJsonImport(filesInFolder, "breweries.json", Brewery.fromJsonEntry, this.addBrewery.bind(this));
+            this.handleListJsonImport(filesInFolder, "items.json", Item.fromJsonEntry, this.addItem.bind(this));
+            this.handleListJsonImport(filesInFolder, "containers.json", ItemContainer.fromJsonEntry, this.addContainer.bind(this));
+            this.handleListJsonImport(filesInFolder, "salesContainers.json", SaleContainer.fromJsonEntry, this.addSaleContainer.bind(this));
+            this.handleListJsonImport(filesInFolder, "menus.json", Menu.fromJsonEntry, this.addMenu.bind(this));
+            this.handleListJsonImport(filesInFolder, "subMenus.json", SubMenu.fromJsonEntry, this.addSubMenu.bind(this));
+            this.handleListJsonImport(filesInFolder, "menuItems.json", MenuItem.fromJsonEntry, this.addMenuItem.bind(this));
         }
+    }
+
+    getIdForAdd(map: Map<number, any>, existingId: number | null): number {
+        if (existingId !== 0 && existingId !== null){
+            return existingId;
+        }
+        return this.getLatestIdForMap(map);
     }
 
     getLatestIdForMap(map: Map<number, any>): number {
@@ -83,7 +104,7 @@ export class LocalDataProvider extends DataProvider {
             Adds a new item to the given map and returns the updated item with a new ID
         */
         const addMap = this._cache.get(mapName)!;
-        const newId = this.getLatestIdForMap(addMap);
+        const newId = this.getIdForAdd(addMap, toAdd.id);
         toAdd.id = newId;
         addMap.set(toAdd.id, toAdd);
 
@@ -105,6 +126,14 @@ export class LocalDataProvider extends DataProvider {
             return true;
         }
         return false;
+    }
+
+    addBrewery(brewery: Brewery): Brewery {
+        return this.addGeneric(brewery, this.BREWERIES_KEY);
+    }
+
+    getBrewery(id: number): Brewery | null {
+        return this.getGeneric(id, this.BREWERIES_KEY);
     }
 
     addContainer(container: ItemContainer): ItemContainer {
@@ -143,11 +172,51 @@ export class LocalDataProvider extends DataProvider {
     }
 
     addItem(item: Item): Item {
-        // TODO: Check for "name/brewery name" combo uniqueness
+        if (item.breweryId !== null && !this.idExists(item.breweryId, this.BREWERIES_KEY)) {
+            console.log(`TODO: Do an error here because ID ${item.breweryId} does not exist for breweries when adding ${item.id}`)
+        }
         return this.addGeneric(item, this.ITEMS_KEY);
     }
 
     getItem(id: number): Item | null {
         return this.getGeneric(id, this.ITEMS_KEY);
+    }
+
+    addMenu(menu: Menu): Menu {
+        return this.addGeneric(menu, this.MENUS_KEY);
+    }
+
+    getMenu(id: number): Menu | null {
+        return this.getGeneric(id, this.MENUS_KEY);
+    }
+
+    addSubMenu(menu: SubMenu): SubMenu {
+        if (!this.idExists(menu.menuId, this.MENUS_KEY)) {
+            console.log(`TODO: Do an error here because ID ${menu.menuId} does not exist for menus`);
+        }
+
+        return this.addGeneric(menu, this.SUBMENUS_KEY);
+    }
+
+    getSubMenu(id: number): SubMenu | null {
+        return this.getGeneric(id, this.SUBMENUS_KEY);
+    }
+
+    addMenuItem(item: MenuItem): MenuItem {
+        if (!this.idExists(item.menuId, this.MENUS_KEY)) {
+            console.log(`TODO: Do an error here because ID ${item.menuId} does not exist for menus`);
+        }
+        if (!this.idExists(item.itemId, this.ITEMS_KEY)) {
+            console.log(`TODO: Do an error here because ID ${item.menuId} does not exist for menus`);
+        }
+        if (item.subMenuId !== null && !this.idExists(item.itemId, this.ITEMS_KEY)) {
+            console.log(`TODO: Do an error here because ID ${item.menuId} does not exist for menus`);
+        }
+
+        return this.addGeneric(item, this.MENU_ITEMS_KEY);
+    }
+
+    getMenuItem(id: number): MenuItem | null {
+        return this.getGeneric(id, this.MENU_ITEMS_KEY);
     }
 }
