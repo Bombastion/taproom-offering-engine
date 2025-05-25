@@ -29,6 +29,7 @@ export abstract class DataProvider {
     
     abstract addMenuItem(item: MenuItem): MenuItem;
     abstract getMenuItem(id: number): MenuItem | null;
+    abstract getMenuItemsForMenu(menuId: number): Array<MenuItem>;
 }
 
 export class LocalDataProvider extends DataProvider {
@@ -218,5 +219,17 @@ export class LocalDataProvider extends DataProvider {
 
     getMenuItem(id: number): MenuItem | null {
         return this.getGeneric(id, this.MENU_ITEMS_KEY);
+    }
+
+    getMenuItemsForMenu(menuId: number): Array<MenuItem> {
+        const itemMap = this._cache.get(this.MENU_ITEMS_KEY)!;
+        const results: Array<MenuItem> = [];
+        itemMap.forEach((value: MenuItem) => {
+            if (value.menuId === menuId) {
+                results.push(value);
+            }
+        });
+
+        return results;
     }
 }

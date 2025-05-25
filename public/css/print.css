@@ -1,0 +1,20 @@
+body {
+  background-color: lightblue;
+}
+
+.header {
+  margin: auto;
+  width: 50%;
+  padding: 10px;
+  text-align: center;
+}
+
+.itemTable {
+    float: left;
+    width: 75%;
+    margin: auto;
+}
+
+.priceTable {
+    float: left;
+}
