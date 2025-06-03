@@ -4,20 +4,28 @@ html
   body
     div(class='header')
       h2 #{menuTitle}
-    div 
-      table(class='itemTable')
-        tr
-        - for (var x = 0; x < menuItems.length; x++)
-          tr
-            td #{menuItems[x].breweryName} * #{menuItems[x].displayName} * #{menuItems[x].style} * #{menuItems[x].abv}%
-          tr
-            td #{menuItems[x].description}
-      table(class='priceTable')
-        tr
-          th 32oz Crowler To-Go
-          th Full Pour
-          th Half Pour
-          th Taster
-
-      table(class='priceTable')
+    each subMenu in allDisplaySubMenus
+      div
+        h3(class='header') #{subMenu.menu.displayName}
+        - var items = subMenuToItemMap.get(subMenu.menu.id)
+        - var containers = subMenu.containerOptions
+        table(class='itemTable')
+          tr 
+            td
+            td
+              table
+                tr 
+                  each containerName in containers
+                    td #{containerName}
+          each item in items
+            tr 
+              td #{item.breweryName} * #{item.displayName} * #{item.style} * #{item.abv}% ABV
+              td
+                table
+                  tr
+                    each containerName in containers
+                      td #{item.containerDisplayNameToPrice.get(containerName)}
+            tr
+              td #{item.description}
+        table(class='priceTable')
     

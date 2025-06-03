@@ -21,16 +21,29 @@ export class SubMenu {
     internalName: string;
     displayName: string;
     menuId: number;
+    order: number;
     
-    constructor(id: number, internalName: string, displayName: string, menuId: number) {
+    constructor(id: number, internalName: string, displayName: string, menuId: number, order: number) {
         this.id = id;
         this.internalName = internalName;
         this.displayName = displayName;
         this.menuId = menuId;
+        this.order = order;
     }
 
     static fromJsonEntry(entry: any): SubMenu {
-        return new SubMenu(entry.id, entry.internalName, entry.displayName, entry.menuId);
+        return new SubMenu(entry.id, entry.internalName, entry.displayName, entry.menuId, entry.order);
+    }
+}
+
+export class DisplaySubMenu {
+    menu: SubMenu;
+    // Keeps track of which container options to display for a submenu
+    containerOptions: Array<string>;
+
+    constructor(menu: SubMenu, containerOptions: Array<string>) {
+        this.menu = menu;
+        this.containerOptions = containerOptions;
     }
 }
 
@@ -41,16 +54,38 @@ export class MenuItem {
     itemId: number;
     subMenuId: number | null;
     itemLogo: string | null;
+    order: number;
 
-    constructor(id: number, menuId: number, itemId: number, subMenuId: number | null, itemLogo: string | null) {
+    constructor(id: number, menuId: number, itemId: number, subMenuId: number | null, itemLogo: string | null, order: number) {
         this.id = id;
         this.menuId = menuId;
         this.itemId = itemId;
         this.subMenuId = subMenuId;
         this.itemLogo = itemLogo;
+        this.order = order;
     }
 
     static fromJsonEntry(entry: any): MenuItem {
-        return new MenuItem(entry.id, entry.menuId, entry.itemId, entry.subMenuId, entry.itemLogo);
+        return new MenuItem(entry.id, entry.menuId, entry.itemId, entry.subMenuId, entry.itemLogo, entry.order);
+    }
+}
+
+export class DisplayItem {
+    breweryName: string | null;
+    displayName: string;
+    style: string;
+    abv: number;
+    description: string;
+    order: number;
+    containerDisplayNameToPrice: Map<string, number>;
+
+    constructor(breweryName: string | null, displayName: string, style: string, abv: number, description: string, order: number, containerDisplayNameToPrice: Map<string, number>) {
+        this.breweryName = breweryName;
+        this.displayName = displayName;
+        this.style = style;
+        this.abv = abv;
+        this.description = description;
+        this.order = order;
+        this.containerDisplayNameToPrice = containerDisplayNameToPrice;
     }
 }

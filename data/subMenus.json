@@ -3,6 +3,7 @@
         "id": 1,
         "internalName": "light",
         "displayName": "Light & Crisp",
-        "menuId": 1
+        "menuId": 1,
+        "order": 1
     }
 ]
