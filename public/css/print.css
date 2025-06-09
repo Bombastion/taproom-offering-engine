@@ -1,16 +1,20 @@
 .header {
   margin: auto;
-  width: 50%;
+  width: 80%;
   padding: 10px;
   text-align: center;
 }
 
-.itemTable {
-    float: left;
-    width: 75%;
-    margin: auto;
+.subMenuHeader {
+  border-style: solid;
 }
 
-.priceTable {
-    float: left;
+.menuTable {
+  width: 100%;
+  display: block;
+}
+
+.menuContainer {
+  width: 100%;
+  margin: auto;
 }

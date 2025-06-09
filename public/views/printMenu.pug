@@ -2,30 +2,31 @@
 
 html
   body
-    div(class='header')
-      h2 #{menuTitle}
+    div
+      h2(class='header') #{menuTitle}
     each subMenu in allDisplaySubMenus
       div
-        h3(class='header') #{subMenu.menu.displayName}
+        h3(class='header subMenuHeader') #{subMenu.menu.displayName}
         - var items = subMenuToItemMap.get(subMenu.menu.id)
         - var containers = subMenu.containerOptions
-        table(class='itemTable')
-          tr 
-            td
-            td
-              table
+        div(class='menuContainer')
+          table(class='menuContainer')
+            tbody
+              tr 
+                td
+                td
+                  table(class='priceTable')
+                    tr 
+                      each containerName in containers
+                        th #{containerName}
+              each item in items
                 tr 
-                  each containerName in containers
-                    td #{containerName}
-          each item in items
-            tr 
-              td #{item.breweryName} * #{item.displayName} * #{item.style} * #{item.abv}% ABV
-              td
-                table
-                  tr
-                    each containerName in containers
-                      td #{item.containerDisplayNameToPrice.get(containerName)}
-            tr
-              td #{item.description}
-        table(class='priceTable')
+                  td #{item.breweryName} * #{item.displayName} * #{item.style} * #{item.abv}% ABV
+                  td
+                    table
+                      tr
+                        each containerName in containers
+                          td #{item.containerDisplayNameToPrice.get(containerName)}
+                tr
+                  td #{item.description}
     
