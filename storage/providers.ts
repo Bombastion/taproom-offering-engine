@@ -236,10 +236,10 @@ export class LocalDataProvider extends DataProvider {
             console.log(`TODO: Do an error here because ID ${item.menuId} does not exist for menus`);
         }
         if (!this.idExists(item.itemId, this.ITEMS_KEY)) {
-            console.log(`TODO: Do an error here because ID ${item.menuId} does not exist for menus`);
+            console.log(`TODO: Do an error here because ID ${item.itemId} does not exist for items`);
         }
         if (item.subMenuId !== null && !this.idExists(item.itemId, this.ITEMS_KEY)) {
-            console.log(`TODO: Do an error here because ID ${item.menuId} does not exist for menus`);
+            console.log(`TODO: Do an error here because ID ${item.subMenuId} does not exist for submenus`);
         }
 
         return this.addGeneric(item, this.MENU_ITEMS_KEY);
