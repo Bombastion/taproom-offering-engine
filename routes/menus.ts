@@ -50,10 +50,10 @@ export class MenusRoutes extends Routes {
           
           // Gather all the container names for this item
           const allSaleContainersForItem = this.dataProvider.getSaleContainersForItem(item.id);
-          const containerDisplayNameToPrice: Map<string, number> = new Map();
+          const containerDisplayNameToPrice: Map<string, string> = new Map();
           allSaleContainersForItem.forEach(saleContainer => {
             const containerInfo = this.dataProvider.getContainer(saleContainer.containerId)!;
-            containerDisplayNameToPrice.set(containerInfo.displayName, saleContainer.price);
+            containerDisplayNameToPrice.set(containerInfo.displayName, saleContainer.price.toLocaleString('en-US', { minimumFractionDigits: 2}));
 
             // Get the top level display names and orders for the sub menu we're on
             let displayNameToOrder;
@@ -102,7 +102,7 @@ export class MenusRoutes extends Routes {
           displaySubMenus.push(new DisplaySubMenu(menu, displayNames));
         });
 
-        res.render('printMenu', { menuTitle: result.displayName, allDisplaySubMenus: displaySubMenus, subMenuToItemMap: subMenuToItemMap });
+        res.render('printMenu', { menuLogo: result.logo, menuTitle: result.displayName, allDisplaySubMenus: displaySubMenus, subMenuToItemMap: subMenuToItemMap });
         return
       }
       

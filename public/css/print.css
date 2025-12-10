@@ -1,20 +1,71 @@
+@font-face {
+  font-family: 'Roboto Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url(https://cdn.jsdelivr.net/fontsource/fonts/roboto:vf@latest/latin-wght-normal.woff2) format('woff2-variations');
+  unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+
 .header {
   margin: auto;
-  width: 80%;
   padding: 10px;
   text-align: center;
 }
 
+.subMenuDiv{
+  width: 90%;
+  text-align: center;
+  margin: 0 auto;
+}
+
 .subMenuHeader {
   border-style: solid;
+  border-color: #949494;
+  font-family: 'Roboto Variable', sans-serif;
+  font-size: x-large;
+  color: #3f3f3f;
 }
 
-.menuTable {
+.itemTable {
   width: 100%;
+}
+
+.containerNameCell {
+  width: 100%;
+  margin-left: auto; 
+  margin-right: 0;
+}
+
+.containerNameSubTable {
+  width: 100%;
+  margin-left: auto; 
+  margin-right: 0;
+}
+
+.containerName, .containerPriceCell {
+  width: 25%;
+}
+
+.descriptionCell {
+  width: 95%;
+  margin-left: 0;
+}
+
+.containerPrices {
+  width: 100%;
+  text-align: center;
+}
+
+.containerPriceCell:before {
+   content: '$';
+}
+
+.menuLogo {
+  max-width: 8%;
+  height: auto;
+  text-align: center;
   display: block;
-}
-
-.menuContainer {
-  width: 100%;
-  margin: auto;
+  margin-left: auto;
+  margin-right: auto;
 }

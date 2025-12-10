@@ -3,15 +3,18 @@ export class Menu {
     id: number;
     internalName: string;
     displayName: string;
+    // A b64 string representing the logo
+    logo: string | null;
 
-    constructor(id: number, internalName: string, displayName: string) {
+    constructor(id: number, internalName: string, displayName: string, logo: string) {
         this.id = id;
         this.internalName = internalName;
         this.displayName = displayName;
+        this.logo = logo;
     }
 
     static fromJsonEntry(entry: any): Menu {
-        return new Menu(entry.id, entry.internalName, entry.displayName);
+        return new Menu(entry.id, entry.internalName, entry.displayName, entry.logo);
     }
 }
 
@@ -77,9 +80,9 @@ export class DisplayItem {
     abv: number;
     description: string;
     order: number;
-    containerDisplayNameToPrice: Map<string, number>;
+    containerDisplayNameToPrice: Map<string, string>;
 
-    constructor(breweryName: string | null, displayName: string, style: string, abv: number, description: string, order: number, containerDisplayNameToPrice: Map<string, number>) {
+    constructor(breweryName: string | null, displayName: string, style: string, abv: number, description: string, order: number, containerDisplayNameToPrice: Map<string, string>) {
         this.breweryName = breweryName;
         this.displayName = displayName;
         this.style = style;

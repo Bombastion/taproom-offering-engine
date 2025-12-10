@@ -3,30 +3,30 @@
 html
   body
     div
-      h2(class='header') #{menuTitle}
+      img(class='menuLogo' src='data:image;base64, ' + menuLogo)
     each subMenu in allDisplaySubMenus
-      div
+      div(class='subMenuDiv')
         h3(class='header subMenuHeader') #{subMenu.menu.displayName}
         - var items = subMenuToItemMap.get(subMenu.menu.id)
         - var containers = subMenu.containerOptions
-        div(class='menuContainer')
-          table(class='menuContainer')
+        div()
+          table(class='itemTable')
             tbody
               tr 
-                td
-                td
-                  table(class='priceTable')
+                td(class='descriptionCell')
+                td(class='containerNameCell')
+                  table(class='containerNameSubTable')
                     tr 
                       each containerName in containers
-                        th #{containerName}
+                        th(class='containerName') #{containerName}
               each item in items
                 tr 
-                  td #{item.breweryName} * #{item.displayName} * #{item.style} * #{item.abv}% ABV
+                  td(class='descriptionCell') #{item.breweryName} &bull; <b>#{item.displayName}</b> &bull; #{item.style} &bull; #{item.abv}% ABV
                   td
-                    table
+                    table(class='containerPrices')
                       tr
                         each containerName in containers
-                          td #{item.containerDisplayNameToPrice.get(containerName)}
+                          td(class='containerPriceCell') #{item.containerDisplayNameToPrice.get(containerName)}
                 tr
                   td #{item.description}
     
