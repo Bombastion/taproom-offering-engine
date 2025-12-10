@@ -77,7 +77,6 @@ export class MenusRoutes extends Routes {
           }
         });
 
-        // TODO: this stuff
         // For each submenu, gather all the price options
         const displaySubMenus: Array<DisplaySubMenu> = [];
         allSubMenus.forEach((menu: SubMenu) => {
