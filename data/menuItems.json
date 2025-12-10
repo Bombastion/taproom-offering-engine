@@ -3,11 +3,13 @@
         "id": 1,
         "menuId": 1,
         "itemId": 1,
-        "subMenuId": 1
+        "subMenuId": 1,
+        "order": 1
     },
     {
         "id": 2,
         "menuId": 1,
-        "itemId": 2
+        "itemId": 2,
+        "order": 1
     }
 ]

@@ -5,15 +5,18 @@ export class ItemContainer {
     containerName: string;
     // How we would like the container to show up in the system, e.g., "Full Pour" or "Taster"
     displayName: string;
+    // The order we'd like this to show up in columns on a menu, ascending
+    order: number;
 
-    constructor(id: number, containerName: string, displayName: string){
+    constructor(id: number, containerName: string, displayName: string, order: number){
         this.id = id;
         this.containerName = containerName;
         this.displayName = displayName;
+        this.order = order;
     }
 
     static fromJsonEntry(entry: any): ItemContainer {
-        return new ItemContainer(entry.id, entry.containerName, entry.displayName);
+        return new ItemContainer(entry.id, entry.containerName, entry.displayName, entry.order);
     }
 }
 

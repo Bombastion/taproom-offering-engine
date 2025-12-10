@@ -1,0 +1,32 @@
+<link rel="stylesheet" type="text/css" href="/print.css" />
+
+html
+  body
+    div
+      img(class='menuLogo' src='data:image;base64, ' + menuLogo)
+    each subMenu in allDisplaySubMenus
+      div(class='subMenuDiv')
+        h3(class='header subMenuHeader') #{subMenu.menu.displayName}
+        - var items = subMenuToItemMap.get(subMenu.menu.id)
+        - var containers = subMenu.containerOptions
+        div()
+          table(class='itemTable')
+            tbody
+              tr 
+                td(class='descriptionCell')
+                td(class='containerNameCell')
+                  table(class='containerNameSubTable')
+                    tr 
+                      each containerName in containers
+                        th(class='containerName') #{containerName}
+              each item in items
+                tr 
+                  td(class='descriptionCell') #{item.breweryName} &bull; <b>#{item.displayName}</b> &bull; #{item.style} &bull; #{item.abv}% ABV
+                  td
+                    table(class='containerPrices')
+                      tr
+                        each containerName in containers
+                          td(class='containerPriceCell') #{item.containerDisplayNameToPrice.get(containerName)}
+                tr
+                  td #{item.description}
+    

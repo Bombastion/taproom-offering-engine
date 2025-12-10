@@ -1,4 +1,5 @@
 import express, { Request, Response } from 'express';
+import path from 'path';
 import { ContainersRoutes, SaleContainersRoutes } from './routes/containers';
 import { ItemsRoutes } from './routes/items';
 import { LocalDataProvider } from './storage/providers';
@@ -17,6 +18,11 @@ app.get('/', (_req: Request, res: Response) => {
 app.listen(port, () => {
   console.log(`Server listening on port ${port}`);
 });
+
+// Setting up HTML rendering
+app.set('view engine', 'pug');
+app.set('views', './dist/public/views')
+app.use(express.static(path.join(__dirname, 'public', 'css')));
 
 // Register routers
 const dataProvider = new LocalDataProvider("./data/");
