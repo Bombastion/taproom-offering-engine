@@ -1,0 +1,7 @@
+version: '3.8'
+services:
+  taproom-offering-engine:
+    build:
+      dockerfile: ./build/app/Dockerfile
+    ports:
+      - "3000:3000"
