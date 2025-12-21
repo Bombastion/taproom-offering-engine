@@ -12,7 +12,7 @@ const port = process.env.TOE_SERVER_PORT || 3000;
 app.use(express.json()); // for parsing application/json
 
 app.get('/', (_req: Request, res: Response) => {
-  res.send('Hello World!');
+  res.render('index')
 });
 
 app.listen(port, () => {

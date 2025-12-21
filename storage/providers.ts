@@ -9,6 +9,7 @@ import { EntryType } from 'perf_hooks';
 export abstract class DataProvider {
     abstract addBrewery(brewery: Brewery): Brewery;
     abstract getBrewery(id: number): Brewery | null;
+    abstract getBreweries(): Array<Brewery>;
 
     abstract addContainer(container: ItemContainer): ItemContainer;
     abstract getContainer(id: number): ItemContainer | null;
@@ -124,6 +125,16 @@ export class LocalDataProvider extends DataProvider {
         return result;
     }
 
+    getGenericList(mapName: string): any {
+        // TODO: This needs to support pagination eventually
+        const result = this._cache.get(mapName)!.values();
+        if (!result) {
+            return [];
+        }
+
+        return [...result];
+    }
+
     idExists(id: number, mapName: string): boolean {
         const result = this.getGeneric(id, mapName);
         if (result !== null) {
@@ -138,6 +149,10 @@ export class LocalDataProvider extends DataProvider {
 
     getBrewery(id: number): Brewery | null {
         return this.getGeneric(id, this.BREWERIES_KEY);
+    }
+
+    getBreweries(): Array<Brewery> {
+        return this.getGenericList(this.BREWERIES_KEY);
     }
 
     addContainer(container: ItemContainer): ItemContainer {
