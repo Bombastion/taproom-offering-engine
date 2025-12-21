@@ -1,0 +1,30 @@
+<link rel="stylesheet" type="text/css" href="/editor.css" />
+
+script.
+  function toggleAddDiv() {
+    var element = document.querySelector('div.hidden-element, div.visible-element');
+    element.classList.toggle('hidden-element');
+    element.classList.toggle('visible-element');
+  }
+
+html
+  body
+    table
+      button(onclick="toggleAddDiv()") Add New
+      div.hidden-element Doin' stuff
+      tbody
+        tr
+          th Logo 
+          th Name 
+          th Location 
+          th 
+        each brewery in breweries
+          - var name = brewery.name
+          - var location = brewery.location
+          tr 
+            td 
+              img(class='logo' src='data:image;base64, ' + brewery.defaultLogo)
+            td #{name}
+            td #{location}
+            td
+              button Edit
