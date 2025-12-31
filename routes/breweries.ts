@@ -15,7 +15,8 @@ export class BreweriesRoutes extends Routes {
 
     this.router.post("", (req: Request, res: Response) => {
       this.dataProvider.addBrewery(new Brewery(2, req.body['newBreweryName'], req.body['newBreweryLogoB64'], req.body['newBreweryLocation']))
-      res.redirect("/breweries/manage");
+      
+      res.redirect(req.query.callbackUrl as string);
       return
     });
 

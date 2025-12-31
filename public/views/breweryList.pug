@@ -59,7 +59,7 @@ html
     table
       button(onclick="toggleAddDiv()") Add New
       div.hidden-element 
-        form(action="/breweries" method="POST" id="breweryForm")
+        form(action="/breweries?callbackUrl=/breweries/manage" method="POST" id="breweryForm")
           label(for="newBreweryName") Name:
           input(name="newBreweryName" id="newBreweryName")
           label(for="newBreweryLocation") Location:
