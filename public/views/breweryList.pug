@@ -7,11 +7,67 @@ script.
     element.classList.toggle('visible-element');
   }
 
+script.
+  function isFormTextValueValid(form, fieldName) {
+    const value = form[fieldName].value;
+    if (value == "") {
+      alert(`${fieldName} must be filled out`);
+      return false;
+    }
+    return true;
+  }
+
+  function setB64FormFieldFromImage(imageFormId, b64FormId) {
+    const logoFileElement = document.getElementById(imageFormId);
+    const files = logoFileElement.files;
+    if (files && files.length > 0) {
+      // Assume a single file
+      const file = files[0];
+      const reader = new FileReader();
+
+      reader.onload = function (e) {
+        // The result is a Data URL (e.g., "data:image/jpeg;base64,<the stuff we want as b64 data>")
+        const dataURL = e.target.result;
+        const base64String = dataURL.split(',')[1]; 
+
+        const b64FormElement = document.getElementById(b64FormId);
+        b64FormElement.value = base64String;
+      };
+
+      reader.readAsDataURL(file);
+    }
+  }
+
+  function submitForm() {
+    setB64FormFieldFromImage('newBreweryLogo', 'newBreweryLogoB64');
+
+    const form = document.getElementById('breweryForm');
+    if (!isFormTextValueValid(form, 'newBreweryName')) {
+      return 
+    }
+    if (!isFormTextValueValid(form, 'newBreweryLocation')) {
+      return 
+    }
+    if (!isFormTextValueValid(form, 'newBreweryLogoB64')) {
+      return 
+    }
+    form.submit();
+  }
+
 html
   body
     table
       button(onclick="toggleAddDiv()") Add New
-      div.hidden-element Doin' stuff
+      div.hidden-element 
+        form(action="/breweries" method="POST" id="breweryForm")
+          label(for="newBreweryName") Name:
+          input(name="newBreweryName" id="newBreweryName")
+          label(for="newBreweryLocation") Location:
+          input(name="newBreweryLocation" id="newBreweryLocation")
+          label(for="newBreweryLogo") Logo:
+          input(name="newBreweryLogo" id="newBreweryLogo" type="file" accept="image/png, image/jpeg" onchange="setB64FormFieldFromImage('newBreweryLogo', 'newBreweryLogoB64')")
+          input(name="newBreweryLogoB64" id="newBreweryLogoB64" type="hidden")
+        button(onclick="submitForm()") Create Brewery
       tbody
         tr
           th Logo 
