@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import Routes from './common';
+import { Brewery } from '../models/breweries';
 
 const sharp = require('sharp');
 
@@ -13,7 +14,7 @@ export class BreweriesRoutes extends Routes {
     });
 
     this.router.post("", (req: Request, res: Response) => {
-      console.log(req.body);
+      this.dataProvider.addBrewery(new Brewery(2, req.body['newBreweryName'], req.body['newBreweryLogoB64'], req.body['newBreweryLocation']))
       res.redirect("/breweries/manage");
       return
     });
