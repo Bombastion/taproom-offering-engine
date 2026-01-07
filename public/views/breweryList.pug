@@ -1,10 +1,9 @@
 <link rel="stylesheet" type="text/css" href="/editor.css" />
 
 script.
-  function toggleAddDiv() {
-    var element = document.querySelector('div.hidden-element, div.visible-element');
-    element.classList.toggle('hidden-element');
-    element.classList.toggle('visible-element');
+  function toggleShowElement(divId) {
+    var element = document.querySelector(`#${divId}`);
+    element.style.display = element.style.display === "none" ? "" : "none";
   }
 
 script.
@@ -17,8 +16,8 @@ script.
     return true;
   }
 
-  function setB64FormFieldFromImage(imageFormId, b64FormId) {
-    const logoFileElement = document.getElementById(imageFormId);
+  function setB64FormFieldFromImage(form) {
+    const logoFileElement = form.newBreweryLogo;
     const files = logoFileElement.files;
     if (files && files.length > 0) {
       // Assume a single file
@@ -30,7 +29,7 @@ script.
         const dataURL = e.target.result;
         const base64String = dataURL.split(',')[1]; 
 
-        const b64FormElement = document.getElementById(b64FormId);
+        const b64FormElement = form.newBreweryLogoB64;
         b64FormElement.value = base64String;
       };
 
@@ -38,36 +37,80 @@ script.
     }
   }
 
-  function submitForm() {
-    setB64FormFieldFromImage('newBreweryLogo', 'newBreweryLogoB64');
+  function setItemIdFormField(itemId) {
+    const formElement = document.getElementById('newItemIdHidden');
+    formElement.value = itemId;
+  }
 
-    const form = document.getElementById('breweryForm');
+  function stringifyForm(form) {
+    const formData = new FormData(form);
+    const formObject = Object.fromEntries(formData.entries());
+    return JSON.stringify(formObject); 
+  }
+
+  function submitAddForm(formId) {
+    const form = document.getElementById(formId);
+    setB64FormFieldFromImage(form);
     if (!isFormTextValueValid(form, 'newBreweryName')) {
-      return 
+      return;
     }
     if (!isFormTextValueValid(form, 'newBreweryLocation')) {
-      return 
+      return;
     }
     if (!isFormTextValueValid(form, 'newBreweryLogoB64')) {
-      return 
+      return; 
     }
-    form.submit();
+
+    const jsonString = stringifyForm(form);
+
+    fetch(`/breweries`, {
+      method:'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: jsonString
+    }).then(data => {
+      window.location.reload();
+    })
+    .catch(error => {
+      alert(`Problem making request: ${error}`);
+    });
+  }
+
+  function submitEditForm(formId, breweryId) {
+    const form = document.getElementById(formId);
+    setB64FormFieldFromImage(form);
+
+    const jsonString = stringifyForm(form);
+
+    fetch(`/breweries/${breweryId}`, {
+      method:'PATCH',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: jsonString
+    }).then(data => {
+      window.location.reload();
+    })
+    .catch(error => {
+      alert(`Problem making request: ${error}`);
+    });
   }
 
 html
   body
     table
-      button(onclick="toggleAddDiv()") Add New
-      div.hidden-element 
-        form(action="/breweries?callbackUrl=/breweries/manage" method="POST" id="breweryForm")
+      button(onclick="toggleShowElement('createBreweryDiv')") Add New
+      div(style="display: none;", id="createBreweryDiv")
+        form(action="/breweries?callbackUrl=/breweries/manage" method="POST" id="addBreweryForm")
           label(for="newBreweryName") Name:
           input(name="newBreweryName" id="newBreweryName")
           label(for="newBreweryLocation") Location:
           input(name="newBreweryLocation" id="newBreweryLocation")
           label(for="newBreweryLogo") Logo:
-          input(name="newBreweryLogo" id="newBreweryLogo" type="file" accept="image/png, image/jpeg" onchange="setB64FormFieldFromImage('newBreweryLogo', 'newBreweryLogoB64')")
+          input(name="newBreweryLogo" id="newBreweryLogo" type="file" accept="image/png, image/jpeg" onchange="setB64FormFieldFromImage(document.getElementById('addBreweryForm'))")
           input(name="newBreweryLogoB64" id="newBreweryLogoB64" type="hidden")
-        button(onclick="submitForm()") Create Brewery
+        button(onclick="submitAddForm('addBreweryForm')" type="button") Create Brewery
       tbody
         tr
           th Logo 
@@ -77,10 +120,25 @@ html
         each brewery in breweries
           - var name = brewery.name
           - var location = brewery.location
+          - var breweryId = brewery.id
           tr 
             td 
               img(class='logo' src='data:image;base64, ' + brewery.defaultLogo)
             td #{name}
             td #{location}
             td
-              button Edit
+              button(onclick=`toggleShowElement('editBreweryElement${breweryId}')`) Edit
+          tr(style="display: none;", id=`editBreweryElement${breweryId}`)
+            form(action=`/breweries/${breweryId}?callbackUrl=/breweries/manage` id=`updateBreweryForm${breweryId}`)
+              td
+                label(for="newBreweryLogo") Logo:
+                input(name="newBreweryLogo" id="newBreweryLogo" type="file" accept="image/png, image/jpeg" onchange=`setB64FormFieldFromImage(document.getElementById('updateBreweryForm${breweryId}'))`)
+              td
+                label(for="newBreweryName") Name:
+                input(name="newBreweryName" id="newBreweryName")
+              td
+                label(for="newBreweryLocation") Location:
+                input(name="newBreweryLocation" id="newBreweryLocation")
+              input(name="newBreweryLogoB64" id="newBreweryLogoB64" type="hidden")
+              td
+                button(onclick=`submitEditForm('updateBreweryForm${breweryId}', '${breweryId}')` type="button") Update Brewery

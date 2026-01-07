@@ -14,25 +14,26 @@ export class BreweriesRoutes extends Routes {
     });
 
     this.router.post("", (req: Request, res: Response) => {
-      this.dataProvider.addBrewery(new Brewery(2, req.body['newBreweryName'], req.body['newBreweryLogoB64'], req.body['newBreweryLocation']));
+      const result = this.dataProvider.addBrewery(new Brewery(2, req.body['newBreweryName'], req.body['newBreweryLogoB64'], req.body['newBreweryLocation']));
       
-      res.redirect(req.query.callbackUrl as string);
-      return
+      res.send(result);
+      return;
     });
 
     this.router.patch("/:breweryId", (req: Request, res: Response) => {
       try{
         if (!req.body) {
           res.status(400).send("Request body expected");
-          return
+          return;
         }
         const result = this.dataProvider.updateBrewery(parseInt(req.params.breweryId), new Brewery(null, req.body['newBreweryName'], req.body['newBreweryLogoB64'], req.body['newBreweryLocation']));
         if (result !== null) {
           res.send(result);
-          return
+          return;
         }
         res.status(400);
         res.send("Invalid Argument");
+        return
       } catch(e: any) {
         const statusCode = "statusCode" in e ? e["statusCode"] : 500;
         const message = "message" in e ? e["message"] : "Unexpected error occurred";
