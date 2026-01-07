@@ -6,9 +6,20 @@ import { Menu, MenuItem, SubMenu } from '../models/menus';
 import { EntryType } from 'perf_hooks';
 
 
+export class DataProviderError extends Error {
+    statusCode: number;
+
+    constructor(message: string, statusCode: number) {
+        super(message); 
+        this.statusCode = statusCode;
+    }
+}
+
 export abstract class DataProvider {
     abstract addBrewery(brewery: Brewery): Brewery;
     abstract getBrewery(id: number): Brewery | null;
+    abstract getBreweries(): Array<Brewery>;
+    abstract updateBrewery(breweryId: number, brewery: Brewery): Brewery;
 
     abstract addContainer(container: ItemContainer): ItemContainer;
     abstract getContainer(id: number): ItemContainer | null;
@@ -124,6 +135,51 @@ export class LocalDataProvider extends DataProvider {
         return result;
     }
 
+    getGenericList(mapName: string): any {
+        // TODO: This needs to support pagination eventually
+        const result = this._cache.get(mapName)!.values();
+        if (!result) {
+            return [];
+        }
+
+        return [...result];
+    }
+
+    validateUpdatedObject(updated: any, keysNotAllowed: string[]) {
+        for(const key of keysNotAllowed) {
+            if(updated[key] !== null) {
+                throw new DataProviderError(`${key} is not allowed to be updated on ${updated.constructor.name}`, 400);
+            }
+        }
+    }
+
+    getObjectWithUpdatedFields(id: number, mapName: string, updated: any, constructorClass: any) {
+        const originalValue = this.getGeneric(id, mapName);
+        if (originalValue === null) {
+            throw new DataProviderError(`${id} not found`, 404);
+        }
+        const objectProperties = Object.keys(originalValue);
+        const newValues = [];
+        for(const key of objectProperties) {
+            const valueToAdd = updated[key] ? updated[key] : originalValue[key];
+            newValues.push(valueToAdd);
+        }
+        const updatedValue = new constructorClass(...newValues);
+
+        return updatedValue;
+    }
+
+
+    updateGeneric(id: number, mapName: string, updated: any, constructorClass: any, keysNotAllowed: string[]): any {
+        this.validateUpdatedObject(updated, keysNotAllowed);
+        const newValue = this.getObjectWithUpdatedFields(id, mapName, updated, constructorClass);
+        
+        const updateMap = this._cache.get(mapName)!;
+        updateMap.set(id, newValue);
+        
+        return newValue;
+    }
+
     idExists(id: number, mapName: string): boolean {
         const result = this.getGeneric(id, mapName);
         if (result !== null) {
@@ -138,6 +194,14 @@ export class LocalDataProvider extends DataProvider {
 
     getBrewery(id: number): Brewery | null {
         return this.getGeneric(id, this.BREWERIES_KEY);
+    }
+
+    getBreweries(): Array<Brewery> {
+        return this.getGenericList(this.BREWERIES_KEY);
+    }
+
+    updateBrewery(breweryId: number, brewery: Brewery): Brewery {
+        return this.updateGeneric(breweryId, this.BREWERIES_KEY, brewery, Brewery, ['id']);
     }
 
     addContainer(container: ItemContainer): ItemContainer {
