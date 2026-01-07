@@ -1,3 +1,5 @@
 dist
 node_modules
+# Ignored since it's copied from the compiled typescript. See package.json build
+public/js
 
