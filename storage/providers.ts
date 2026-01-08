@@ -34,6 +34,8 @@ export abstract class DataProvider {
 
     abstract addItem(item: Item): Item;
     abstract getItem(id: number): Item | null;
+    abstract getItems(): Array<Item>;
+    abstract updateItem(itemId: number, item: Item): Item;
 
     abstract addMenu(menu: Menu): Menu;
     abstract getMenu(id: number): Menu | null;
@@ -261,15 +263,28 @@ export class LocalDataProvider extends DataProvider {
         return true;
     }
 
-    addItem(item: Item): Item {
-        if (item.breweryId !== null && !this.idExists(item.breweryId, this.BREWERIES_KEY)) {
+    validateItem(item: Item) {
+        if (item.breweryId && !this.idExists(item.breweryId, this.BREWERIES_KEY)) {
             console.log(`TODO: Do an error here because ID ${item.breweryId} does not exist for breweries when adding ${item.id}`)
         }
+    }
+
+    addItem(item: Item): Item {
+        this.validateItem(item);
         return this.addGeneric(item, this.ITEMS_KEY);
     }
 
     getItem(id: number): Item | null {
         return this.getGeneric(id, this.ITEMS_KEY);
+    }
+
+    getItems(): Array<Item> {
+        return this.getGenericList(this.ITEMS_KEY);
+    }
+
+    updateItem(itemId: number, item: Item): Item{
+        this.validateItem(item);
+        return this.updateGeneric(itemId, this.ITEMS_KEY, item, Item, ['id']);
     }
 
     addMenu(menu: Menu): Menu {

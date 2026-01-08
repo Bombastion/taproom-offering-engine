@@ -76,13 +76,13 @@ export class MenuItem {
 export class DisplayItem {
     breweryName: string | null;
     displayName: string;
-    style: string;
-    abv: number;
-    description: string;
-    order: number;
+    style: string | null;
+    abv: number | null;
+    description: string | null;
+    order: number | null;
     containerDisplayNameToPrice: Map<string, string>;
 
-    constructor(breweryName: string | null, displayName: string, style: string, abv: number, description: string, order: number, containerDisplayNameToPrice: Map<string, string>) {
+    constructor(breweryName: string | null, displayName: string, style: string | null, abv: number | null, description: string | null, order: number | null, containerDisplayNameToPrice: Map<string, string>) {
         this.breweryName = breweryName;
         this.displayName = displayName;
         this.style = style;

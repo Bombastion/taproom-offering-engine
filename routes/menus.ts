@@ -50,7 +50,7 @@ export class MenusRoutes extends Routes {
           }
           
           // Gather all the container names for this item
-          const allSaleContainersForItem = this.dataProvider.getSaleContainersForItem(item.id);
+          const allSaleContainersForItem = this.dataProvider.getSaleContainersForItem(item.id!);
           const containerDisplayNameToPrice: Map<string, string> = new Map();
           allSaleContainersForItem.forEach(saleContainer => {
             const containerInfo = this.dataProvider.getContainer(saleContainer.containerId)!;
@@ -72,7 +72,7 @@ export class MenusRoutes extends Routes {
             }
           });
 
-          const displayItem = new DisplayItem(brewery ? brewery!.name : null, item.displayName, item.style, item.abv, item.description, menuItem.order, containerDisplayNameToPrice);
+          const displayItem = new DisplayItem(brewery ? brewery!.name : null, item.displayName!, item.style, item.abv, item.description, menuItem.order, containerDisplayNameToPrice);
           if (menuItem.subMenuId) {
             subMenuToItemMap.get(menuItem.subMenuId)?.push(displayItem);
           } else {
