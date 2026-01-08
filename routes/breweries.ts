@@ -1,8 +1,7 @@
 import { Request, Response } from 'express';
 import Routes from './common';
 import { Brewery } from '../models/breweries';
-
-const sharp = require('sharp');
+import { toggleShowElement } from './viewHelpers/functions';
 
 export class BreweriesRoutes extends Routes {
   // Order matters here. If we don't specify non-IDs first, they get interpreted as IDs

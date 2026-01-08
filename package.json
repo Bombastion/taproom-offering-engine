@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "build": "tsc && yarn copy-files",
+    "build": "tsc && yarn copy-files && rm -r public/js/* && cp -r dist/routes/viewHelpers/*.js public/js/",
     "start": "node dist/server.js",
     "test": "echo \"Error: no test specified\" && exit 1",
     "copy-files": "cp -r public dist"
@@ -26,6 +26,7 @@
     "prettier": "^3.5.3",
     "sharp": "^0.34.5",
     "ts-node": "^10.9.2",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "uuid": "^13.0.0"
   }
 }
