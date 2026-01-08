@@ -23,6 +23,8 @@ export abstract class DataProvider {
 
     abstract addContainer(container: ItemContainer): ItemContainer;
     abstract getContainer(id: number): ItemContainer | null;
+    abstract getContainers(): Array<ItemContainer>;
+    abstract updateContainer(containerId: number, container: ItemContainer): ItemContainer;
 
     abstract addSaleContainer(container: SaleContainer): SaleContainer;
     abstract getSaleContainer(id: number): SaleContainer | null;
@@ -210,6 +212,14 @@ export class LocalDataProvider extends DataProvider {
 
     getContainer(id: number): ItemContainer | null {
         return this.getGeneric(id, this.CONTAINERS_KEY);
+    }
+
+    getContainers(): Array<ItemContainer> {
+        return this.getGenericList(this.CONTAINERS_KEY);
+    }
+
+    updateContainer(containerId: number, container: ItemContainer): ItemContainer {
+        return this.updateGeneric(containerId, this.CONTAINERS_KEY, container, ItemContainer, ['id'])
     }
 
     addSaleContainer(container: SaleContainer): SaleContainer {

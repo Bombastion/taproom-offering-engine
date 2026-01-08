@@ -6,10 +6,10 @@ export class ContainersRoutes extends Routes {
   requiredFieldsAndTypes: Record<string, string> = {"containerName": "string", "displayName": "string"};
 
   registerRoutes(): void {
-    // Default get
-    // TODO: Should probably list all IDs or something eventually
-    this.router.get("/", (_req: Request, res: Response) => {
-      res.send("Look at all the glasses!");
+    this.router.get("/manage", (_req: Request, res: Response) => {
+      const containerList = this.dataProvider.getContainers();
+      res.render("containerList", {displayList: containerList})
+      return;
     });
 
     // Gets a specific container by ID
@@ -33,6 +33,31 @@ export class ContainersRoutes extends Routes {
       container = this.dataProvider.addContainer(container);
 
       res.send(container);
+    });
+
+    // Update an existing container
+    this.router.patch("/:containerId", (req: Request, res: Response) => {
+      try{
+        if (!req.body) {
+          res.status(400).send("Request body expected");
+          return;
+        }
+        const result = this.dataProvider.updateContainer(parseInt(req.params.containerId), new ItemContainer(null, req.body.containerName, req.body.displayName, req.body.order));
+        if (result !== null) {
+          res.send(result);
+          return;
+        }
+        res.status(400);
+        res.send("Invalid Argument");
+        return
+      } catch(e: any) {
+        const statusCode = "statusCode" in e ? e["statusCode"] : 500;
+        const message = "message" in e ? e["message"] : "Unexpected error occurred";
+        res.status(statusCode);
+        res.send(message);
+      }
+      
+      return
     });
   }
 }

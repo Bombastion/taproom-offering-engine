@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import Routes from './common';
+import {v4 as uuidv4} from 'uuid';
 import { Item } from '../models/items';
 import { DisplayItem, DisplaySubMenu, MenuItem, SubMenu } from '../models/menus';
 import { Brewery } from '../models/breweries';
@@ -53,7 +54,8 @@ export class MenusRoutes extends Routes {
           const containerDisplayNameToPrice: Map<string, string> = new Map();
           allSaleContainersForItem.forEach(saleContainer => {
             const containerInfo = this.dataProvider.getContainer(saleContainer.containerId)!;
-            containerDisplayNameToPrice.set(containerInfo.displayName, saleContainer.price.toLocaleString('en-US', { minimumFractionDigits: 2}));
+            const workingDisplayName = containerInfo.displayName ? containerInfo.displayName : uuidv4();
+            containerDisplayNameToPrice.set(workingDisplayName, saleContainer.price.toLocaleString('en-US', { minimumFractionDigits: 2}));
 
             // Get the top level display names and orders for the sub menu we're on
             let displayNameToOrder;
@@ -63,9 +65,10 @@ export class MenusRoutes extends Routes {
               displayNameToOrder = subMenuToContainerDisplayNameToOrder.get(-1)!;
             }
 
-            const existingOrderForDisplayName = displayNameToOrder.get(containerInfo.displayName);
-            if (!existingOrderForDisplayName || existingOrderForDisplayName > containerInfo.order) {
-              displayNameToOrder.set(containerInfo.displayName, containerInfo.order);
+            const workingOrder = containerInfo.order ? containerInfo.order : 999;
+            const existingOrderForDisplayName = displayNameToOrder.get(workingDisplayName);
+            if (!existingOrderForDisplayName || existingOrderForDisplayName > workingOrder) {
+              displayNameToOrder.set(workingDisplayName, workingOrder);
             }
           });
 

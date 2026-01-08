@@ -1,0 +1,94 @@
+<link rel="stylesheet" type="text/css" href="/editor.css" />
+script.
+  var exports = {};
+
+script(src="/functions.js")
+
+script.
+  function submitAddForm(formId) {
+    const form = document.getElementById(formId);
+    if (!isFormTextValueValid(form, 'containerName')) {
+      return;
+    }
+    if (!isFormTextValueValid(form, 'displayName')) {
+      return;
+    }
+
+    const jsonString = stringifyForm(form);
+
+    fetch(`/containers`, {
+      method:'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: jsonString
+    }).then(data => {
+      window.location.reload();
+    })
+    .catch(error => {
+      alert(`Problem making request: ${error}`);
+    });
+  }
+
+  function submitEditForm(formId, itemId) {
+    const form = document.getElementById(formId);
+
+    const jsonString = stringifyForm(form);
+
+    fetch(`/containers/${itemId}`, {
+      method:'PATCH',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: jsonString
+    }).then(data => {
+      window.location.reload();
+    })
+    .catch(error => {
+      alert(`Problem making request: ${error}`);
+    });
+  }
+
+html
+  body
+    table
+      button(onclick="toggleShowElement('createItemNewDiv')") Add New
+      div(style="display: none", id="createItemNewDiv")
+        form(id="addItemForm")
+          label(for="containerName") Internal Name:
+          input(name="containerName" id="containerName")
+          label(for="displayName") Display Name:
+          input(name="displayName" id="displayName")
+          label(for="order") Display Order:
+          input(name="order" id="order")
+        button(onclick="submitAddForm('addItemForm')" type="button") Create Container
+      tbody
+        tr
+          th Internal Name
+          th Display Name
+          th Display Order
+          th 
+        each item in displayList
+          - var name = item.containerName
+          - var location = item.displayName
+          - var order = item.order
+          - var itemId = item.id
+          tr 
+            td #{name}
+            td #{location}
+            td #{order}
+            td
+              button(onclick=`toggleShowElement('editElement${itemId}')`) Edit
+          tr(style="display: none", id=`editElement${itemId}`)
+            form(id=`updateForm${itemId}`)
+              td
+                label(for="containerName") Internal Name:
+                input(name="containerName" id="containerName")
+              td
+                label(for="displayName") Display Name:
+                input(name="displayName" id="displayName")
+              td
+                label(for="order") Display Order:
+                input(name="order" id="order")
+              td
+                button(onclick=`submitEditForm('updateForm${itemId}', '${itemId}')` type="button") Update Container
