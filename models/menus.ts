@@ -1,12 +1,12 @@
 // Represents a collection of items to form a menu
 export class Menu {
-    id: number;
-    internalName: string;
-    displayName: string;
+    id: number | null;
+    internalName: string | null;
+    displayName: string | null;
     // A b64 string representing the logo
     logo: string | null;
 
-    constructor(id: number, internalName: string, displayName: string, logo: string) {
+    constructor(id: number | null, internalName: string | null, displayName: string | null, logo: string | null) {
         this.id = id;
         this.internalName = internalName;
         this.displayName = displayName;
@@ -20,13 +20,13 @@ export class Menu {
 
 // A particular sub-heading on a menu. Used to organize items within a menu
 export class SubMenu {
-    id: number;
-    internalName: string;
-    displayName: string;
-    menuId: number;
-    order: number;
+    id: number | null;
+    internalName: string | null;
+    displayName: string | null;
+    menuId: number | null;
+    order: number | null;
     
-    constructor(id: number, internalName: string, displayName: string, menuId: number, order: number) {
+    constructor(id: number | null, internalName: string | null, displayName: string | null, menuId: number | null, order: number | null) {
         this.id = id;
         this.internalName = internalName;
         this.displayName = displayName;
@@ -52,14 +52,14 @@ export class DisplaySubMenu {
 
 // A join of Menu and Item. Also contains the particular sub-menu the item might appear on
 export class MenuItem {
-    id: number;
-    menuId: number;
-    itemId: number;
+    id: number | null;
+    menuId: number | null;
+    itemId: number | null;
     subMenuId: number | null;
     itemLogo: string | null;
-    order: number;
+    order: number | null;
 
-    constructor(id: number, menuId: number, itemId: number, subMenuId: number | null, itemLogo: string | null, order: number) {
+    constructor(id: number | null, menuId: number, itemId: number, subMenuId: number | null, itemLogo: string | null, order: number | null) {
         this.id = id;
         this.menuId = menuId;
         this.itemId = itemId;
@@ -76,13 +76,13 @@ export class MenuItem {
 export class DisplayItem {
     breweryName: string | null;
     displayName: string;
-    style: string;
-    abv: number;
-    description: string;
-    order: number;
+    style: string | null;
+    abv: number | null;
+    description: string | null;
+    order: number | null;
     containerDisplayNameToPrice: Map<string, string>;
 
-    constructor(breweryName: string | null, displayName: string, style: string, abv: number, description: string, order: number, containerDisplayNameToPrice: Map<string, string>) {
+    constructor(breweryName: string | null, displayName: string, style: string | null, abv: number | null, description: string | null, order: number | null, containerDisplayNameToPrice: Map<string, string>) {
         this.breweryName = breweryName;
         this.displayName = displayName;
         this.style = style;

@@ -7,8 +7,10 @@ export class ItemsRoutes extends Routes {
   registerRoutes(): void {
     // TODO: This should probably be a paginated list of all items.
     // Copy/paste that thought to all routes
-    this.router.get("/", (_req: Request, res: Response) => {
-      res.send("Look at all the beer!");
+    this.router.get("/manage", (_req: Request, res: Response) => {
+      const displayList = this.dataProvider.getItems();
+      res.render("itemList", {displayList: displayList});
+      return;
     });
 
     this.router.get("/:itemId", (req: Request, res: Response) => {
@@ -26,29 +28,61 @@ export class ItemsRoutes extends Routes {
       const requiredFieldsAndTypes: Record<string, string> = {
         "internalName": "string",
         "displayName": "string",
-        "brewery": "string",
-        "style": "string",
-        "abv": "number",
-        "description": "string",
-        "category": "string",
       }
       if(!this.validateInput(req, res, requiredFieldsAndTypes)) {
         return;
       }
 
-      let item = new Item(
-        0,
+      const item = new Item(
+        null,
         req.body.internalName,
         req.body.displayName,
-        req.body.brewery,
+        req.body.breweryId? parseInt(req.body.breweryId) : null,
         req.body.style,
         req.body.abv,
         req.body.description,
         req.body.category,
       );
-      item = this.dataProvider.addItem(item);
+      const result = this.dataProvider.addItem(item);
 
-      res.send(item);
+      res.send(result);
+    });
+
+    // Updates an existing item
+    this.router.patch("/:itemId", (req: Request, res: Response) => {
+      try{
+        if (!req.body) {
+          res.status(400).send("Request body expected");
+          return;
+        }
+
+        const item = new Item(
+          null,
+          req.body.internalName,
+          req.body.displayName,
+          req.body.breweryId? parseInt(req.body.breweryId) : null,
+          req.body.style,
+          req.body.abv,
+          req.body.description,
+          req.body.category,
+        );
+        
+        const result = this.dataProvider.updateItem(parseInt(req.params.itemId), item);
+        if (result !== null) {
+          res.send(result);
+          return;
+        }
+        res.status(400);
+        res.send("Invalid Argument");
+        return;
+      } catch(e: any) {
+        const statusCode = "statusCode" in e ? e["statusCode"] : 500;
+        const message = "message" in e ? e["message"] : "Unexpected error occurred";
+        res.status(statusCode);
+        res.send(message);
+      }
+      
+      return;
     });
   }
 }

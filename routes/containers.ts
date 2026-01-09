@@ -29,7 +29,7 @@ export class ContainersRoutes extends Routes {
         return;
       }
 
-      let container = new ItemContainer(0, req.body.containerName, req.body.displayName, req.body.order);
+      let container = new ItemContainer(null, req.body.containerName, req.body.displayName, req.body.order);
       container = this.dataProvider.addContainer(container);
 
       res.send(container);

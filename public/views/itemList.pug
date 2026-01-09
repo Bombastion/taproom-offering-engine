@@ -1,0 +1,127 @@
+<link rel="stylesheet" type="text/css" href="/editor.css" />
+script.
+  var exports = {};
+
+script(src="/functions.js")
+
+script.
+  function submitAddForm(formId) {
+    const fieldsToValidate = ['internalName', 'displayName'];
+    const form = document.getElementById(formId);
+
+    for (fieldName in fieldsToValidate) {
+      if (!isFormTextValueValid(form, fieldName)) {
+        return;
+      }
+    }
+
+    const jsonString = stringifyForm(form);
+
+    fetch(`/items`, {
+      method:'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: jsonString
+    }).then(data => {
+      window.location.reload();
+    })
+    .catch(error => {
+      alert(`Problem making request: ${error}`);
+    });
+  }
+
+  function submitEditForm(formId, itemId) {
+    const form = document.getElementById(formId);
+
+    const jsonString = stringifyForm(form);
+
+    fetch(`/items/${itemId}`, {
+      method:'PATCH',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: jsonString
+    }).then(data => {
+      window.location.reload();
+    })
+    .catch(error => {
+      alert(`Problem making request: ${error}`);
+    });
+  }
+
+html
+  body
+    table
+      button(onclick="toggleShowElement('createItemNewDiv')") Add New
+      div(style="display: none", id="createItemNewDiv")
+        form(id="addItemForm")
+          label(for="internalName") Internal Name:
+          input(name="internalName" id="internalName")
+          label(for="displayName") Display Name:
+          input(name="displayName" id="displayName")
+          label(for="breweryId") Brewery ID:
+          input(name="breweryId" id="breweryId")
+          label(for="style") Style:
+          input(name="style" id="style")
+          label(for="abv") ABV:
+          input(name="abv" id="abv")
+          label(for="description") Description:
+          input(name="description" id="description")
+          label(for="category") Menu Category:
+          input(name="category" id="category")
+        button(onclick="submitAddForm('addItemForm')" type="button") Create Item
+      tbody
+        tr
+          th Internal Name
+          th Display Name
+          th Brewery ID
+          th Style
+          th ABV
+          th Description
+          th Menu Category
+          th 
+        each item in displayList
+          - var internalName = item.internalName
+          - var displayName = item.displayName
+          - var breweryId = item.breweryId
+          - var style = item.style
+          - var abv = item.abv
+          - var description = item.description
+          - var category = item.category
+          - var itemId = item.id
+          tr 
+            td #{internalName}
+            td #{displayName}
+            td #{breweryId}
+            td #{style}
+            td #{abv}
+            td #{description}
+            td #{category}
+            td
+              button(onclick=`toggleShowElement('editElement${itemId}')`) Edit
+          tr(style="display: none", id=`editElement${itemId}`)
+            form(id=`updateForm${itemId}`)
+              td
+                label(for="internalName") Internal Name:
+                input(name="internalName" id="internalName")
+              td
+                label(for="displayName") Display Name:
+                input(name="displayName" id="displayName")
+              td
+                label(for="breweryId") Brewery ID:
+                input(name="breweryId" id="breweryId")
+              td
+                label(for="style") Style:
+                input(name="style" id="style")
+              td
+                label(for="abv") ABV:
+                input(name="abv" id="abv")
+              td
+                label(for="description") Description:
+                input(name="description" id="description")
+              td
+                label(for="category") Menu Category:
+                input(name="category" id="category")
+              td
+                button(onclick=`submitEditForm('updateForm${itemId}', '${itemId}')` type="button") Update Container

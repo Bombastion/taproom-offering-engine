@@ -34,4 +34,4 @@ app.use('/sale-containers', new SaleContainersRoutes(dataProvider).router)
 app.use('/items', new ItemsRoutes(dataProvider).router);
 app.use('/menu-items', new MenuItemsRoutes(dataProvider).router);
 app.use('/menus', new MenusRoutes(dataProvider).router);
-app.use('/sub-menus', new SubMenusRoutes(dataProvider).router);
+app.use('/submenus', new SubMenusRoutes(dataProvider).router);

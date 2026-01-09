@@ -34,18 +34,25 @@ export abstract class DataProvider {
 
     abstract addItem(item: Item): Item;
     abstract getItem(id: number): Item | null;
+    abstract getItems(): Array<Item>;
+    abstract updateItem(itemId: number, item: Item): Item;
 
     abstract addMenu(menu: Menu): Menu;
     abstract getMenu(id: number): Menu | null;
+    abstract getMenus(): Array<Menu>;
+    abstract updateMenu(id: number, menu: Menu): Menu;
     
     abstract addSubMenu(menu: SubMenu): SubMenu;
     abstract getSubMenu(id: number): SubMenu | null;
     // Gets all sub-menus for a menu, ordered by "order"
     abstract getSubMenusForMenu(menuId: number): Array<SubMenu>;
+    abstract updateSubMenu(id: number, subMenu: SubMenu): SubMenu;
     
     abstract addMenuItem(item: MenuItem): MenuItem;
     abstract getMenuItem(id: number): MenuItem | null;
     abstract getMenuItemsForMenu(menuId: number): Array<MenuItem>;
+    abstract getMenuItemsForSubMenu(subMenuId: number): Array<MenuItem>;
+    abstract removeMenuItem(id: number): boolean;
 }
 
 export class LocalDataProvider extends DataProvider {
@@ -190,6 +197,15 @@ export class LocalDataProvider extends DataProvider {
         return false;
     }
 
+    removeGeneric(id: number, mapName: string): boolean {
+        if (!this.idExists(id, mapName)) {
+            return false;
+        } else {
+            this._cache.get(mapName)!.delete(id);
+            return true;
+        }
+    }
+
     addBrewery(brewery: Brewery): Brewery {
         return this.addGeneric(brewery, this.BREWERIES_KEY);
     }
@@ -253,23 +269,31 @@ export class LocalDataProvider extends DataProvider {
     }
 
     removeSaleContainer(id: number): boolean {
-        const containerMap = this._cache.get(this.SALE_CONTAINERS_KEY)!;
-        if (!containerMap!.has(id)) {
-            return false;
+        return this.removeGeneric(id, this.SALE_CONTAINERS_KEY);
+    }
+
+    validateItem(item: Item) {
+        if (item.breweryId && !this.idExists(item.breweryId, this.BREWERIES_KEY)) {
+            console.log(`TODO: Do an error here because ID ${item.breweryId} does not exist for breweries when adding ${item.id}`)
         }
-        containerMap.delete(id);
-        return true;
     }
 
     addItem(item: Item): Item {
-        if (item.breweryId !== null && !this.idExists(item.breweryId, this.BREWERIES_KEY)) {
-            console.log(`TODO: Do an error here because ID ${item.breweryId} does not exist for breweries when adding ${item.id}`)
-        }
+        this.validateItem(item);
         return this.addGeneric(item, this.ITEMS_KEY);
     }
 
     getItem(id: number): Item | null {
         return this.getGeneric(id, this.ITEMS_KEY);
+    }
+
+    getItems(): Array<Item> {
+        return this.getGenericList(this.ITEMS_KEY);
+    }
+
+    updateItem(itemId: number, item: Item): Item {
+        this.validateItem(item);
+        return this.updateGeneric(itemId, this.ITEMS_KEY, item, Item, ['id']);
     }
 
     addMenu(menu: Menu): Menu {
@@ -280,12 +304,23 @@ export class LocalDataProvider extends DataProvider {
         return this.getGeneric(id, this.MENUS_KEY);
     }
 
-    addSubMenu(menu: SubMenu): SubMenu {
-        if (!this.idExists(menu.menuId, this.MENUS_KEY)) {
-            console.log(`TODO: Do an error here because ID ${menu.menuId} does not exist for menus`);
-        }
+    getMenus(): Array<Menu> {
+        return this.getGenericList(this.MENUS_KEY);
+    }
 
-        return this.addGeneric(menu, this.SUBMENUS_KEY);
+    updateMenu(id: number, menu: Menu): Menu {
+        return this.updateGeneric(id, this.MENUS_KEY, menu, Menu, ['id']);
+    }
+
+    validateSubMenu(item: SubMenu) {
+        if (item.menuId && !this.idExists(item.menuId, this.MENUS_KEY)) {
+            console.log(`TODO: Do an error here because ID ${item.menuId} does not exist for menus when adding ${item.id}`)
+        }
+    }
+
+    addSubMenu(subMenu: SubMenu): SubMenu {
+        this.validateSubMenu(subMenu);
+        return this.addGeneric(subMenu, this.SUBMENUS_KEY);
     }
 
     getSubMenu(id: number): SubMenu | null {
@@ -301,21 +336,29 @@ export class LocalDataProvider extends DataProvider {
             }
         });
 
-        results.sort((a: SubMenu, b: SubMenu) => a.order - b.order);
+        results.sort((a: SubMenu, b: SubMenu) => (a.order ? a.order : 999) - (b.order ? b.order : 999));
         return results;
     }
 
-    addMenuItem(item: MenuItem): MenuItem {
-        if (!this.idExists(item.menuId, this.MENUS_KEY)) {
+    updateSubMenu(id: number, subMenu: SubMenu): SubMenu {
+        this.validateSubMenu(subMenu);
+        return this.updateGeneric(id, this.SUBMENUS_KEY, subMenu, SubMenu, ['id']);
+    }
+
+    validateMenuItem(item: MenuItem) {
+        if (item.menuId && !this.idExists(item.menuId, this.MENUS_KEY)) {
             console.log(`TODO: Do an error here because ID ${item.menuId} does not exist for menus`);
         }
-        if (!this.idExists(item.itemId, this.ITEMS_KEY)) {
+        if (item.itemId && !this.idExists(item.itemId, this.ITEMS_KEY)) {
             console.log(`TODO: Do an error here because ID ${item.itemId} does not exist for items`);
         }
-        if (item.subMenuId !== null && !this.idExists(item.itemId, this.ITEMS_KEY)) {
+        if (item.subMenuId && !this.idExists(item.subMenuId, this.SUBMENUS_KEY)) {
             console.log(`TODO: Do an error here because ID ${item.subMenuId} does not exist for submenus`);
         }
+    }
 
+    addMenuItem(item: MenuItem): MenuItem {
+        this.validateMenuItem(item);
         return this.addGeneric(item, this.MENU_ITEMS_KEY);
     }
 
@@ -333,5 +376,22 @@ export class LocalDataProvider extends DataProvider {
         });
 
         return results;
+    }
+
+    getMenuItemsForSubMenu(subMenuId: number): Array<MenuItem> {
+        const itemMap = this._cache.get(this.MENU_ITEMS_KEY)!;
+        
+        const results: Array<MenuItem> = [];
+        itemMap.forEach((value: MenuItem) => {
+            if (value.subMenuId === subMenuId) {
+                results.push(value);
+            }
+        });
+
+        return results; 
+    }
+
+    removeMenuItem(id: number): boolean {
+        return this.removeGeneric(id, this.MENU_ITEMS_KEY);
     }
 }

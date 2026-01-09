@@ -1,0 +1,110 @@
+<link rel="stylesheet" type="text/css" href="/editor.css" />
+script.
+  var exports = {};
+
+script(src="/functions.js")
+
+script.
+  function submitAddForm(formId) {
+    const form = document.getElementById(formId);
+    if (!isFormTextValueValid(form, 'internalName')) {
+      return;
+    }
+    if (!isFormTextValueValid(form, 'displayName')) {
+      return;
+    }
+    if (!isFormTextValueValid(form, 'menuId')) {
+      return;
+    }
+
+    const jsonString = stringifyForm(form);
+
+    fetch(`/submenus`, {
+      method:'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: jsonString
+    }).then(data => {
+      window.location.reload();
+    })
+    .catch(error => {
+      alert(`Problem making request: ${error}`);
+    });
+  }
+
+  function submitEditForm(formId, itemId) {
+    const form = document.getElementById(formId);
+    
+    const jsonString = stringifyForm(form);
+
+    fetch(`/submenus/${itemId}`, {
+      method:'PATCH',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: jsonString
+    }).then(data => {
+      window.location.reload();
+    })
+    .catch(error => {
+      alert(`Problem making request: ${error}`);
+    });
+  }
+
+html
+  body
+    table
+      button(onclick="toggleShowElement('createItemNewDiv')") Add New
+      div(style="display: none", id="createItemNewDiv")
+        form(id="addItemForm")
+          label(for="internalName") Internal Name:
+          input(name="internalName" id="internalName")
+          label(for="displayName") Display Name:
+          input(name="displayName" id="displayName")
+          label(for="menuId") Menu ID:
+          input(name="menuId" id="menuId")
+          label(for="order") Display Order:
+          input(name="order" id="order")
+        button(onclick="submitAddForm('addItemForm')" type="button") Create Menu
+      tbody
+        tr
+          th Internal Name
+          th Display Name
+          th Menu ID
+          th Display Order
+          th 
+          th
+        each item in displayList
+          - var internalName = item.internalName
+          - var displayName = item.displayName
+          - var menuId = item.menuId
+          - var order = item.order
+          - var itemId = item.id
+          tr 
+            td #{internalName}
+            td #{displayName}
+            td #{menuId}
+            td #{order}
+            td
+              button(onclick=`toggleShowElement('editElement${itemId}')`) Edit
+            td
+              a(href=`/submenus/${itemId}/items/manage`)
+                button Manage Items
+          tr(style="display: none", id=`editElement${itemId}`)
+            form(id=`updateForm${itemId}`)
+              td
+                label(for="internalName") Internal Name
+                input(name="internalName" id="internalName")
+              td
+                label(for="displayName") Display Name:
+                input(name="displayName" id="displayName")
+              td
+                label(for="menuId") Menu ID:
+                input(name="menuId" id="menuId")
+              td
+                label(for="order") Display Order:
+                input(name="order" id="order")
+              td
+                button(onclick=`submitEditForm('updateForm${itemId}', '${itemId}')` type="button") Update Category
+

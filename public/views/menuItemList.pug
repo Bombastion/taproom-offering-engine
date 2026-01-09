@@ -1,0 +1,65 @@
+<link rel="stylesheet" type="text/css" href="/editor.css" />
+script.
+  var exports = {};
+
+script(src="/functions.js")
+
+script.
+  function addItemToSubMenu(subMenuId) {
+    const selectedId = document.getElementById('menuItemSelect').value;
+    fetch(`/submenus/${subMenuId}/menuItems/${selectedId}`, {
+      method:'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    }).then(data => {
+      window.location.reload();
+    })
+    .catch(error => {
+      alert(`Problem making request: ${error}`);
+    });
+  }
+
+  function removeMenuItemFromSubMenu(subMenuId, itemId) {
+    fetch(`/submenus/${subMenuId}/menuItems/${itemId}`, {
+      method:'DELETE',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    }).then(data => {
+      window.location.reload();
+    })
+    .catch(error => {
+      alert(`Problem making request: ${error}`);
+    });
+  }
+
+html
+  body
+    - var subMenuId = subMenu.id
+    h1 Editing #{subMenu.displayName}
+    select(id="menuItemSelect")
+      each item, id in itemMap
+        option(value=id) #{item.displayName}
+    button(onclick=`addItemToSubMenu(${subMenuId})`) Add Item to Category
+    table
+      tbody
+        tr
+          th Logo
+          th Internal Name
+          th Display Name
+          th Display Order
+        each item in displayList
+          - var matchingItem = itemMap[item.itemId]
+          - var logo = item.itemLogo
+          - var internalName = matchingItem.internalName
+          - var displayName = matchingItem.displayName
+          - var order = item.order
+          tr 
+            td 
+              img(class='logo' src='data:image;base64, ' + logo)
+            td #{internalName}
+            td #{displayName}
+            td #{order}
+            td
+              button(onclick=`removeMenuItemFromSubMenu(${subMenuId}, ${matchingItem.id})`) Remove
