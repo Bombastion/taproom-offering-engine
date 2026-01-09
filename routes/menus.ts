@@ -41,7 +41,7 @@ export class MenusRoutes extends Routes {
         // Get all the sub-menus for this menu
         const allSubMenus = this.dataProvider.getSubMenusForMenu(result.id!);
         // Add a fake sub-menu for anything that was uncategorized
-        allSubMenus.push(new SubMenu(-1, "uncategorized", "uncategorized", result.id!, -1));
+        allSubMenus.push(new SubMenu(-1, "Other", "Other", result.id!, -1));
 
         // Initialize a map we can add things to
         const subMenuToItemMap: Map<number, Array<DisplayItem>> = new Map();
@@ -55,7 +55,7 @@ export class MenusRoutes extends Routes {
         // Also gathers all container display info for submenus during the loop
         const allItemsForMenu = this.dataProvider.getMenuItemsForMenu(result.id!);
         allItemsForMenu.forEach((menuItem: MenuItem) => {
-          const item = this.dataProvider.getItem(menuItem.itemId)!;
+          const item = this.dataProvider.getItem(menuItem.itemId!)!;
 
           // Not all items are associated with a brewery
           let brewery: Brewery | null = null;
@@ -169,6 +169,19 @@ export class SubMenusRoutes extends Routes {
   requiredFieldsAndTypes: Record<string, string> = {"internalName": "string", "displayName": "string"};
 
   registerRoutes(): void {
+    this.router.get("/:itemId/items/manage", (req: Request, res: Response) => {
+      const subMenuId = parseInt(req.params.itemId);
+      const displayList = this.dataProvider.getMenuItemsForSubMenu(subMenuId);
+      const subMenu = this.dataProvider.getSubMenu(subMenuId);
+      const allItems = this.dataProvider.getItems();
+      const itemMap = new Map<number, Item>();
+      for (const item of allItems) {
+        itemMap.set(item.id!, item);
+      }
+      res.render("menuItemList", {displayList: displayList, subMenu: subMenu, itemMap: Object.fromEntries(itemMap)});
+      return;
+    });
+
     this.router.get("/:menuId", (req: Request, res: Response) => {
       const result = this.dataProvider.getSubMenu(parseInt(req.params.menuId))
       if (result !== null) {
@@ -177,6 +190,29 @@ export class SubMenusRoutes extends Routes {
       }
       res.sendStatus(404);
       return
+    });
+
+    this.router.post("/:menuId/menuItems/:itemId", (req: Request, res: Response) => {
+      const subMenu = this.dataProvider.getSubMenu(parseInt(req.params.menuId))
+      if (subMenu !== null) {
+        const menuItemToAdd = new MenuItem(null, subMenu.menuId!, parseInt(req.params.itemId), subMenu.id, null, null);
+        this.dataProvider.addMenuItem(menuItemToAdd);
+        res.status(201).send(menuItemToAdd);
+        return;
+      }
+      res.sendStatus(400);
+      return;
+    });
+
+    this.router.delete("/:menuId/menuItems/:itemId", (req: Request, res: Response) => {
+      const subMenu = this.dataProvider.getSubMenu(parseInt(req.params.menuId))
+      if (subMenu !== null) {
+        this.dataProvider.removeMenuItem(parseInt(req.params.itemId));
+        res.sendStatus(204);
+        return;
+      }
+      res.sendStatus(400);
+      return;
     });
 
     // Creates a new submenu

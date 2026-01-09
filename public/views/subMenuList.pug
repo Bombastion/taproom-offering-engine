@@ -74,6 +74,7 @@ html
           th Menu ID
           th Display Order
           th 
+          th
         each item in displayList
           - var internalName = item.internalName
           - var displayName = item.displayName
@@ -87,6 +88,9 @@ html
             td #{order}
             td
               button(onclick=`toggleShowElement('editElement${itemId}')`) Edit
+            td
+              a(href=`/submenus/${itemId}/items/manage`)
+                button Manage Items
           tr(style="display: none", id=`editElement${itemId}`)
             form(id=`updateForm${itemId}`)
               td

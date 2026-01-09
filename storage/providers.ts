@@ -51,6 +51,8 @@ export abstract class DataProvider {
     abstract addMenuItem(item: MenuItem): MenuItem;
     abstract getMenuItem(id: number): MenuItem | null;
     abstract getMenuItemsForMenu(menuId: number): Array<MenuItem>;
+    abstract getMenuItemsForSubMenu(subMenuId: number): Array<MenuItem>;
+    abstract removeMenuItem(id: number): boolean;
 }
 
 export class LocalDataProvider extends DataProvider {
@@ -195,6 +197,15 @@ export class LocalDataProvider extends DataProvider {
         return false;
     }
 
+    removeGeneric(id: number, mapName: string): boolean {
+        if (!this.idExists(id, mapName)) {
+            return false;
+        } else {
+            this._cache.get(mapName)!.delete(id);
+            return true;
+        }
+    }
+
     addBrewery(brewery: Brewery): Brewery {
         return this.addGeneric(brewery, this.BREWERIES_KEY);
     }
@@ -258,12 +269,7 @@ export class LocalDataProvider extends DataProvider {
     }
 
     removeSaleContainer(id: number): boolean {
-        const containerMap = this._cache.get(this.SALE_CONTAINERS_KEY)!;
-        if (!containerMap!.has(id)) {
-            return false;
-        }
-        containerMap.delete(id);
-        return true;
+        return this.removeGeneric(id, this.SALE_CONTAINERS_KEY);
     }
 
     validateItem(item: Item) {
@@ -339,17 +345,20 @@ export class LocalDataProvider extends DataProvider {
         return this.updateGeneric(id, this.SUBMENUS_KEY, subMenu, SubMenu, ['id']);
     }
 
-    addMenuItem(item: MenuItem): MenuItem {
-        if (!this.idExists(item.menuId, this.MENUS_KEY)) {
+    validateMenuItem(item: MenuItem) {
+        if (item.menuId && !this.idExists(item.menuId, this.MENUS_KEY)) {
             console.log(`TODO: Do an error here because ID ${item.menuId} does not exist for menus`);
         }
-        if (!this.idExists(item.itemId, this.ITEMS_KEY)) {
+        if (item.itemId && !this.idExists(item.itemId, this.ITEMS_KEY)) {
             console.log(`TODO: Do an error here because ID ${item.itemId} does not exist for items`);
         }
-        if (item.subMenuId !== null && !this.idExists(item.itemId, this.ITEMS_KEY)) {
+        if (item.subMenuId && !this.idExists(item.subMenuId, this.SUBMENUS_KEY)) {
             console.log(`TODO: Do an error here because ID ${item.subMenuId} does not exist for submenus`);
         }
+    }
 
+    addMenuItem(item: MenuItem): MenuItem {
+        this.validateMenuItem(item);
         return this.addGeneric(item, this.MENU_ITEMS_KEY);
     }
 
@@ -367,5 +376,22 @@ export class LocalDataProvider extends DataProvider {
         });
 
         return results;
+    }
+
+    getMenuItemsForSubMenu(subMenuId: number): Array<MenuItem> {
+        const itemMap = this._cache.get(this.MENU_ITEMS_KEY)!;
+        
+        const results: Array<MenuItem> = [];
+        itemMap.forEach((value: MenuItem) => {
+            if (value.subMenuId === subMenuId) {
+                results.push(value);
+            }
+        });
+
+        return results; 
+    }
+
+    removeMenuItem(id: number): boolean {
+        return this.removeGeneric(id, this.MENU_ITEMS_KEY);
     }
 }

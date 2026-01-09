@@ -52,14 +52,14 @@ export class DisplaySubMenu {
 
 // A join of Menu and Item. Also contains the particular sub-menu the item might appear on
 export class MenuItem {
-    id: number;
-    menuId: number;
-    itemId: number;
+    id: number | null;
+    menuId: number | null;
+    itemId: number | null;
     subMenuId: number | null;
     itemLogo: string | null;
-    order: number;
+    order: number | null;
 
-    constructor(id: number, menuId: number, itemId: number, subMenuId: number | null, itemLogo: string | null, order: number) {
+    constructor(id: number | null, menuId: number, itemId: number, subMenuId: number | null, itemLogo: string | null, order: number | null) {
         this.id = id;
         this.menuId = menuId;
         this.itemId = itemId;

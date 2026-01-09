@@ -59,7 +59,7 @@ html
     table
       button(onclick="toggleShowElement('createBreweryDiv')") Add New
       div(style="display: none", id="createBreweryDiv")
-        form(action="/breweries?callbackUrl=/breweries/manage" method="POST" id="addBreweryForm")
+        form(id="addBreweryForm")
           label(for="newBreweryName") Name:
           input(name="newBreweryName" id="newBreweryName")
           label(for="newBreweryLocation") Location:
@@ -86,7 +86,7 @@ html
             td
               button(onclick=`toggleShowElement('editBreweryElement${breweryId}')`) Edit
           tr(style="display: none", id=`editBreweryElement${breweryId}`)
-            form(action=`/breweries/${breweryId}?callbackUrl=/breweries/manage` id=`updateBreweryForm${breweryId}`)
+            form(id=`updateBreweryForm${breweryId}`)
               td
                 label(for="newBreweryLogo") Logo:
                 input(name="newBreweryLogo" id="newBreweryLogo" type="file" accept="image/png, image/jpeg" onchange=`setB64FormFieldFromImage(document.getElementById('updateBreweryForm${breweryId}'), 'newBreweryLogo', 'newBreweryLogoB64')`)
