@@ -24,17 +24,17 @@ export class ItemContainer {
 export class SaleContainer {
     id: number;
     containerId: number;
-    itemId: number;
+    menuItemId: number;
     price: number;
 
-    constructor(id: number, containerId: number, itemId: number, price: number) {
+    constructor(id: number, containerId: number, menuItemId: number, price: number) {
         this.id = id;
         this.containerId = containerId;
-        this.itemId = itemId;
+        this.menuItemId = menuItemId;
         this.price = price;
     }
 
     static fromJsonEntry(entry: any): SaleContainer {
-        return new SaleContainer(entry.id, entry.containerId, entry.itemId, entry.price);
+        return new SaleContainer(entry.id, entry.containerId, entry.menuItemId, entry.price);
     }
 }

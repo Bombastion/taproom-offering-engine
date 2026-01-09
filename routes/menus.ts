@@ -64,7 +64,7 @@ export class MenusRoutes extends Routes {
           }
           
           // Gather all the container names for this item
-          const allSaleContainersForItem = this.dataProvider.getSaleContainersForItem(item.id!);
+          const allSaleContainersForItem = this.dataProvider.getSaleContainersForMenuItem(menuItem.id!);
           const containerDisplayNameToPrice: Map<string, string> = new Map();
           allSaleContainersForItem.forEach(saleContainer => {
             const containerInfo = this.dataProvider.getContainer(saleContainer.containerId)!;
