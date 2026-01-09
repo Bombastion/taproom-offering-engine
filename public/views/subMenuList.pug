@@ -7,17 +7,19 @@ script(src="/functions.js")
 script.
   function submitAddForm(formId) {
     const form = document.getElementById(formId);
-    setB64FormFieldFromImage(form, 'logoFile', 'logo');
     if (!isFormTextValueValid(form, 'internalName')) {
       return;
     }
     if (!isFormTextValueValid(form, 'displayName')) {
       return;
     }
+    if (!isFormTextValueValid(form, 'menuId')) {
+      return;
+    }
 
     const jsonString = stringifyForm(form);
 
-    fetch(`/menus`, {
+    fetch(`/submenus`, {
       method:'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -33,11 +35,10 @@ script.
 
   function submitEditForm(formId, itemId) {
     const form = document.getElementById(formId);
-    setB64FormFieldFromImage(form, 'logoFile', 'logo');
     
     const jsonString = stringifyForm(form);
 
-    fetch(`/menus/${itemId}`, {
+    fetch(`/submenus/${itemId}`, {
       method:'PATCH',
       headers: {
         'Content-Type': 'application/json'
@@ -57,47 +58,49 @@ html
       button(onclick="toggleShowElement('createItemNewDiv')") Add New
       div(style="display: none", id="createItemNewDiv")
         form(id="addItemForm")
-          label(for="logoFile") Logo:
-          input(name="logoFile" id="logoFile" type="file" accept="image/png, image/jpeg" onchange="setB64FormFieldFromImage(document.getElementById('addItemForm'), 'logoFile', 'logo')")
           label(for="internalName") Internal Name:
           input(name="internalName" id="internalName")
           label(for="displayName") Display Name:
           input(name="displayName" id="displayName")
-          input(name="logo" id="logo" type="hidden")
+          label(for="menuId") Menu ID:
+          input(name="menuId" id="menuId")
+          label(for="order") Display Order:
+          input(name="order" id="order")
         button(onclick="submitAddForm('addItemForm')" type="button") Create Menu
       tbody
         tr
-          th Logo
           th Internal Name
           th Display Name
+          th Menu ID
+          th Display Order
           th 
-          th
         each item in displayList
-          - var existingLogo = item.logo
           - var internalName = item.internalName
           - var displayName = item.displayName
+          - var menuId = item.menuId
+          - var order = item.order
           - var itemId = item.id
           tr 
-            td 
-              img(class='logo' src='data:image;base64, ' + existingLogo)
             td #{internalName}
             td #{displayName}
+            td #{menuId}
+            td #{order}
             td
               button(onclick=`toggleShowElement('editElement${itemId}')`) Edit
-            td
-              a(href=`/menus/${itemId}/submenus/manage`)
-                button Manage Categories
           tr(style="display: none", id=`editElement${itemId}`)
             form(id=`updateForm${itemId}`)
               td
-                label(for="logoFile") Logo:
-                input(name="logoFile" id="logoFile" type="file" accept="image/png, image/jpeg" onchange=`setB64FormFieldFromImage(document.getElementById('updateForm${itemId}'), 'logoFile', 'logo')`)
-              td
-                label(for="internalName") Internal Name:
+                label(for="internalName") Internal Name
                 input(name="internalName" id="internalName")
               td
                 label(for="displayName") Display Name:
                 input(name="displayName" id="displayName")
-              input(name="logo" id="logo" type="hidden")
               td
-                button(onclick=`submitEditForm('updateForm${itemId}', '${itemId}')` type="button") Update Menu
+                label(for="menuId") Menu ID:
+                input(name="menuId" id="menuId")
+              td
+                label(for="order") Display Order:
+                input(name="order" id="order")
+              td
+                button(onclick=`submitEditForm('updateForm${itemId}', '${itemId}')` type="button") Update Category
+

@@ -10,9 +10,15 @@ export class MenusRoutes extends Routes {
   requiredFieldsAndTypes: Record<string, string> = {"internalName": "string", "displayName": "string"};
 
   registerRoutes(): void {
-    this.router.get("/manage", (_req: Request, res: Response) => {
+    this.router.get("/manage", (_: Request, res: Response) => {
       const displayList = this.dataProvider.getMenus();
       res.render("menuList", {displayList: displayList})
+      return;
+    });
+
+    this.router.get("/:menuId/submenus/manage", (req: Request, res: Response) => {
+      const displayList = this.dataProvider.getSubMenusForMenu(parseInt(req.params.menuId));
+      res.render("subMenuList", {displayList: displayList})
       return;
     });
 
@@ -41,8 +47,8 @@ export class MenusRoutes extends Routes {
         const subMenuToItemMap: Map<number, Array<DisplayItem>> = new Map();
         const subMenuToContainerDisplayNameToOrder: Map<number, Map<string, number>> = new Map();
         allSubMenus.forEach((subMenu: SubMenu) => {
-          subMenuToItemMap.set(subMenu.id, []);
-          subMenuToContainerDisplayNameToOrder.set(subMenu.id, new Map());
+          subMenuToItemMap.set(subMenu.id!, []);
+          subMenuToContainerDisplayNameToOrder.set(subMenu.id!, new Map());
         })
 
         // Create DisplayItems for each MenuItem and add it to the appropriate map
@@ -91,7 +97,7 @@ export class MenusRoutes extends Routes {
         // For each submenu, gather all the price options
         const displaySubMenus: Array<DisplaySubMenu> = [];
         allSubMenus.forEach((menu: SubMenu) => {
-          const displayNameToOrder = subMenuToContainerDisplayNameToOrder.get(menu.id)!;
+          const displayNameToOrder = subMenuToContainerDisplayNameToOrder.get(menu.id!)!;
           const displayNameAndOrderObjects: Array<{ displayName: string, order: number }> = []
           displayNameToOrder.forEach((order, displayName) => {
             displayNameAndOrderObjects.push({ "displayName": displayName, "order": order });
@@ -160,6 +166,8 @@ export class MenusRoutes extends Routes {
 }
 
 export class SubMenusRoutes extends Routes {
+  requiredFieldsAndTypes: Record<string, string> = {"internalName": "string", "displayName": "string"};
+
   registerRoutes(): void {
     this.router.get("/:menuId", (req: Request, res: Response) => {
       const result = this.dataProvider.getSubMenu(parseInt(req.params.menuId))
@@ -168,6 +176,49 @@ export class SubMenusRoutes extends Routes {
         return
       }
       res.sendStatus(404);
+      return
+    });
+
+    // Creates a new submenu
+    this.router.post("/", (req: Request, res: Response) => {
+      if(!this.validateInput(req, res, this.requiredFieldsAndTypes)) {
+        return;
+      }
+
+      const menuId = req.body.menuId? parseInt(req.body.menuId) : null;
+      const order = req.body.order? parseInt(req.body.order) : null;
+      const submenu = new SubMenu(null, req.body.internalName, req.body.displayName, menuId, order);
+      const result = this.dataProvider.addSubMenu(submenu)
+
+      res.send(result);
+    });
+
+    // Update an existing submenu
+    this.router.patch("/:menuId", (req: Request, res: Response) => {
+      try{
+        if (!req.body) {
+          res.status(400).send("Request body expected");
+          return;
+        }
+
+        const menuId = req.body.menuId? parseInt(req.body.menuId) : null;
+        const order = req.body.order? parseInt(req.body.order) : null;
+        const submenu = new SubMenu(null, req.body.internalName, req.body.displayName, menuId, order);
+        const result = this.dataProvider.updateSubMenu(parseInt(req.params.menuId), submenu);
+        if (result !== null) {
+          res.send(result);
+          return;
+        }
+        res.status(400);
+        res.send("Invalid Argument");
+        return
+      } catch(e: any) {
+        const statusCode = "statusCode" in e ? e["statusCode"] : 500;
+        const message = "message" in e ? e["message"] : "Unexpected error occurred";
+        res.status(statusCode);
+        res.send(message);
+      }
+      
       return
     });
   }

@@ -20,13 +20,13 @@ export class Menu {
 
 // A particular sub-heading on a menu. Used to organize items within a menu
 export class SubMenu {
-    id: number;
-    internalName: string;
-    displayName: string;
-    menuId: number;
-    order: number;
+    id: number | null;
+    internalName: string | null;
+    displayName: string | null;
+    menuId: number | null;
+    order: number | null;
     
-    constructor(id: number, internalName: string, displayName: string, menuId: number, order: number) {
+    constructor(id: number | null, internalName: string | null, displayName: string | null, menuId: number | null, order: number | null) {
         this.id = id;
         this.internalName = internalName;
         this.displayName = displayName;

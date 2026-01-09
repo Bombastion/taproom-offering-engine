@@ -46,6 +46,7 @@ export abstract class DataProvider {
     abstract getSubMenu(id: number): SubMenu | null;
     // Gets all sub-menus for a menu, ordered by "order"
     abstract getSubMenusForMenu(menuId: number): Array<SubMenu>;
+    abstract updateSubMenu(id: number, subMenu: SubMenu): SubMenu;
     
     abstract addMenuItem(item: MenuItem): MenuItem;
     abstract getMenuItem(id: number): MenuItem | null;
@@ -305,12 +306,15 @@ export class LocalDataProvider extends DataProvider {
         return this.updateGeneric(id, this.MENUS_KEY, menu, Menu, ['id']);
     }
 
-    addSubMenu(menu: SubMenu): SubMenu {
-        if (!this.idExists(menu.menuId, this.MENUS_KEY)) {
-            console.log(`TODO: Do an error here because ID ${menu.menuId} does not exist for menus`);
+    validateSubMenu(item: SubMenu) {
+        if (item.menuId && !this.idExists(item.menuId, this.MENUS_KEY)) {
+            console.log(`TODO: Do an error here because ID ${item.menuId} does not exist for menus when adding ${item.id}`)
         }
+    }
 
-        return this.addGeneric(menu, this.SUBMENUS_KEY);
+    addSubMenu(subMenu: SubMenu): SubMenu {
+        this.validateSubMenu(subMenu);
+        return this.addGeneric(subMenu, this.SUBMENUS_KEY);
     }
 
     getSubMenu(id: number): SubMenu | null {
@@ -326,8 +330,13 @@ export class LocalDataProvider extends DataProvider {
             }
         });
 
-        results.sort((a: SubMenu, b: SubMenu) => a.order - b.order);
+        results.sort((a: SubMenu, b: SubMenu) => (a.order ? a.order : 999) - (b.order ? b.order : 999));
         return results;
+    }
+
+    updateSubMenu(id: number, subMenu: SubMenu): SubMenu {
+        this.validateSubMenu(subMenu);
+        return this.updateGeneric(id, this.SUBMENUS_KEY, subMenu, SubMenu, ['id']);
     }
 
     addMenuItem(item: MenuItem): MenuItem {
