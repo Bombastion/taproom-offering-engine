@@ -2,12 +2,20 @@ import { Request, Response } from 'express';
 import Routes from './common';
 import {v4 as uuidv4} from 'uuid';
 import { Item } from '../models/items';
-import { DisplayItem, DisplaySubMenu, MenuItem, SubMenu } from '../models/menus';
+import { DisplayItem, DisplaySubMenu, Menu, MenuItem, SubMenu } from '../models/menus';
 import { Brewery } from '../models/breweries';
 
 
 export class MenusRoutes extends Routes {
+  requiredFieldsAndTypes: Record<string, string> = {"internalName": "string", "displayName": "string"};
+
   registerRoutes(): void {
+    this.router.get("/manage", (_req: Request, res: Response) => {
+      const displayList = this.dataProvider.getMenus();
+      res.render("menuList", {displayList: displayList})
+      return;
+    });
+
     this.router.get("/:menuId", (req: Request, res: Response) => {
       const result = this.dataProvider.getMenu(parseInt(req.params.menuId))
 
@@ -25,9 +33,9 @@ export class MenusRoutes extends Routes {
       }
       if (req.query.format === "print") {
         // Get all the sub-menus for this menu
-        const allSubMenus = this.dataProvider.getSubMenusForMenu(result.id);
+        const allSubMenus = this.dataProvider.getSubMenusForMenu(result.id!);
         // Add a fake sub-menu for anything that was uncategorized
-        allSubMenus.push(new SubMenu(-1, "uncategorized", "uncategorized", result.id, -1));
+        allSubMenus.push(new SubMenu(-1, "uncategorized", "uncategorized", result.id!, -1));
 
         // Initialize a map we can add things to
         const subMenuToItemMap: Map<number, Array<DisplayItem>> = new Map();
@@ -39,7 +47,7 @@ export class MenusRoutes extends Routes {
 
         // Create DisplayItems for each MenuItem and add it to the appropriate map
         // Also gathers all container display info for submenus during the loop
-        const allItemsForMenu = this.dataProvider.getMenuItemsForMenu(result.id);
+        const allItemsForMenu = this.dataProvider.getMenuItemsForMenu(result.id!);
         allItemsForMenu.forEach((menuItem: MenuItem) => {
           const item = this.dataProvider.getItem(menuItem.itemId)!;
 
@@ -109,6 +117,43 @@ export class MenusRoutes extends Routes {
       }
       
       res.sendStatus(400);
+      return
+    });
+
+    // Creates a new menu
+    this.router.post("/", (req: Request, res: Response) => {
+      if(!this.validateInput(req, res, this.requiredFieldsAndTypes)) {
+        return;
+      }
+
+      const menu = new Menu(null, req.body.internalName, req.body.displayName, req.body.logo);
+      const result = this.dataProvider.addMenu(menu);
+
+      res.send(result);
+    });
+
+    // Update an existing container
+    this.router.patch("/:menuId", (req: Request, res: Response) => {
+      try{
+        if (!req.body) {
+          res.status(400).send("Request body expected");
+          return;
+        }
+        const result = this.dataProvider.updateMenu(parseInt(req.params.menuId), new Menu(null, req.body.internalName, req.body.displayName, req.body.logo));
+        if (result !== null) {
+          res.send(result);
+          return;
+        }
+        res.status(400);
+        res.send("Invalid Argument");
+        return
+      } catch(e: any) {
+        const statusCode = "statusCode" in e ? e["statusCode"] : 500;
+        const message = "message" in e ? e["message"] : "Unexpected error occurred";
+        res.status(statusCode);
+        res.send(message);
+      }
+      
       return
     });
   }

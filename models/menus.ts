@@ -1,12 +1,12 @@
 // Represents a collection of items to form a menu
 export class Menu {
-    id: number;
-    internalName: string;
-    displayName: string;
+    id: number | null;
+    internalName: string | null;
+    displayName: string | null;
     // A b64 string representing the logo
     logo: string | null;
 
-    constructor(id: number, internalName: string, displayName: string, logo: string) {
+    constructor(id: number | null, internalName: string | null, displayName: string | null, logo: string | null) {
         this.id = id;
         this.internalName = internalName;
         this.displayName = displayName;

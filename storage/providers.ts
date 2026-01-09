@@ -39,6 +39,8 @@ export abstract class DataProvider {
 
     abstract addMenu(menu: Menu): Menu;
     abstract getMenu(id: number): Menu | null;
+    abstract getMenus(): Array<Menu>;
+    abstract updateMenu(id: number, menu: Menu): Menu;
     
     abstract addSubMenu(menu: SubMenu): SubMenu;
     abstract getSubMenu(id: number): SubMenu | null;
@@ -282,7 +284,7 @@ export class LocalDataProvider extends DataProvider {
         return this.getGenericList(this.ITEMS_KEY);
     }
 
-    updateItem(itemId: number, item: Item): Item{
+    updateItem(itemId: number, item: Item): Item {
         this.validateItem(item);
         return this.updateGeneric(itemId, this.ITEMS_KEY, item, Item, ['id']);
     }
@@ -293,6 +295,14 @@ export class LocalDataProvider extends DataProvider {
 
     getMenu(id: number): Menu | null {
         return this.getGeneric(id, this.MENUS_KEY);
+    }
+
+    getMenus(): Array<Menu> {
+        return this.getGenericList(this.MENUS_KEY);
+    }
+
+    updateMenu(id: number, menu: Menu): Menu {
+        return this.updateGeneric(id, this.MENUS_KEY, menu, Menu, ['id']);
     }
 
     addSubMenu(menu: SubMenu): SubMenu {

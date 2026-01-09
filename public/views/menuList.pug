@@ -1,0 +1,99 @@
+<link rel="stylesheet" type="text/css" href="/editor.css" />
+script.
+  var exports = {};
+
+script(src="/functions.js")
+
+script.
+  function submitAddForm(formId) {
+    const form = document.getElementById(formId);
+    setB64FormFieldFromImage(form, 'logoFile', 'logo');
+    if (!isFormTextValueValid(form, 'internalName')) {
+      return;
+    }
+    if (!isFormTextValueValid(form, 'displayName')) {
+      return;
+    }
+
+    const jsonString = stringifyForm(form);
+
+    fetch(`/menus`, {
+      method:'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: jsonString
+    }).then(data => {
+      window.location.reload();
+    })
+    .catch(error => {
+      alert(`Problem making request: ${error}`);
+    });
+  }
+
+  function submitEditForm(formId, itemId) {
+    const form = document.getElementById(formId);
+    setB64FormFieldFromImage(form, 'logoFile', 'logo');
+    
+    const jsonString = stringifyForm(form);
+
+    fetch(`/menus/${itemId}`, {
+      method:'PATCH',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: jsonString
+    }).then(data => {
+      window.location.reload();
+    })
+    .catch(error => {
+      alert(`Problem making request: ${error}`);
+    });
+  }
+
+html
+  body
+    table
+      button(onclick="toggleShowElement('createItemNewDiv')") Add New
+      div(style="display: none", id="createItemNewDiv")
+        form(id="addItemForm")
+          label(for="logoFile") Logo:
+          input(name="logoFile" id="logoFile" type="file" accept="image/png, image/jpeg" onchange="setB64FormFieldFromImage(document.getElementById('addItemForm'), 'logoFile', 'logo')")
+          label(for="internalName") Internal Name:
+          input(name="internalName" id="internalName")
+          label(for="displayName") Display Name:
+          input(name="displayName" id="displayName")
+          input(name="logo" id="logo" type="hidden")
+        button(onclick="submitAddForm('addItemForm')" type="button") Create Menu
+      tbody
+        tr
+          th Logo
+          th Internal Name
+          th Display Name
+          th 
+        each item in displayList
+          - var existingLogo = item.logo
+          - var internalName = item.internalName
+          - var displayName = item.displayName
+          - var itemId = item.id
+          tr 
+            td 
+              img(class='logo' src='data:image;base64, ' + existingLogo)
+            td #{internalName}
+            td #{displayName}
+            td
+              button(onclick=`toggleShowElement('editElement${itemId}')`) Edit
+          tr(style="display: none", id=`editElement${itemId}`)
+            form(id=`updateForm${itemId}`)
+              td
+                label(for="logoFile") Logo:
+                input(name="logoFile" id="logoFile" type="file" accept="image/png, image/jpeg" onchange=`setB64FormFieldFromImage(document.getElementById('updateForm${itemId}'), 'logoFile', 'logo')`)
+              td
+                label(for="internalName") Internal Name:
+                input(name="internalName" id="internalName")
+              td
+                label(for="displayName") Display Name:
+                input(name="displayName" id="displayName")
+              input(name="logo" id="logo" type="hidden")
+              td
+                button(onclick=`submitEditForm('updateForm${itemId}', '${itemId}')` type="button") Update Menu
