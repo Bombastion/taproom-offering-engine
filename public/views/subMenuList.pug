@@ -13,9 +13,6 @@ script.
     if (!isFormTextValueValid(form, 'displayName')) {
       return;
     }
-    if (!isFormTextValueValid(form, 'menuId')) {
-      return;
-    }
 
     const jsonString = stringifyForm(form);
 
@@ -62,10 +59,9 @@ html
           input(name="internalName" id="internalName")
           label(for="displayName") Display Name:
           input(name="displayName" id="displayName")
-          label(for="menuId") Menu ID:
-          input(name="menuId" id="menuId")
           label(for="order") Display Order:
           input(name="order" id="order")
+          input(name="menuId" id="menuId" type="hidden" value=menuId)
         button(onclick="submitAddForm('addItemForm')" type="button") Create Menu
       tbody
         tr

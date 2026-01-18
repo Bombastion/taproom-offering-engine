@@ -37,7 +37,7 @@ script.
 html
   body
     - var subMenuId = subMenu.id
-    h1 Editing #{subMenu.displayName}
+    h1 Editing #{parentMenu.displayName} -> #{subMenu.displayName}
     select(id="menuItemSelect")
       each item, id in itemMap
         option(value=id) #{item.displayName}

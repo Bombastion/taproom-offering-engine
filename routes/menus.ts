@@ -17,8 +17,9 @@ export class MenusRoutes extends Routes {
     });
 
     this.router.get("/:menuId/submenus/manage", (req: Request, res: Response) => {
-      const displayList = this.dataProvider.getSubMenusForMenu(parseInt(req.params.menuId));
-      res.render("subMenuList", {displayList: displayList})
+      const menu = this.dataProvider.getMenu(parseInt(req.params.menuId));
+      const displayList = this.dataProvider.getSubMenusForMenu(menu?.id!);
+      res.render("subMenuList", {displayList: displayList, menuId: menu?.id!})
       return;
     });
 
@@ -173,12 +174,13 @@ export class SubMenusRoutes extends Routes {
       const subMenuId = parseInt(req.params.itemId);
       const displayList = this.dataProvider.getMenuItemsForSubMenu(subMenuId);
       const subMenu = this.dataProvider.getSubMenu(subMenuId);
+      const menu = this.dataProvider.getMenu(subMenu?.menuId!);
       const allItems = this.dataProvider.getItems();
       const itemMap = new Map<number, Item>();
       for (const item of allItems) {
         itemMap.set(item.id!, item);
       }
-      res.render("menuItemList", {displayList: displayList, subMenu: subMenu, itemMap: Object.fromEntries(itemMap)});
+      res.render("menuItemList", {displayList: displayList, subMenu: subMenu, itemMap: Object.fromEntries(itemMap), parentMenu: menu});
       return;
     });
 
