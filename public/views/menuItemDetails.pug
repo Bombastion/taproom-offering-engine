@@ -25,6 +25,28 @@ script.
     });
   }
 
+  function submitAddForm(formId) {
+    const form = document.getElementById(formId);
+    if (!isFormTextValueValid(form, 'price')) {
+      return;
+    }
+
+    const jsonString = stringifyForm(form);
+
+    fetch(`/sale-containers`, {
+      method:'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: jsonString
+    }).then(data => {
+      window.location.reload();
+    })
+    .catch(error => {
+      alert(`Problem making request: ${error}`);
+    });
+  }
+
 html
   body
     h1 Editing #{parentMenu.displayName} -> #{subMenu.displayName} -> #{itemDetails.displayName}
@@ -62,13 +84,24 @@ html
             td
               button(onclick=`submitEditForm()` type="button") Update Menu Item
     h2 Containers
-      table
-        tbody 
+    table
+      tbody 
+        tr 
+          button(onclick="toggleShowElement('createSaleContainerDiv')") Add Sale Container
+          div(style="display: none", id="createSaleContainerDiv")
+            form(id="addSaleContainerForm")
+              select(id="containerId" name="containerId")
+                each item, id in containerDetailMap 
+                  option(value=id) #{item.containerName} #{item.displayName}
+              label(for="price") Price:
+              input(name="price")
+              input(name="itemId" type="hidden" value=menuItem.id)
+            button(onclick="submitAddForm('addSaleContainerForm')" type="button") Submit Container
+        tr 
+          th Container Name 
+          th Price
+        each container in containersList
+          - var containerDetails = containerDetailMap[container.containerId]
           tr 
-            th Container Name 
-            th Price
-          each container in containersList
-            - var containerDetails = containerDetailMap[container.containerId]
-            tr 
-              td #{containerDetails.displayName}
-              td #{container.price}
+            td #{containerDetails.containerName} #{containerDetails.displayName}
+            td #{container.price}
