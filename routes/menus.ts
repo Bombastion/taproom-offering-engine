@@ -4,6 +4,7 @@ import {v4 as uuidv4} from 'uuid';
 import { Item } from '../models/items';
 import { DisplayItem, DisplaySubMenu, Menu, MenuItem, SubMenu } from '../models/menus';
 import { Brewery } from '../models/breweries';
+import { ItemContainer } from '../models/containers';
 
 
 export class MenusRoutes extends Routes {
@@ -265,13 +266,32 @@ export class SubMenusRoutes extends Routes {
 export class MenuItemsRoutes extends Routes {
   registerRoutes(): void {
     this.router.get("/:itemId", (req: Request, res: Response) => {
-      const result = this.dataProvider.getMenuItem(parseInt(req.params.itemId))
+      const result = this.dataProvider.getMenuItem(parseInt(req.params.itemId));
       if (result !== null) {
         res.send(result);
-        return
+        return;
       }
       res.sendStatus(404);
-      return
+      return;
+    });
+
+    this.router.get("/:itemId/manage", (req: Request, res: Response) => {
+      const result = this.dataProvider.getMenuItem(parseInt(req.params.itemId));
+      const itemForMenuItem = this.dataProvider.getItem(result?.itemId!);
+      const subMenu = this.dataProvider.getSubMenu(result?.subMenuId!);
+      const parentMenu = this.dataProvider.getMenu(subMenu?.menuId!);
+      const containersList = this.dataProvider.getSaleContainersForMenuItem(result?.id!);
+      const allContainers = this.dataProvider.getContainers();
+      const containerMap = new Map<number, ItemContainer>();
+      for (const container of allContainers) {
+        containerMap.set(container.id!, container);
+      }
+      if (result !== null) {
+        res.render("menuItemDetails", {menuItem: result, itemDetails: itemForMenuItem, subMenu: subMenu, parentMenu: parentMenu, containersList: containersList, containerDetailMap: Object.fromEntries(containerMap)});
+        return;
+      }
+      res.sendStatus(404);
+      return;
     });
   }
 }

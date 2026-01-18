@@ -34,6 +34,10 @@ script.
     });
   }
 
+  function goToMenuItemDetails(menuItemId) {
+    window.location.href = `/menu-items/${menuItemId}/manage`;
+  }
+
 html
   body
     - var subMenuId = subMenu.id
@@ -49,6 +53,8 @@ html
           th Internal Name
           th Display Name
           th Display Order
+          th
+          th
         each item in displayList
           - var matchingItem = itemMap[item.itemId]
           - var logo = item.itemLogo
@@ -61,5 +67,7 @@ html
             td #{internalName}
             td #{displayName}
             td #{order}
+            td
+              button(onclick=`goToMenuItemDetails(${item.id})`) Edit Item/Containers
             td
               button(onclick=`removeMenuItemFromSubMenu(${subMenuId}, ${item.id})`) Remove

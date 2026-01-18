@@ -1,0 +1,63 @@
+<link rel="stylesheet" type="text/css" href="/editor.css" />
+script.
+  var exports = {};
+
+script(src="/functions.js")
+
+script.
+  function addItemToSubMenu(subMenuId) {
+    const selectedId = document.getElementById('menuItemSelect').value;
+    fetch(`/submenus/${subMenuId}/menuItems/${selectedId}`, {
+      method:'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    }).then(data => {
+      window.location.reload();
+    })
+    .catch(error => {
+      alert(`Problem making request: ${error}`);
+    });
+  }
+
+  function removeMenuItemFromSubMenu(subMenuId, itemId) {
+    fetch(`/submenus/${subMenuId}/menuItems/${itemId}`, {
+      method:'DELETE',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    }).then(data => {
+      window.location.reload();
+    })
+    .catch(error => {
+      alert(`Problem making request: ${error}`);
+    });
+  }
+
+html
+  body
+    h1 Editing #{parentMenu.displayName} -> #{subMenu.displayName} -> #{itemDetails.displayName}
+    table
+      tbody
+        tr
+          th Logo
+          th Internal Name
+          th Display Name
+          th Display Order
+        tr 
+          td 
+            img(class='logo' src='data:image;base64, ' + logo)
+          td #{itemDetails.internalName}
+          td #{itemDetails.displayName}
+          td #{menuItem.order}
+    h2 Containers
+      table
+        tbody 
+          tr 
+            th Container Name 
+            th Price
+          each container in containersList
+            - var containerDetails = containerDetailMap[container.containerId]
+            tr 
+              td #{containerDetails.displayName}
+              td #{container.price}
