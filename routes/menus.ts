@@ -293,5 +293,28 @@ export class MenuItemsRoutes extends Routes {
       res.sendStatus(404);
       return;
     });
+
+    this.router.patch("/:itemId", (req: Request, res: Response) => {
+      try{
+        if (!req.body) {
+          res.status(400).send("Request body expected");
+          return;
+        }
+        const result = this.dataProvider.updateMenuItem(parseInt(req.params.itemId), new MenuItem(null, null, null, null, req.body.itemLogoB64, parseInt(req.body.order)));
+        if (result !== null) {
+          res.send(result);
+          return;
+        }
+        res.status(400);
+        res.send("Invalid Argument");
+        return;
+      } catch(e: any) {
+        const statusCode = "statusCode" in e ? e["statusCode"] : 500;
+        const message = "message" in e ? e["message"] : "Unexpected error occurred";
+        res.status(statusCode);
+        res.send(message);
+        return;
+      }
+    });
   }
 }

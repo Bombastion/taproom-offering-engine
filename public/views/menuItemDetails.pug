@@ -5,27 +5,18 @@ script.
 script(src="/functions.js")
 
 script.
-  function addItemToSubMenu(subMenuId) {
-    const selectedId = document.getElementById('menuItemSelect').value;
-    fetch(`/submenus/${subMenuId}/menuItems/${selectedId}`, {
-      method:'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    }).then(data => {
-      window.location.reload();
-    })
-    .catch(error => {
-      alert(`Problem making request: ${error}`);
-    });
-  }
+  function submitEditForm() {
+    const form = document.getElementById('editItemForm');
+    setB64FormFieldFromImage(form, 'itemLogo', 'itemLogoB64');
 
-  function removeMenuItemFromSubMenu(subMenuId, itemId) {
-    fetch(`/submenus/${subMenuId}/menuItems/${itemId}`, {
-      method:'DELETE',
+    const jsonString = stringifyForm(form);
+
+    fetch(`/menu-items/${form['menuItemId'].value}`, {
+      method:'PATCH',
       headers: {
         'Content-Type': 'application/json'
-      }
+      },
+      body: jsonString
     }).then(data => {
       window.location.reload();
     })
@@ -44,12 +35,32 @@ html
           th Internal Name
           th Display Name
           th Display Order
+          th
         tr 
           td 
-            img(class='logo' src='data:image;base64, ' + logo)
+            img(class='logo' src='data:image;base64, ' + menuItem.itemLogo)
           td #{itemDetails.internalName}
           td #{itemDetails.displayName}
           td #{menuItem.order}
+          td 
+            button(onclick=`toggleShowElement('editItemElement')`) Edit
+        tr(style="display: none", id=`editItemElement`)
+          form(id=`editItemForm`)
+            td
+              label(for="itemLogo") Logo:
+              input(name="itemLogo" id="itemLogo" type="file" accept="image/png, image/jpeg" onchange=`setB64FormFieldFromImage(document.getElementById('editItemForm'), 'itemLogo', 'itemLogoB64')`)
+            td 
+            td
+            td
+              label(for="order") Order:
+              input(name="order" id="order")
+            input(name="itemLogoB64" id="itemLogoB64" type="hidden")
+            input(name="menuId" id="menuId" type="hidden" value=parentMenu.id)
+            input(name="subMenuId" id="subMenuId" type="hidden" value=subMenu.id)
+            input(name="itemId" id="itemId" type="hidden" value=itemDetails.id)
+            input(name="menuItemId", id="menuItemId", type="hidden", value=menuItem.id)
+            td
+              button(onclick=`submitEditForm()` type="button") Update Menu Item
     h2 Containers
       table
         tbody 

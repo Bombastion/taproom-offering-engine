@@ -53,6 +53,7 @@ export abstract class DataProvider {
     abstract getMenuItemsForMenu(menuId: number): Array<MenuItem>;
     abstract getMenuItemsForSubMenu(subMenuId: number): Array<MenuItem>;
     abstract removeMenuItem(id: number): boolean;
+    abstract updateMenuItem(id: number, item: MenuItem): MenuItem;
 }
 
 export class LocalDataProvider extends DataProvider {
@@ -395,5 +396,10 @@ export class LocalDataProvider extends DataProvider {
 
     removeMenuItem(id: number): boolean {
         return this.removeGeneric(id, this.MENU_ITEMS_KEY);
+    }
+
+    updateMenuItem(id: number, item: MenuItem): MenuItem {
+        this.validateMenuItem(item);
+        return this.updateGeneric(id, this.MENU_ITEMS_KEY, item, MenuItem, ["id"]);
     }
 }
