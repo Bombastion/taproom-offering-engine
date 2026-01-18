@@ -201,7 +201,9 @@ export class LocalDataProvider extends DataProvider {
         if (!this.idExists(id, mapName)) {
             return false;
         } else {
+            console.log(this._cache.get(mapName)?.keys())
             this._cache.get(mapName)!.delete(id);
+            console.log(this._cache.get(mapName)?.keys())
             return true;
         }
     }
