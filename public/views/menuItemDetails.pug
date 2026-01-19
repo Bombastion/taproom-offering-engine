@@ -47,6 +47,20 @@ script.
     });
   }
 
+  function removeContainer(containerId) {
+    fetch(`/sale-containers/${containerId}`, {
+      method:'DELETE',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+    }).then(data => {
+      window.location.reload();
+    })
+    .catch(error => {
+      alert(`Problem making request: ${error}`);
+    }); 
+  }
+
 html
   body
     h1 Editing #{parentMenu.displayName} -> #{subMenu.displayName} -> #{itemDetails.displayName}
@@ -100,8 +114,11 @@ html
         tr 
           th Container Name 
           th Price
+          th
         each container in containersList
           - var containerDetails = containerDetailMap[container.containerId]
           tr 
             td #{containerDetails.containerName} #{containerDetails.displayName}
             td #{container.price}
+            td
+              button(onclick=`removeContainer(${container.id})`) Remove Container
