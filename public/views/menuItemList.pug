@@ -34,10 +34,14 @@ script.
     });
   }
 
+  function goToMenuItemDetails(menuItemId) {
+    window.location.href = `/menu-items/${menuItemId}/manage`;
+  }
+
 html
   body
     - var subMenuId = subMenu.id
-    h1 Editing #{subMenu.displayName}
+    h1 Editing #{parentMenu.displayName} -> #{subMenu.displayName}
     select(id="menuItemSelect")
       each item, id in itemMap
         option(value=id) #{item.displayName}
@@ -49,6 +53,8 @@ html
           th Internal Name
           th Display Name
           th Display Order
+          th
+          th
         each item in displayList
           - var matchingItem = itemMap[item.itemId]
           - var logo = item.itemLogo
@@ -62,4 +68,6 @@ html
             td #{displayName}
             td #{order}
             td
-              button(onclick=`removeMenuItemFromSubMenu(${subMenuId}, ${matchingItem.id})`) Remove
+              button(onclick=`goToMenuItemDetails(${item.id})`) Edit Item/Containers
+            td
+              button(onclick=`removeMenuItemFromSubMenu(${subMenuId}, ${item.id})`) Remove

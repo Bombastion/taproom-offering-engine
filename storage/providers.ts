@@ -28,7 +28,7 @@ export abstract class DataProvider {
 
     abstract addSaleContainer(container: SaleContainer): SaleContainer;
     abstract getSaleContainer(id: number): SaleContainer | null;
-    abstract getSaleContainersForItem(itemId: number): Array<SaleContainer>;
+    abstract getSaleContainersForMenuItem(itemId: number): Array<SaleContainer>;
     // Deletes a sale container. Returns true if the item was removed, and false if it didn't exist.
     abstract removeSaleContainer(id: number): boolean;
 
@@ -53,6 +53,7 @@ export abstract class DataProvider {
     abstract getMenuItemsForMenu(menuId: number): Array<MenuItem>;
     abstract getMenuItemsForSubMenu(subMenuId: number): Array<MenuItem>;
     abstract removeMenuItem(id: number): boolean;
+    abstract updateMenuItem(id: number, item: MenuItem): MenuItem;
 }
 
 export class LocalDataProvider extends DataProvider {
@@ -99,10 +100,10 @@ export class LocalDataProvider extends DataProvider {
             this.handleListJsonImport(filesInFolder, "breweries.json", Brewery.fromJsonEntry, this.addBrewery.bind(this));
             this.handleListJsonImport(filesInFolder, "items.json", Item.fromJsonEntry, this.addItem.bind(this));
             this.handleListJsonImport(filesInFolder, "containers.json", ItemContainer.fromJsonEntry, this.addContainer.bind(this));
-            this.handleListJsonImport(filesInFolder, "saleContainers.json", SaleContainer.fromJsonEntry, this.addSaleContainer.bind(this));
             this.handleListJsonImport(filesInFolder, "menus.json", Menu.fromJsonEntry, this.addMenu.bind(this));
             this.handleListJsonImport(filesInFolder, "subMenus.json", SubMenu.fromJsonEntry, this.addSubMenu.bind(this));
             this.handleListJsonImport(filesInFolder, "menuItems.json", MenuItem.fromJsonEntry, this.addMenuItem.bind(this));
+            this.handleListJsonImport(filesInFolder, "saleContainers.json", SaleContainer.fromJsonEntry, this.addSaleContainer.bind(this));
         }
     }
 
@@ -246,8 +247,8 @@ export class LocalDataProvider extends DataProvider {
             // A cursory skim suggests I'll need to refactor a lot of this code
             console.log(`TODO: Do an error here because ID ${container.containerId} does not exist for containers`)
         }
-        if (!this.idExists(container.itemId, this.ITEMS_KEY)) {
-            console.log(`TODO: Do an error here because ID ${container.itemId} does not exist for items`)
+        if (!this.idExists(container.menuItemId, this.MENU_ITEMS_KEY)) {
+            console.log(`TODO: Do an error here because ID ${container.menuItemId} does not exist for menu items`)
         }
         return this.addGeneric(container, this.SALE_CONTAINERS_KEY);
     }
@@ -256,11 +257,11 @@ export class LocalDataProvider extends DataProvider {
         return this.getGeneric(id, this.SALE_CONTAINERS_KEY);
     }
 
-    getSaleContainersForItem(itemId: number): Array<SaleContainer> {
+    getSaleContainersForMenuItem(menuItemId: number): Array<SaleContainer> {
         const saleContainers = this._cache.get(this.SALE_CONTAINERS_KEY)!;
         const results: Array<SaleContainer> = [];
         saleContainers.forEach((value: SaleContainer) => {
-            if (value.itemId === itemId) {
+            if (value.menuItemId === menuItemId) {
                 results.push(value);
             }
         });
@@ -393,5 +394,10 @@ export class LocalDataProvider extends DataProvider {
 
     removeMenuItem(id: number): boolean {
         return this.removeGeneric(id, this.MENU_ITEMS_KEY);
+    }
+
+    updateMenuItem(id: number, item: MenuItem): MenuItem {
+        this.validateMenuItem(item);
+        return this.updateGeneric(id, this.MENU_ITEMS_KEY, item, MenuItem, ["id"]);
     }
 }

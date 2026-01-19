@@ -59,7 +59,7 @@ export class MenuItem {
     itemLogo: string | null;
     order: number | null;
 
-    constructor(id: number | null, menuId: number, itemId: number, subMenuId: number | null, itemLogo: string | null, order: number | null) {
+    constructor(id: number | null, menuId: number | null, itemId: number | null, subMenuId: number | null, itemLogo: string | null, order: number | null) {
         this.id = id;
         this.menuId = menuId;
         this.itemId = itemId;

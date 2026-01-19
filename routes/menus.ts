@@ -4,6 +4,7 @@ import {v4 as uuidv4} from 'uuid';
 import { Item } from '../models/items';
 import { DisplayItem, DisplaySubMenu, Menu, MenuItem, SubMenu } from '../models/menus';
 import { Brewery } from '../models/breweries';
+import { ItemContainer } from '../models/containers';
 
 
 export class MenusRoutes extends Routes {
@@ -17,8 +18,9 @@ export class MenusRoutes extends Routes {
     });
 
     this.router.get("/:menuId/submenus/manage", (req: Request, res: Response) => {
-      const displayList = this.dataProvider.getSubMenusForMenu(parseInt(req.params.menuId));
-      res.render("subMenuList", {displayList: displayList})
+      const menu = this.dataProvider.getMenu(parseInt(req.params.menuId));
+      const displayList = this.dataProvider.getSubMenusForMenu(menu?.id!);
+      res.render("subMenuList", {displayList: displayList, menuId: menu?.id!})
       return;
     });
 
@@ -64,7 +66,7 @@ export class MenusRoutes extends Routes {
           }
           
           // Gather all the container names for this item
-          const allSaleContainersForItem = this.dataProvider.getSaleContainersForItem(item.id!);
+          const allSaleContainersForItem = this.dataProvider.getSaleContainersForMenuItem(menuItem.id!);
           const containerDisplayNameToPrice: Map<string, string> = new Map();
           allSaleContainersForItem.forEach(saleContainer => {
             const containerInfo = this.dataProvider.getContainer(saleContainer.containerId)!;
@@ -173,12 +175,13 @@ export class SubMenusRoutes extends Routes {
       const subMenuId = parseInt(req.params.itemId);
       const displayList = this.dataProvider.getMenuItemsForSubMenu(subMenuId);
       const subMenu = this.dataProvider.getSubMenu(subMenuId);
+      const menu = this.dataProvider.getMenu(subMenu?.menuId!);
       const allItems = this.dataProvider.getItems();
       const itemMap = new Map<number, Item>();
       for (const item of allItems) {
         itemMap.set(item.id!, item);
       }
-      res.render("menuItemList", {displayList: displayList, subMenu: subMenu, itemMap: Object.fromEntries(itemMap)});
+      res.render("menuItemList", {displayList: displayList, subMenu: subMenu, itemMap: Object.fromEntries(itemMap), parentMenu: menu});
       return;
     });
 
@@ -263,13 +266,55 @@ export class SubMenusRoutes extends Routes {
 export class MenuItemsRoutes extends Routes {
   registerRoutes(): void {
     this.router.get("/:itemId", (req: Request, res: Response) => {
-      const result = this.dataProvider.getMenuItem(parseInt(req.params.itemId))
+      const result = this.dataProvider.getMenuItem(parseInt(req.params.itemId));
       if (result !== null) {
         res.send(result);
-        return
+        return;
       }
       res.sendStatus(404);
-      return
+      return;
+    });
+
+    this.router.get("/:itemId/manage", (req: Request, res: Response) => {
+      const result = this.dataProvider.getMenuItem(parseInt(req.params.itemId));
+      const itemForMenuItem = this.dataProvider.getItem(result?.itemId!);
+      const subMenu = this.dataProvider.getSubMenu(result?.subMenuId!);
+      const parentMenu = this.dataProvider.getMenu(subMenu?.menuId!);
+      const containersList = this.dataProvider.getSaleContainersForMenuItem(result?.id!);
+      const allContainers = this.dataProvider.getContainers();
+      const containerMap = new Map<number, ItemContainer>();
+      for (const container of allContainers) {
+        containerMap.set(container.id!, container);
+      }
+      if (result !== null) {
+        res.render("menuItemDetails", {menuItem: result, itemDetails: itemForMenuItem, subMenu: subMenu, parentMenu: parentMenu, containersList: containersList, containerDetailMap: Object.fromEntries(containerMap)});
+        return;
+      }
+      res.sendStatus(404);
+      return;
+    });
+
+    this.router.patch("/:itemId", (req: Request, res: Response) => {
+      try{
+        if (!req.body) {
+          res.status(400).send("Request body expected");
+          return;
+        }
+        const result = this.dataProvider.updateMenuItem(parseInt(req.params.itemId), new MenuItem(null, null, null, null, req.body.itemLogoB64, parseInt(req.body.order)));
+        if (result !== null) {
+          res.send(result);
+          return;
+        }
+        res.status(400);
+        res.send("Invalid Argument");
+        return;
+      } catch(e: any) {
+        const statusCode = "statusCode" in e ? e["statusCode"] : 500;
+        const message = "message" in e ? e["message"] : "Unexpected error occurred";
+        res.status(statusCode);
+        res.send(message);
+        return;
+      }
     });
   }
 }

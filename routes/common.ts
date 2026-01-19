@@ -30,7 +30,7 @@ abstract class Routes {
         if (requiredFieldsAndTypes[fieldName] === "string" && typeof(req.body[fieldName]) !== "string") {
           badTypes.push(`${fieldName} must be of type string`);
         }
-        if (requiredFieldsAndTypes[fieldName] === "number" && typeof(req.body[fieldName]) !== "number") {
+        if (requiredFieldsAndTypes[fieldName] === "number" && (typeof(req.body[fieldName]) !== "number" && typeof(parseFloat(req.body[fieldName])) !== "number")) {
           badTypes.push(`${fieldName} must be of type number`);
         }
       }

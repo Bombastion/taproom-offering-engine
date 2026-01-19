@@ -2,43 +2,43 @@
     {
         "id": 1,
         "containerId": 1,
-        "itemId": 1,
+        "menuItemId": 1,
         "price": 5
     },
     {
         "id": 2,
         "containerId": 2,
-        "itemId": 1,
+        "menuItemId": 1,
         "price": 3
     },
     {
         "id": 3,
         "containerId": 3,
-        "itemId": 1,
+        "menuItemId": 1,
         "price":12 
     },
     {
         "id": 4,
         "containerId": 4,
-        "itemId": 2,
+        "menuItemId": 2,
         "price": 7
     },
     {
         "id": 5,
         "containerId": 5,
-        "itemId": 2,
+        "menuItemId": 2,
         "price": 4
     },
     {
         "id": 6,
         "containerId": 2,
-        "itemId": 2,
+        "menuItemId": 2,
         "price": 3
     },
     {
         "id": 7,
         "containerId": 3,
-        "itemId": 2,
+        "menuItemId": 2,
         "price": 18
     }
 ]

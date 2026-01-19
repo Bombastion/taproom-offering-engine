@@ -91,7 +91,7 @@ export class SaleContainersRoutes extends Routes {
         return;
       }
 
-      let container = new SaleContainer(0, req.body.containerId, req.body.itemId, req.body.price);
+      let container = new SaleContainer(0, parseInt(req.body.containerId), parseInt(req.body.itemId), parseFloat(req.body.price));
       container = this.dataProvider.addSaleContainer(container);
 
       res.send(container);
