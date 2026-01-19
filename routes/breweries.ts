@@ -13,7 +13,7 @@ export class BreweriesRoutes extends Routes {
     });
 
     this.router.post("", (req: Request, res: Response) => {
-      const result = this.dataProvider.addBrewery(new Brewery(2, req.body['newBreweryName'], req.body['newBreweryLogoB64'], req.body['newBreweryLocation']));
+      const result = this.dataProvider.addBrewery(new Brewery(null, req.body['newBreweryName'], req.body['newBreweryLogoB64'], req.body['newBreweryLocation']));
       
       res.send(result);
       return;
@@ -25,7 +25,8 @@ export class BreweriesRoutes extends Routes {
           res.status(400).send("Request body expected");
           return;
         }
-        const result = this.dataProvider.updateBrewery(parseInt(req.params.breweryId), new Brewery(null, req.body['newBreweryName'], req.body['newBreweryLogoB64'], req.body['newBreweryLocation']));
+        console.dir(req.body)
+        const result = this.dataProvider.updateBrewery(req.params.breweryId, new Brewery(null, req.body['newBreweryName'], req.body['newBreweryLogoB64'], req.body['newBreweryLocation']));
         if (result !== null) {
           res.send(result);
           return;
@@ -44,7 +45,7 @@ export class BreweriesRoutes extends Routes {
     });
 
     this.router.get("/:breweryId", (req: Request, res: Response) => {
-      const result = this.dataProvider.getBrewery(parseInt(req.params.breweryId))
+      const result = this.dataProvider.getBrewery(req.params.breweryId)
       if (result !== null) {
         res.send(result);
         return

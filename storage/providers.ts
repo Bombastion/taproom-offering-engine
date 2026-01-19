@@ -3,8 +3,7 @@ import { ItemContainer, SaleContainer } from '../models/containers';
 import { Item } from "../models/items";
 import { Brewery } from '../models/breweries';
 import { Menu, MenuItem, SubMenu } from '../models/menus';
-import { EntryType } from 'perf_hooks';
-
+import {v4 as uuidv4} from 'uuid';
 
 export class DataProviderError extends Error {
     statusCode: number;
@@ -17,9 +16,9 @@ export class DataProviderError extends Error {
 
 export abstract class DataProvider {
     abstract addBrewery(brewery: Brewery): Brewery;
-    abstract getBrewery(id: number): Brewery | null;
+    abstract getBrewery(id: string): Brewery | null;
     abstract getBreweries(): Array<Brewery>;
-    abstract updateBrewery(breweryId: number, brewery: Brewery): Brewery;
+    abstract updateBrewery(breweryId: string, brewery: Brewery): Brewery;
 
     abstract addContainer(container: ItemContainer): ItemContainer;
     abstract getContainer(id: number): ItemContainer | null;
@@ -107,11 +106,15 @@ export class LocalDataProvider extends DataProvider {
         }
     }
 
-    getIdForAdd(map: Map<number, any>, existingId: number | null): number {
+    getIdForAdd(map: Map<number, any>, existingId: number | null): number | string {
         if (existingId !== 0 && existingId !== null){
             return existingId;
         }
-        return this.getLatestIdForMap(map);
+        if(typeof map.keys().next === 'number') {
+            return this.getLatestIdForMap(map);
+        } else {
+            return uuidv4();
+        }
     }
 
     getLatestIdForMap(map: Map<number, any>): number {
@@ -136,7 +139,7 @@ export class LocalDataProvider extends DataProvider {
         return toAdd;
     }
 
-    getGeneric(id: number, mapName: string): any {
+    getGeneric(id: any, mapName: string): any {
         const result = this._cache.get(mapName)!.get(id);
         if (!result) {
             return null;
@@ -180,7 +183,7 @@ export class LocalDataProvider extends DataProvider {
     }
 
 
-    updateGeneric(id: number, mapName: string, updated: any, constructorClass: any, keysNotAllowed: string[]): any {
+    updateGeneric(id: any, mapName: string, updated: any, constructorClass: any, keysNotAllowed: string[]): any {
         this.validateUpdatedObject(updated, keysNotAllowed);
         const newValue = this.getObjectWithUpdatedFields(id, mapName, updated, constructorClass);
         
@@ -190,7 +193,7 @@ export class LocalDataProvider extends DataProvider {
         return newValue;
     }
 
-    idExists(id: number, mapName: string): boolean {
+    idExists(id: any, mapName: string): boolean {
         const result = this.getGeneric(id, mapName);
         if (result !== null) {
             return true;
@@ -211,7 +214,7 @@ export class LocalDataProvider extends DataProvider {
         return this.addGeneric(brewery, this.BREWERIES_KEY);
     }
 
-    getBrewery(id: number): Brewery | null {
+    getBrewery(id: string): Brewery | null {
         return this.getGeneric(id, this.BREWERIES_KEY);
     }
 
@@ -219,7 +222,7 @@ export class LocalDataProvider extends DataProvider {
         return this.getGenericList(this.BREWERIES_KEY);
     }
 
-    updateBrewery(breweryId: number, brewery: Brewery): Brewery {
+    updateBrewery(breweryId: string, brewery: Brewery): Brewery {
         return this.updateGeneric(breweryId, this.BREWERIES_KEY, brewery, Brewery, ['id']);
     }
 
