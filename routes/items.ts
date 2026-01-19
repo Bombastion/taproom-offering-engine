@@ -14,7 +14,7 @@ export class ItemsRoutes extends Routes {
     });
 
     this.router.get("/:itemId", (req: Request, res: Response) => {
-      const result = this.dataProvider.getItem(parseInt(req.params.itemId))
+      const result = this.dataProvider.getItem(req.params.itemId);
       if (result !== null) {
         res.send(result);
         return
@@ -67,7 +67,7 @@ export class ItemsRoutes extends Routes {
           req.body.category,
         );
         
-        const result = this.dataProvider.updateItem(parseInt(req.params.itemId), item);
+        const result = this.dataProvider.updateItem(req.params.itemId, item);
         if (result !== null) {
           res.send(result);
           return;

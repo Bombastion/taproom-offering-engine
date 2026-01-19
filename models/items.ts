@@ -1,6 +1,6 @@
 // Represents a generic type of menu item (food, beverage, etc.)
 export class Item {
-    id: number | null;
+    id: string | null;
     internalName: string | null;
     displayName: string | null;
     // Brewery ID is optional since some of our stuff are things like pretzels
@@ -11,7 +11,7 @@ export class Item {
     // Which menu this should appear on, e.g., "beer", "NA", or "snacks"
     category: string | null;
 
-    constructor(id: number| null, internalName: string| null, displayName: string| null, breweryId: string | null| null, style: string| null, abv: number| null, description: string| null, menuCategory: string| null) {
+    constructor(id: string| null, internalName: string| null, displayName: string| null, breweryId: string | null| null, style: string| null, abv: number| null, description: string| null, menuCategory: string| null) {
         this.id = id;
         this.internalName = internalName;
         this.displayName = displayName;

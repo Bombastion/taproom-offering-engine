@@ -54,12 +54,12 @@ export class DisplaySubMenu {
 export class MenuItem {
     id: number | null;
     menuId: number | null;
-    itemId: number | null;
+    itemId: string | null;
     subMenuId: number | null;
     itemLogo: string | null;
     order: number | null;
 
-    constructor(id: number | null, menuId: number | null, itemId: number | null, subMenuId: number | null, itemLogo: string | null, order: number | null) {
+    constructor(id: number | null, menuId: number | null, itemId: string | null, subMenuId: number | null, itemLogo: string | null, order: number | null) {
         this.id = id;
         this.menuId = menuId;
         this.itemId = itemId;

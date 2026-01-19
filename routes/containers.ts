@@ -63,7 +63,7 @@ export class ContainersRoutes extends Routes {
 }
 
 export class SaleContainersRoutes extends Routes {
-  requiredFieldsAndTypes: Record<string, string> = {"containerId": "number", "itemId": "number", "price": "number"};
+  requiredFieldsAndTypes: Record<string, string> = {"containerId": "number", "itemId": "string", "price": "number"};
 
   registerRoutes(): void {
     // Gets a specific sale container by ID

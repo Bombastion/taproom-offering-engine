@@ -177,7 +177,7 @@ export class SubMenusRoutes extends Routes {
       const subMenu = this.dataProvider.getSubMenu(subMenuId);
       const menu = this.dataProvider.getMenu(subMenu?.menuId!);
       const allItems = this.dataProvider.getItems();
-      const itemMap = new Map<number, Item>();
+      const itemMap = new Map<string, Item>();
       for (const item of allItems) {
         itemMap.set(item.id!, item);
       }
@@ -198,7 +198,7 @@ export class SubMenusRoutes extends Routes {
     this.router.post("/:menuId/menuItems/:itemId", (req: Request, res: Response) => {
       const subMenu = this.dataProvider.getSubMenu(parseInt(req.params.menuId))
       if (subMenu !== null) {
-        const menuItemToAdd = new MenuItem(null, subMenu.menuId!, parseInt(req.params.itemId), subMenu.id, null, null);
+        const menuItemToAdd = new MenuItem(null, subMenu.menuId!, req.params.itemId, subMenu.id, null, null);
         this.dataProvider.addMenuItem(menuItemToAdd);
         res.status(201).send(menuItemToAdd);
         return;
