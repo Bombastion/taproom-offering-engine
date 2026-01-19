@@ -21,15 +21,15 @@ export abstract class DataProvider {
     abstract updateBrewery(breweryId: string, brewery: Brewery): Brewery;
 
     abstract addContainer(container: ItemContainer): ItemContainer;
-    abstract getContainer(id: number): ItemContainer | null;
+    abstract getContainer(id: string): ItemContainer | null;
     abstract getContainers(): Array<ItemContainer>;
-    abstract updateContainer(containerId: number, container: ItemContainer): ItemContainer;
+    abstract updateContainer(containerId: string, container: ItemContainer): ItemContainer;
 
     abstract addSaleContainer(container: SaleContainer): SaleContainer;
-    abstract getSaleContainer(id: number): SaleContainer | null;
-    abstract getSaleContainersForMenuItem(itemId: number): Array<SaleContainer>;
+    abstract getSaleContainer(id: string): SaleContainer | null;
+    abstract getSaleContainersForMenuItem(itemId: string): Array<SaleContainer>;
     // Deletes a sale container. Returns true if the item was removed, and false if it didn't exist.
-    abstract removeSaleContainer(id: number): boolean;
+    abstract removeSaleContainer(id: string): boolean;
 
     abstract addItem(item: Item): Item;
     abstract getItem(id: string): Item | null;
@@ -42,17 +42,17 @@ export abstract class DataProvider {
     abstract updateMenu(id: string, menu: Menu): Menu;
     
     abstract addSubMenu(menu: SubMenu): SubMenu;
-    abstract getSubMenu(id: number): SubMenu | null;
+    abstract getSubMenu(id: string): SubMenu | null;
     // Gets all sub-menus for a menu, ordered by "order"
     abstract getSubMenusForMenu(menuId: string): Array<SubMenu>;
-    abstract updateSubMenu(id: number, subMenu: SubMenu): SubMenu;
+    abstract updateSubMenu(id: string, subMenu: SubMenu): SubMenu;
     
     abstract addMenuItem(item: MenuItem): MenuItem;
-    abstract getMenuItem(id: number): MenuItem | null;
+    abstract getMenuItem(id: string): MenuItem | null;
     abstract getMenuItemsForMenu(menuId: string): Array<MenuItem>;
-    abstract getMenuItemsForSubMenu(subMenuId: number): Array<MenuItem>;
-    abstract removeMenuItem(id: number): boolean;
-    abstract updateMenuItem(id: number, item: MenuItem): MenuItem;
+    abstract getMenuItemsForSubMenu(subMenuId: string): Array<MenuItem>;
+    abstract removeMenuItem(id: string): boolean;
+    abstract updateMenuItem(id: string, item: MenuItem): MenuItem;
 }
 
 export class LocalDataProvider extends DataProvider {
@@ -65,7 +65,7 @@ export class LocalDataProvider extends DataProvider {
     SUBMENUS_KEY = "submenus";
 
     dataFolder: string;
-    _cache: Map<string, Map<number, any>>;
+    _cache: Map<string, Map<string, any>>;
 
     constructor(dataFolder: string) {
         super();
@@ -106,15 +106,11 @@ export class LocalDataProvider extends DataProvider {
         }
     }
 
-    getIdForAdd(map: Map<number, any>, existingId: number | null): number | string {
-        if (existingId !== 0 && existingId !== null){
+    getIdForAdd(map: Map<string, any>, existingId: string | null): number | string {
+        if (existingId !== '' && existingId !== null){
             return existingId;
         }
-        if(typeof map.keys().next === 'number') {
-            return this.getLatestIdForMap(map);
-        } else {
-            return uuidv4();
-        }
+        return uuidv4();
     }
 
     getLatestIdForMap(map: Map<number, any>): number {
@@ -166,7 +162,7 @@ export class LocalDataProvider extends DataProvider {
         }
     }
 
-    getObjectWithUpdatedFields(id: number, mapName: string, updated: any, constructorClass: any) {
+    getObjectWithUpdatedFields(id: string, mapName: string, updated: any, constructorClass: any) {
         const originalValue = this.getGeneric(id, mapName);
         if (originalValue === null) {
             throw new DataProviderError(`${id} not found`, 404);
@@ -183,7 +179,7 @@ export class LocalDataProvider extends DataProvider {
     }
 
 
-    updateGeneric(id: any, mapName: string, updated: any, constructorClass: any, keysNotAllowed: string[]): any {
+    updateGeneric(id: string, mapName: string, updated: any, constructorClass: any, keysNotAllowed: string[]): any {
         this.validateUpdatedObject(updated, keysNotAllowed);
         const newValue = this.getObjectWithUpdatedFields(id, mapName, updated, constructorClass);
         
@@ -193,7 +189,7 @@ export class LocalDataProvider extends DataProvider {
         return newValue;
     }
 
-    idExists(id: any, mapName: string): boolean {
+    idExists(id: string, mapName: string): boolean {
         const result = this.getGeneric(id, mapName);
         if (result !== null) {
             return true;
@@ -201,7 +197,7 @@ export class LocalDataProvider extends DataProvider {
         return false;
     }
 
-    removeGeneric(id: number, mapName: string): boolean {
+    removeGeneric(id: string, mapName: string): boolean {
         if (!this.idExists(id, mapName)) {
             return false;
         } else {
@@ -230,7 +226,7 @@ export class LocalDataProvider extends DataProvider {
         return this.addGeneric(container, this.CONTAINERS_KEY);
     }
 
-    getContainer(id: number): ItemContainer | null {
+    getContainer(id: string): ItemContainer | null {
         return this.getGeneric(id, this.CONTAINERS_KEY);
     }
 
@@ -238,7 +234,7 @@ export class LocalDataProvider extends DataProvider {
         return this.getGenericList(this.CONTAINERS_KEY);
     }
 
-    updateContainer(containerId: number, container: ItemContainer): ItemContainer {
+    updateContainer(containerId: string, container: ItemContainer): ItemContainer {
         return this.updateGeneric(containerId, this.CONTAINERS_KEY, container, ItemContainer, ['id'])
     }
 
@@ -256,11 +252,11 @@ export class LocalDataProvider extends DataProvider {
         return this.addGeneric(container, this.SALE_CONTAINERS_KEY);
     }
 
-    getSaleContainer(id: number): SaleContainer | null {
+    getSaleContainer(id: string): SaleContainer | null {
         return this.getGeneric(id, this.SALE_CONTAINERS_KEY);
     }
 
-    getSaleContainersForMenuItem(menuItemId: number): Array<SaleContainer> {
+    getSaleContainersForMenuItem(menuItemId: string): Array<SaleContainer> {
         const saleContainers = this._cache.get(this.SALE_CONTAINERS_KEY)!;
         const results: Array<SaleContainer> = [];
         saleContainers.forEach((value: SaleContainer) => {
@@ -272,7 +268,7 @@ export class LocalDataProvider extends DataProvider {
         return results;
     }
 
-    removeSaleContainer(id: number): boolean {
+    removeSaleContainer(id: string): boolean {
         return this.removeGeneric(id, this.SALE_CONTAINERS_KEY);
     }
 
@@ -327,7 +323,7 @@ export class LocalDataProvider extends DataProvider {
         return this.addGeneric(subMenu, this.SUBMENUS_KEY);
     }
 
-    getSubMenu(id: number): SubMenu | null {
+    getSubMenu(id: string): SubMenu | null {
         return this.getGeneric(id, this.SUBMENUS_KEY);
     }
 
@@ -344,7 +340,7 @@ export class LocalDataProvider extends DataProvider {
         return results;
     }
 
-    updateSubMenu(id: number, subMenu: SubMenu): SubMenu {
+    updateSubMenu(id: string, subMenu: SubMenu): SubMenu {
         this.validateSubMenu(subMenu);
         return this.updateGeneric(id, this.SUBMENUS_KEY, subMenu, SubMenu, ['id']);
     }
@@ -366,7 +362,7 @@ export class LocalDataProvider extends DataProvider {
         return this.addGeneric(item, this.MENU_ITEMS_KEY);
     }
 
-    getMenuItem(id: number): MenuItem | null {
+    getMenuItem(id: string): MenuItem | null {
         return this.getGeneric(id, this.MENU_ITEMS_KEY);
     }
 
@@ -382,7 +378,7 @@ export class LocalDataProvider extends DataProvider {
         return results;
     }
 
-    getMenuItemsForSubMenu(subMenuId: number): Array<MenuItem> {
+    getMenuItemsForSubMenu(subMenuId: string): Array<MenuItem> {
         const itemMap = this._cache.get(this.MENU_ITEMS_KEY)!;
         
         const results: Array<MenuItem> = [];
@@ -395,11 +391,11 @@ export class LocalDataProvider extends DataProvider {
         return results; 
     }
 
-    removeMenuItem(id: number): boolean {
+    removeMenuItem(id: string): boolean {
         return this.removeGeneric(id, this.MENU_ITEMS_KEY);
     }
 
-    updateMenuItem(id: number, item: MenuItem): MenuItem {
+    updateMenuItem(id: string, item: MenuItem): MenuItem {
         this.validateMenuItem(item);
         return this.updateGeneric(id, this.MENU_ITEMS_KEY, item, MenuItem, ["id"]);
     }

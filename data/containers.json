@@ -1,30 +1,30 @@
 [
     {
-        "id": 1, 
+        "id": "1152e309-601f-457d-9e6e-e88e300b5981", 
         "containerName": "Libbey Napoli",
         "displayName": "Full Pour",
         "order": 1
     },
     {
-        "id": 2, 
+        "id": "9d24c163-e0f5-48af-b1d0-55e7a09b0676", 
         "containerName": "Taster",
         "displayName": "Taster",
         "order": 3
     },
     {
-        "id": 3, 
+        "id": "ba527e32-eb24-41b5-b39a-e7cf00339187", 
         "containerName": "Crowler",
         "displayName": "32oz Crowler To-Go",
         "order": 4
     },
     {
-        "id": 4,
+        "id": "8f8c7b94-bf5c-417b-8dfb-f9a9036b11fd",
         "containerName": "Craft Master",
-        "displayName":"Full Pour",
+        "displayName": "Full Pour",
         "order": 1
     },
     {
-        "id": 5,
+        "id": "616da9d6-bb17-4aed-a9a3-a0cc3bb96380",
         "containerName": "Craft Master",
         "displayName":"Half Pour",
         "order": 2

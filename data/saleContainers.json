@@ -1,44 +1,44 @@
 [
     {
-        "id": 1,
-        "containerId": 1,
-        "menuItemId": 1,
+        "id": "d5d5c6f4-c021-4280-885e-fe8852ededa1",
+        "containerId": "1152e309-601f-457d-9e6e-e88e300b5981",
+        "menuItemId": "2fc7c16c-b688-41b6-93ce-bac486d8a22e",
         "price": 5
     },
     {
-        "id": 2,
-        "containerId": 2,
-        "menuItemId": 1,
+        "id": "e8a16a6e-3796-4789-8ec3-99579dee775b",
+        "containerId": "9d24c163-e0f5-48af-b1d0-55e7a09b0676",
+        "menuItemId": "2fc7c16c-b688-41b6-93ce-bac486d8a22e",
         "price": 3
     },
     {
-        "id": 3,
-        "containerId": 3,
-        "menuItemId": 1,
+        "id": "5e3587b0-3a28-4869-ab07-9fe04f5442c8",
+        "containerId": "ba527e32-eb24-41b5-b39a-e7cf00339187",
+        "menuItemId": "2fc7c16c-b688-41b6-93ce-bac486d8a22e",
         "price":12 
     },
     {
-        "id": 4,
-        "containerId": 4,
-        "menuItemId": 2,
+        "id": "8ef970bf-fbad-44c2-a125-4bc533396bca",
+        "containerId": "8f8c7b94-bf5c-417b-8dfb-f9a9036b11fd",
+        "menuItemId": "52ab7d69-17fc-452f-b2b7-3dd954874623",
         "price": 7
     },
     {
-        "id": 5,
-        "containerId": 5,
-        "menuItemId": 2,
+        "id": "67ba5ec7-0f20-4956-bd0e-911032c03500",
+        "containerId": "616da9d6-bb17-4aed-a9a3-a0cc3bb96380",
+        "menuItemId": "52ab7d69-17fc-452f-b2b7-3dd954874623",
         "price": 4
     },
     {
-        "id": 6,
-        "containerId": 2,
-        "menuItemId": 2,
+        "id": "c4c7fe99-27c5-485d-aa38-c3073c52902c",
+        "containerId": "9d24c163-e0f5-48af-b1d0-55e7a09b0676",
+        "menuItemId": "52ab7d69-17fc-452f-b2b7-3dd954874623",
         "price": 3
     },
     {
-        "id": 7,
-        "containerId": 3,
-        "menuItemId": 2,
+        "id": "373b514f-56dc-4797-8d6b-0334023cd900",
+        "containerId": "ba527e32-eb24-41b5-b39a-e7cf00339187",
+        "menuItemId": "52ab7d69-17fc-452f-b2b7-3dd954874623",
         "price": 18
     }
 ]

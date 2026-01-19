@@ -45,7 +45,7 @@ html
     select(id="menuItemSelect")
       each item, id in itemMap
         option(value=id) #{item.displayName}
-    button(onclick=`addItemToSubMenu(${subMenuId})`) Add Item to Category
+    button(onclick=`addItemToSubMenu('${subMenuId}')`) Add Item to Category
     table
       tbody
         tr
@@ -68,6 +68,6 @@ html
             td #{displayName}
             td #{order}
             td
-              button(onclick=`goToMenuItemDetails(${item.id})`) Edit Item/Containers
+              button(onclick=`goToMenuItemDetails('${item.id}')`) Edit Item/Containers
             td
-              button(onclick=`removeMenuItemFromSubMenu(${subMenuId}, ${item.id})`) Remove
+              button(onclick=`removeMenuItemFromSubMenu('${subMenuId}', '${item.id}')`) Remove

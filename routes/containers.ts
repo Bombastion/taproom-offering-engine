@@ -14,7 +14,7 @@ export class ContainersRoutes extends Routes {
 
     // Gets a specific container by ID
     this.router.get("/:containerId", (req: Request, res: Response) => {
-      const result = this.dataProvider.getContainer(parseInt(req.params.containerId));
+      const result = this.dataProvider.getContainer(req.params.containerId);
       if (result !== null) {
         res.send(result);
         return
@@ -29,7 +29,7 @@ export class ContainersRoutes extends Routes {
         return;
       }
 
-      let container = new ItemContainer(null, req.body.containerName, req.body.displayName, req.body.order);
+      let container = new ItemContainer(null, req.body.containerName, req.body.displayName, parseInt(req.body.order));
       container = this.dataProvider.addContainer(container);
 
       res.send(container);
@@ -42,7 +42,8 @@ export class ContainersRoutes extends Routes {
           res.status(400).send("Request body expected");
           return;
         }
-        const result = this.dataProvider.updateContainer(parseInt(req.params.containerId), new ItemContainer(null, req.body.containerName, req.body.displayName, req.body.order));
+        const order = req.body.order? parseInt(req.body.order) : null;
+        const result = this.dataProvider.updateContainer(req.params.containerId, new ItemContainer(null, req.body.containerName, req.body.displayName, order));
         if (result !== null) {
           res.send(result);
           return;
@@ -68,7 +69,7 @@ export class SaleContainersRoutes extends Routes {
   registerRoutes(): void {
     // Gets a specific sale container by ID
     this.router.get("/:containerId", (req: Request, res: Response) => {
-      const result = this.dataProvider.getSaleContainer(parseInt(req.params.containerId));
+      const result = this.dataProvider.getSaleContainer(req.params.containerId);
       if (result !== null) {
         res.send(result);
         return
@@ -79,7 +80,7 @@ export class SaleContainersRoutes extends Routes {
     
     // Deletes a specific sale container by ID
     this.router.delete("/:containerId", (req: Request, res: Response) => {
-      this.dataProvider.removeSaleContainer(parseInt(req.params.containerId));
+      this.dataProvider.removeSaleContainer(req.params.containerId);
       res.sendStatus(204);
       return;
     });
@@ -91,7 +92,7 @@ export class SaleContainersRoutes extends Routes {
         return;
       }
 
-      let container = new SaleContainer(0, parseInt(req.body.containerId), parseInt(req.body.itemId), parseFloat(req.body.price));
+      let container = new SaleContainer(null, req.body.containerId, req.body.itemId, parseFloat(req.body.price));
       container = this.dataProvider.addSaleContainer(container);
 
       res.send(container);
