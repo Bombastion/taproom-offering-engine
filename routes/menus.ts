@@ -18,14 +18,14 @@ export class MenusRoutes extends Routes {
     });
 
     this.router.get("/:menuId/submenus/manage", (req: Request, res: Response) => {
-      const menu = this.dataProvider.getMenu(parseInt(req.params.menuId));
+      const menu = this.dataProvider.getMenu(req.params.menuId);
       const displayList = this.dataProvider.getSubMenusForMenu(menu?.id!);
       res.render("subMenuList", {displayList: displayList, menuId: menu?.id!})
       return;
     });
 
     this.router.get("/:menuId", (req: Request, res: Response) => {
-      const result = this.dataProvider.getMenu(parseInt(req.params.menuId))
+      const result = this.dataProvider.getMenu(req.params.menuId)
 
       if (result === null) {
         res.sendStatus(404);
@@ -42,12 +42,10 @@ export class MenusRoutes extends Routes {
       if (req.query.format === "print") {
         // Get all the sub-menus for this menu
         const allSubMenus = this.dataProvider.getSubMenusForMenu(result.id!);
-        // Add a fake sub-menu for anything that was uncategorized
-        allSubMenus.push(new SubMenu(-1, "Other", "Other", result.id!, -1));
 
         // Initialize a map we can add things to
-        const subMenuToItemMap: Map<number, Array<DisplayItem>> = new Map();
-        const subMenuToContainerDisplayNameToOrder: Map<number, Map<string, number>> = new Map();
+        const subMenuToItemMap: Map<string, Array<DisplayItem>> = new Map();
+        const subMenuToContainerDisplayNameToOrder: Map<string, Map<string, number>> = new Map();
         allSubMenus.forEach((subMenu: SubMenu) => {
           subMenuToItemMap.set(subMenu.id!, []);
           subMenuToContainerDisplayNameToOrder.set(subMenu.id!, new Map());
@@ -74,26 +72,24 @@ export class MenusRoutes extends Routes {
             containerDisplayNameToPrice.set(workingDisplayName, saleContainer.price.toLocaleString('en-US', { minimumFractionDigits: 2}));
 
             // Get the top level display names and orders for the sub menu we're on
-            let displayNameToOrder;
+            let displayNameToOrder = null;
             if (Boolean(menuItem.subMenuId)) {
               displayNameToOrder = subMenuToContainerDisplayNameToOrder.get(menuItem.subMenuId!)!;
-            } else {
-              displayNameToOrder = subMenuToContainerDisplayNameToOrder.get(-1)!;
-            }
-
-            const workingOrder = containerInfo.order ? containerInfo.order : 999;
-            const existingOrderForDisplayName = displayNameToOrder.get(workingDisplayName);
-            if (!existingOrderForDisplayName || existingOrderForDisplayName > workingOrder) {
-              displayNameToOrder.set(workingDisplayName, workingOrder);
+            } 
+            
+            if (displayNameToOrder !== null) {
+              const workingOrder = containerInfo.order ? containerInfo.order : 999;
+              const existingOrderForDisplayName = displayNameToOrder.get(workingDisplayName);
+              if (!existingOrderForDisplayName || existingOrderForDisplayName > workingOrder) {
+                displayNameToOrder.set(workingDisplayName, workingOrder);
+              }
             }
           });
 
           const displayItem = new DisplayItem(brewery ? brewery!.name : null, item.displayName!, item.style, item.abv, item.description, menuItem.order, containerDisplayNameToPrice);
           if (menuItem.subMenuId) {
             subMenuToItemMap.get(menuItem.subMenuId)?.push(displayItem);
-          } else {
-            subMenuToItemMap.get(-1)!.push(displayItem);
-          }
+          } 
         });
 
         // For each submenu, gather all the price options
@@ -140,14 +136,14 @@ export class MenusRoutes extends Routes {
       res.send(result);
     });
 
-    // Update an existing container
+    // Update an existing menu
     this.router.patch("/:menuId", (req: Request, res: Response) => {
       try{
         if (!req.body) {
           res.status(400).send("Request body expected");
           return;
         }
-        const result = this.dataProvider.updateMenu(parseInt(req.params.menuId), new Menu(null, req.body.internalName, req.body.displayName, req.body.logo));
+        const result = this.dataProvider.updateMenu(req.params.menuId, new Menu(null, req.body.internalName, req.body.displayName, req.body.logo));
         if (result !== null) {
           res.send(result);
           return;
@@ -172,12 +168,12 @@ export class SubMenusRoutes extends Routes {
 
   registerRoutes(): void {
     this.router.get("/:itemId/items/manage", (req: Request, res: Response) => {
-      const subMenuId = parseInt(req.params.itemId);
+      const subMenuId = req.params.itemId;
       const displayList = this.dataProvider.getMenuItemsForSubMenu(subMenuId);
       const subMenu = this.dataProvider.getSubMenu(subMenuId);
       const menu = this.dataProvider.getMenu(subMenu?.menuId!);
       const allItems = this.dataProvider.getItems();
-      const itemMap = new Map<number, Item>();
+      const itemMap = new Map<string, Item>();
       for (const item of allItems) {
         itemMap.set(item.id!, item);
       }
@@ -186,7 +182,7 @@ export class SubMenusRoutes extends Routes {
     });
 
     this.router.get("/:menuId", (req: Request, res: Response) => {
-      const result = this.dataProvider.getSubMenu(parseInt(req.params.menuId))
+      const result = this.dataProvider.getSubMenu(req.params.menuId);
       if (result !== null) {
         res.send(result);
         return
@@ -196,9 +192,9 @@ export class SubMenusRoutes extends Routes {
     });
 
     this.router.post("/:menuId/menuItems/:itemId", (req: Request, res: Response) => {
-      const subMenu = this.dataProvider.getSubMenu(parseInt(req.params.menuId))
+      const subMenu = this.dataProvider.getSubMenu(req.params.menuId);
       if (subMenu !== null) {
-        const menuItemToAdd = new MenuItem(null, subMenu.menuId!, parseInt(req.params.itemId), subMenu.id, null, null);
+        const menuItemToAdd = new MenuItem(null, subMenu.menuId!, req.params.itemId, subMenu.id, null, null);
         this.dataProvider.addMenuItem(menuItemToAdd);
         res.status(201).send(menuItemToAdd);
         return;
@@ -208,9 +204,9 @@ export class SubMenusRoutes extends Routes {
     });
 
     this.router.delete("/:menuId/menuItems/:itemId", (req: Request, res: Response) => {
-      const subMenu = this.dataProvider.getSubMenu(parseInt(req.params.menuId))
+      const subMenu = this.dataProvider.getSubMenu(req.params.menuId);
       if (subMenu !== null) {
-        this.dataProvider.removeMenuItem(parseInt(req.params.itemId));
+        this.dataProvider.removeMenuItem(req.params.itemId);
         res.sendStatus(204);
         return;
       }
@@ -224,7 +220,7 @@ export class SubMenusRoutes extends Routes {
         return;
       }
 
-      const menuId = req.body.menuId? parseInt(req.body.menuId) : null;
+      const menuId = req.body.menuId;
       const order = req.body.order? parseInt(req.body.order) : null;
       const submenu = new SubMenu(null, req.body.internalName, req.body.displayName, menuId, order);
       const result = this.dataProvider.addSubMenu(submenu)
@@ -240,10 +236,10 @@ export class SubMenusRoutes extends Routes {
           return;
         }
 
-        const menuId = req.body.menuId? parseInt(req.body.menuId) : null;
+        const menuId = req.body.menuId;
         const order = req.body.order? parseInt(req.body.order) : null;
         const submenu = new SubMenu(null, req.body.internalName, req.body.displayName, menuId, order);
-        const result = this.dataProvider.updateSubMenu(parseInt(req.params.menuId), submenu);
+        const result = this.dataProvider.updateSubMenu(req.params.menuId, submenu);
         if (result !== null) {
           res.send(result);
           return;
@@ -266,7 +262,7 @@ export class SubMenusRoutes extends Routes {
 export class MenuItemsRoutes extends Routes {
   registerRoutes(): void {
     this.router.get("/:itemId", (req: Request, res: Response) => {
-      const result = this.dataProvider.getMenuItem(parseInt(req.params.itemId));
+      const result = this.dataProvider.getMenuItem(req.params.itemId);
       if (result !== null) {
         res.send(result);
         return;
@@ -276,13 +272,13 @@ export class MenuItemsRoutes extends Routes {
     });
 
     this.router.get("/:itemId/manage", (req: Request, res: Response) => {
-      const result = this.dataProvider.getMenuItem(parseInt(req.params.itemId));
+      const result = this.dataProvider.getMenuItem(req.params.itemId);
       const itemForMenuItem = this.dataProvider.getItem(result?.itemId!);
       const subMenu = this.dataProvider.getSubMenu(result?.subMenuId!);
       const parentMenu = this.dataProvider.getMenu(subMenu?.menuId!);
       const containersList = this.dataProvider.getSaleContainersForMenuItem(result?.id!);
       const allContainers = this.dataProvider.getContainers();
-      const containerMap = new Map<number, ItemContainer>();
+      const containerMap = new Map<string, ItemContainer>();
       for (const container of allContainers) {
         containerMap.set(container.id!, container);
       }
@@ -300,7 +296,8 @@ export class MenuItemsRoutes extends Routes {
           res.status(400).send("Request body expected");
           return;
         }
-        const result = this.dataProvider.updateMenuItem(parseInt(req.params.itemId), new MenuItem(null, null, null, null, req.body.itemLogoB64, parseInt(req.body.order)));
+        const order = req.body.order? parseInt(req.body.order) : null;
+        const result = this.dataProvider.updateMenuItem(req.params.itemId, new MenuItem(null, null, null, null, req.body.itemLogoB64, order));
         if (result !== null) {
           res.send(result);
           return;

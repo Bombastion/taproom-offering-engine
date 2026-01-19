@@ -14,7 +14,7 @@ export class ItemsRoutes extends Routes {
     });
 
     this.router.get("/:itemId", (req: Request, res: Response) => {
-      const result = this.dataProvider.getItem(parseInt(req.params.itemId))
+      const result = this.dataProvider.getItem(req.params.itemId);
       if (result !== null) {
         res.send(result);
         return
@@ -37,7 +37,7 @@ export class ItemsRoutes extends Routes {
         null,
         req.body.internalName,
         req.body.displayName,
-        req.body.breweryId? parseInt(req.body.breweryId) : null,
+        req.body.breweryId,
         req.body.style,
         req.body.abv,
         req.body.description,
@@ -60,14 +60,14 @@ export class ItemsRoutes extends Routes {
           null,
           req.body.internalName,
           req.body.displayName,
-          req.body.breweryId? parseInt(req.body.breweryId) : null,
+          req.body.breweryId,
           req.body.style,
           req.body.abv,
           req.body.description,
           req.body.category,
         );
         
-        const result = this.dataProvider.updateItem(parseInt(req.params.itemId), item);
+        const result = this.dataProvider.updateItem(req.params.itemId, item);
         if (result !== null) {
           res.send(result);
           return;
