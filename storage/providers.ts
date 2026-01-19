@@ -37,19 +37,19 @@ export abstract class DataProvider {
     abstract updateItem(itemId: string, item: Item): Item;
 
     abstract addMenu(menu: Menu): Menu;
-    abstract getMenu(id: number): Menu | null;
+    abstract getMenu(id: string): Menu | null;
     abstract getMenus(): Array<Menu>;
-    abstract updateMenu(id: number, menu: Menu): Menu;
+    abstract updateMenu(id: string, menu: Menu): Menu;
     
     abstract addSubMenu(menu: SubMenu): SubMenu;
     abstract getSubMenu(id: number): SubMenu | null;
     // Gets all sub-menus for a menu, ordered by "order"
-    abstract getSubMenusForMenu(menuId: number): Array<SubMenu>;
+    abstract getSubMenusForMenu(menuId: string): Array<SubMenu>;
     abstract updateSubMenu(id: number, subMenu: SubMenu): SubMenu;
     
     abstract addMenuItem(item: MenuItem): MenuItem;
     abstract getMenuItem(id: number): MenuItem | null;
-    abstract getMenuItemsForMenu(menuId: number): Array<MenuItem>;
+    abstract getMenuItemsForMenu(menuId: string): Array<MenuItem>;
     abstract getMenuItemsForSubMenu(subMenuId: number): Array<MenuItem>;
     abstract removeMenuItem(id: number): boolean;
     abstract updateMenuItem(id: number, item: MenuItem): MenuItem;
@@ -304,7 +304,7 @@ export class LocalDataProvider extends DataProvider {
         return this.addGeneric(menu, this.MENUS_KEY);
     }
 
-    getMenu(id: number): Menu | null {
+    getMenu(id: string): Menu | null {
         return this.getGeneric(id, this.MENUS_KEY);
     }
 
@@ -312,7 +312,7 @@ export class LocalDataProvider extends DataProvider {
         return this.getGenericList(this.MENUS_KEY);
     }
 
-    updateMenu(id: number, menu: Menu): Menu {
+    updateMenu(id: string, menu: Menu): Menu {
         return this.updateGeneric(id, this.MENUS_KEY, menu, Menu, ['id']);
     }
 
@@ -331,7 +331,7 @@ export class LocalDataProvider extends DataProvider {
         return this.getGeneric(id, this.SUBMENUS_KEY);
     }
 
-    getSubMenusForMenu(menuId: number): Array<SubMenu> {
+    getSubMenusForMenu(menuId: string): Array<SubMenu> {
         const subMenus = this._cache.get(this.SUBMENUS_KEY)!;
         const results: Array<SubMenu> = [];
         subMenus.forEach((value: SubMenu) => {
@@ -370,7 +370,7 @@ export class LocalDataProvider extends DataProvider {
         return this.getGeneric(id, this.MENU_ITEMS_KEY);
     }
 
-    getMenuItemsForMenu(menuId: number): Array<MenuItem> {
+    getMenuItemsForMenu(menuId: string): Array<MenuItem> {
         const itemMap = this._cache.get(this.MENU_ITEMS_KEY)!;
         const results: Array<MenuItem> = [];
         itemMap.forEach((value: MenuItem) => {

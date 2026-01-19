@@ -1,12 +1,12 @@
 // Represents a collection of items to form a menu
 export class Menu {
-    id: number | null;
+    id: string | null;
     internalName: string | null;
     displayName: string | null;
     // A b64 string representing the logo
     logo: string | null;
 
-    constructor(id: number | null, internalName: string | null, displayName: string | null, logo: string | null) {
+    constructor(id: string | null, internalName: string | null, displayName: string | null, logo: string | null) {
         this.id = id;
         this.internalName = internalName;
         this.displayName = displayName;
@@ -23,10 +23,10 @@ export class SubMenu {
     id: number | null;
     internalName: string | null;
     displayName: string | null;
-    menuId: number | null;
+    menuId: string | null;
     order: number | null;
     
-    constructor(id: number | null, internalName: string | null, displayName: string | null, menuId: number | null, order: number | null) {
+    constructor(id: number | null, internalName: string | null, displayName: string | null, menuId: string | null, order: number | null) {
         this.id = id;
         this.internalName = internalName;
         this.displayName = displayName;
@@ -53,13 +53,13 @@ export class DisplaySubMenu {
 // A join of Menu and Item. Also contains the particular sub-menu the item might appear on
 export class MenuItem {
     id: number | null;
-    menuId: number | null;
+    menuId: string | null;
     itemId: string | null;
     subMenuId: number | null;
     itemLogo: string | null;
     order: number | null;
 
-    constructor(id: number | null, menuId: number | null, itemId: string | null, subMenuId: number | null, itemLogo: string | null, order: number | null) {
+    constructor(id: number | null, menuId: string | null, itemId: string | null, subMenuId: number | null, itemLogo: string | null, order: number | null) {
         this.id = id;
         this.menuId = menuId;
         this.itemId = itemId;

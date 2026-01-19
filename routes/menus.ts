@@ -18,14 +18,14 @@ export class MenusRoutes extends Routes {
     });
 
     this.router.get("/:menuId/submenus/manage", (req: Request, res: Response) => {
-      const menu = this.dataProvider.getMenu(parseInt(req.params.menuId));
+      const menu = this.dataProvider.getMenu(req.params.menuId);
       const displayList = this.dataProvider.getSubMenusForMenu(menu?.id!);
       res.render("subMenuList", {displayList: displayList, menuId: menu?.id!})
       return;
     });
 
     this.router.get("/:menuId", (req: Request, res: Response) => {
-      const result = this.dataProvider.getMenu(parseInt(req.params.menuId))
+      const result = this.dataProvider.getMenu(req.params.menuId)
 
       if (result === null) {
         res.sendStatus(404);
@@ -140,14 +140,14 @@ export class MenusRoutes extends Routes {
       res.send(result);
     });
 
-    // Update an existing container
+    // Update an existing menu
     this.router.patch("/:menuId", (req: Request, res: Response) => {
       try{
         if (!req.body) {
           res.status(400).send("Request body expected");
           return;
         }
-        const result = this.dataProvider.updateMenu(parseInt(req.params.menuId), new Menu(null, req.body.internalName, req.body.displayName, req.body.logo));
+        const result = this.dataProvider.updateMenu(req.params.menuId, new Menu(null, req.body.internalName, req.body.displayName, req.body.logo));
         if (result !== null) {
           res.send(result);
           return;
@@ -224,7 +224,7 @@ export class SubMenusRoutes extends Routes {
         return;
       }
 
-      const menuId = req.body.menuId? parseInt(req.body.menuId) : null;
+      const menuId = req.body.menuId;
       const order = req.body.order? parseInt(req.body.order) : null;
       const submenu = new SubMenu(null, req.body.internalName, req.body.displayName, menuId, order);
       const result = this.dataProvider.addSubMenu(submenu)
@@ -240,7 +240,7 @@ export class SubMenusRoutes extends Routes {
           return;
         }
 
-        const menuId = req.body.menuId? parseInt(req.body.menuId) : null;
+        const menuId = req.body.menuId;
         const order = req.body.order? parseInt(req.body.order) : null;
         const submenu = new SubMenu(null, req.body.internalName, req.body.displayName, menuId, order);
         const result = this.dataProvider.updateSubMenu(parseInt(req.params.menuId), submenu);
