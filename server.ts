@@ -23,8 +23,8 @@ app.listen(port, () => {
 // Setting up HTML rendering
 app.set('view engine', 'pug');
 app.set('views', './dist/public/views')
-app.use(express.static(path.join(__dirname, 'public', 'css')));
-app.use(express.static(path.join(__dirname, 'public', 'js')));
+app.use(express.static(path.join(import.meta.dirname, 'public', 'css')));
+app.use(express.static(path.join(import.meta.dirname, 'public', 'js')));
 
 // Register routers
 const dataProvider = new LocalDataProvider("./data/");
