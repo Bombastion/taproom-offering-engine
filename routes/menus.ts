@@ -11,7 +11,7 @@ export class MenusRoutes extends Routes {
   requiredFieldsAndTypes: Record<string, string> = {"internalName": "string", "displayName": "string"};
 
   registerRoutes(): void {
-    this.router.get("/manage", (_: Request, res: Response) => {
+    this.router.get("/manage", async (_: Request, res: Response) => {
       const displayList = this.dataProvider.getMenus();
       res.render("menuList", {displayList: displayList})
       return;
@@ -54,20 +54,20 @@ export class MenusRoutes extends Routes {
         // Create DisplayItems for each MenuItem and add it to the appropriate map
         // Also gathers all container display info for submenus during the loop
         const allItemsForMenu = this.dataProvider.getMenuItemsForMenu(result.id!);
-        allItemsForMenu.forEach((menuItem: MenuItem) => {
+        allItemsForMenu.forEach(async (menuItem: MenuItem) => {
           const item = this.dataProvider.getItem(menuItem.itemId!)!;
 
           // Not all items are associated with a brewery
           let brewery: Brewery | null = null;
           if (item.breweryId !== null) {
-            brewery = this.dataProvider.getBrewery(item.breweryId);
+            brewery = await this.dataProvider.getBrewery(item.breweryId);
           }
           
           // Gather all the container names for this item
           const allSaleContainersForItem = this.dataProvider.getSaleContainersForMenuItem(menuItem.id!);
           const containerDisplayNameToPrice: Map<string, string> = new Map();
-          allSaleContainersForItem.forEach(saleContainer => {
-            const containerInfo = this.dataProvider.getContainer(saleContainer.containerId)!;
+          allSaleContainersForItem.forEach(async saleContainer => {
+            const containerInfo = (await this.dataProvider.getContainer(saleContainer.containerId))!!;
             const workingDisplayName = containerInfo.displayName ? containerInfo.displayName : uuidv4();
             containerDisplayNameToPrice.set(workingDisplayName, saleContainer.price.toLocaleString('en-US', { minimumFractionDigits: 2}));
 
@@ -271,13 +271,13 @@ export class MenuItemsRoutes extends Routes {
       return;
     });
 
-    this.router.get("/:itemId/manage", (req: Request, res: Response) => {
+    this.router.get("/:itemId/manage", async (req: Request, res: Response) => {
       const result = this.dataProvider.getMenuItem(req.params.itemId);
       const itemForMenuItem = this.dataProvider.getItem(result?.itemId!);
       const subMenu = this.dataProvider.getSubMenu(result?.subMenuId!);
       const parentMenu = this.dataProvider.getMenu(subMenu?.menuId!);
       const containersList = this.dataProvider.getSaleContainersForMenuItem(result?.id!);
-      const allContainers = this.dataProvider.getContainers();
+      const allContainers = await this.dataProvider.getContainers();
       const containerMap = new Map<string, ItemContainer>();
       for (const container of allContainers) {
         containerMap.set(container.id!, container);

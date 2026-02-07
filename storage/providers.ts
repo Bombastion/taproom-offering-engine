@@ -4,6 +4,7 @@ import { Item } from "../models/items";
 import { Brewery } from '../models/breweries';
 import { Menu, MenuItem, SubMenu } from '../models/menus';
 import {v4 as uuidv4} from 'uuid';
+import { PrismaClient } from '../generated/prisma/client';
 
 export class DataProviderError extends Error {
     statusCode: number;
@@ -15,15 +16,15 @@ export class DataProviderError extends Error {
 }
 
 export abstract class DataProvider {
-    abstract addBrewery(brewery: Brewery): Brewery;
-    abstract getBrewery(id: string): Brewery | null;
-    abstract getBreweries(): Array<Brewery>;
-    abstract updateBrewery(breweryId: string, brewery: Brewery): Brewery;
+    abstract addBrewery(brewery: Brewery): Promise<Brewery>;
+    abstract getBrewery(id: string): Promise<Brewery | null>;
+    abstract getBreweries(): Promise<Array<Brewery>>;
+    abstract updateBrewery(breweryId: string, brewery: Brewery): Promise<Brewery>;
 
-    abstract addContainer(container: ItemContainer): ItemContainer;
-    abstract getContainer(id: string): ItemContainer | null;
-    abstract getContainers(): Array<ItemContainer>;
-    abstract updateContainer(containerId: string, container: ItemContainer): ItemContainer;
+    abstract addContainer(container: ItemContainer): Promise<ItemContainer>;
+    abstract getContainer(id: string): Promise<ItemContainer | null>;
+    abstract getContainers(): Promise<Array<ItemContainer>>;
+    abstract updateContainer(containerId: string, container: ItemContainer): Promise<ItemContainer>;
 
     abstract addSaleContainer(container: SaleContainer): SaleContainer;
     abstract getSaleContainer(id: string): SaleContainer | null;
@@ -53,6 +54,169 @@ export abstract class DataProvider {
     abstract getMenuItemsForSubMenu(subMenuId: string): Array<MenuItem>;
     abstract removeMenuItem(id: string): boolean;
     abstract updateMenuItem(id: string, item: MenuItem): MenuItem;
+}
+
+export class PrismaDataProvider extends DataProvider {
+    prismaClient: PrismaClient
+
+    constructor(prisma: PrismaClient) {
+        super();
+        this.prismaClient = prisma;
+    }
+
+    async addBrewery(brewery: Brewery): Promise<Brewery> {
+        return await this.prismaClient.brewery.create({
+            data: {
+                name: brewery.name!!,
+                defaultLogo: brewery.defaultLogo,
+                location: brewery.location
+            }
+        })
+    }
+
+    async getBrewery(id: string): Promise<Brewery | null> {
+        return await this.prismaClient.brewery.findUnique({
+            where: {
+                id: id
+            }
+        });
+    }
+
+    async getBreweries(): Promise<Array<Brewery>> {
+        return await this.prismaClient.brewery.findMany();
+    }
+
+    async updateBrewery(breweryId: string, brewery: Brewery): Promise<Brewery> {
+        const original = await this.getBrewery(breweryId);
+        if (!original) {
+            throw new DataProviderError(`Brewery with ID ${breweryId} does not exist`, 404);
+        }
+        const updateResult = await this.prismaClient.brewery.update({
+            where: {
+                id: breweryId
+            },
+            data: {
+                name: brewery.name ? brewery.name : original.name!!,
+                location: brewery.location ? brewery.location : original.location,
+                defaultLogo: brewery.defaultLogo ? brewery.defaultLogo : original.defaultLogo
+            }
+        })
+
+        return updateResult; 
+    }
+
+    async addContainer(container: ItemContainer): Promise<ItemContainer> {
+        return await this.prismaClient.itemContainer.create({
+            data: {
+                containerName: container.containerName!!,
+                displayName: container.displayName!!,
+                order: container.order
+            }
+        })
+    }
+
+    async getContainer(id: string): Promise<ItemContainer | null> {
+        return await this.prismaClient.itemContainer.findUnique({
+            where: {
+                id: id
+            }
+        })
+    }
+
+    async getContainers(): Promise<Array<ItemContainer>> {
+        return await this.prismaClient.itemContainer.findMany();
+    }
+
+    async updateContainer(containerId: string, container: ItemContainer): Promise<ItemContainer> {
+        const original = await this.getContainer(containerId);
+        if (!original) {
+            throw new DataProviderError(`ItemContainer with ID ${containerId} does not exist`, 404);
+        }
+        const updateResult = await this.prismaClient.itemContainer.update({
+            where: {
+                id: containerId
+            },
+            data: {
+                containerName: container.containerName? container.containerName : original.containerName!!,
+                displayName: container.displayName? container.displayName : original.displayName!!,
+                order: container.displayName? container.order : original.order
+            }
+        })
+
+        return updateResult;
+    }
+
+    // TODO: move the line
+    addSaleContainer(container: SaleContainer): SaleContainer { 
+        return container;
+    }
+    getSaleContainer(id: string): SaleContainer | null { 
+        return null;
+    }
+    getSaleContainersForMenuItem(itemId: string): Array<SaleContainer> {
+        return [];
+    }
+    removeSaleContainer(id: string): boolean {
+        return true;
+    }
+
+    addItem(item: Item): Item {
+        return item;
+    }
+    getItem(id: string): Item | null { 
+        return null;
+    }
+    getItems(): Array<Item> {
+        return [];
+    }
+    updateItem(itemId: string, item: Item): Item {
+        return item;
+    }
+
+    addMenu(menu: Menu): Menu {
+        return menu;
+    }
+    getMenu(id: string): Menu | null {
+        return null;
+    }
+    getMenus(): Array<Menu> {
+        return [];
+    }
+    updateMenu(id: string, menu: Menu): Menu {
+        return menu;
+    }
+    
+    addSubMenu(menu: SubMenu): SubMenu {
+        return menu;
+    }
+    getSubMenu(id: string): SubMenu | null { 
+        return null;
+    }
+    getSubMenusForMenu(menuId: string): Array<SubMenu> {
+        return [];
+    }
+    updateSubMenu(id: string, subMenu: SubMenu): SubMenu {
+        return subMenu;
+    }
+    
+    addMenuItem(item: MenuItem): MenuItem {
+        return item;
+    }
+    getMenuItem(id: string): MenuItem | null {
+        return null;
+    }
+    getMenuItemsForMenu(menuId: string): Array<MenuItem> {
+        return [];
+    }
+    getMenuItemsForSubMenu(subMenuId: string): Array<MenuItem> {
+        return [];
+    }
+    removeMenuItem(id: string): boolean {
+        return false;
+    }
+    updateMenuItem(id: string, item: MenuItem): MenuItem { 
+        return item;
+    }
 }
 
 export class LocalDataProvider extends DataProvider {
@@ -206,35 +370,35 @@ export class LocalDataProvider extends DataProvider {
         }
     }
 
-    addBrewery(brewery: Brewery): Brewery {
+    async addBrewery(brewery: Brewery): Promise<Brewery> {
         return this.addGeneric(brewery, this.BREWERIES_KEY);
     }
 
-    getBrewery(id: string): Brewery | null {
+    async getBrewery(id: string): Promise<Brewery | null> {
         return this.getGeneric(id, this.BREWERIES_KEY);
     }
 
-    getBreweries(): Array<Brewery> {
+    async getBreweries(): Promise<Array<Brewery>> {
         return this.getGenericList(this.BREWERIES_KEY);
     }
 
-    updateBrewery(breweryId: string, brewery: Brewery): Brewery {
+    async updateBrewery(breweryId: string, brewery: Brewery): Promise<Brewery> {
         return this.updateGeneric(breweryId, this.BREWERIES_KEY, brewery, Brewery, ['id']);
     }
 
-    addContainer(container: ItemContainer): ItemContainer {
+    async addContainer(container: ItemContainer): Promise<ItemContainer> {
         return this.addGeneric(container, this.CONTAINERS_KEY);
     }
 
-    getContainer(id: string): ItemContainer | null {
+    async getContainer(id: string): Promise<ItemContainer | null> {
         return this.getGeneric(id, this.CONTAINERS_KEY);
     }
 
-    getContainers(): Array<ItemContainer> {
+    async getContainers(): Promise<Array<ItemContainer>> {
         return this.getGenericList(this.CONTAINERS_KEY);
     }
 
-    updateContainer(containerId: string, container: ItemContainer): ItemContainer {
+    async updateContainer(containerId: string, container: ItemContainer): Promise<ItemContainer> {
         return this.updateGeneric(containerId, this.CONTAINERS_KEY, container, ItemContainer, ['id'])
     }
 

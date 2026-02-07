@@ -1,0 +1,72 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+  binaryTargets = ["linux-musl-arm64-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Brewery {
+  id  String  @id @default(uuid())
+  name String
+  defaultLogo String?
+  location String?
+}
+
+model ItemContainer {
+  id  String  @id @default(uuid())
+  containerName String
+  displayName String
+  order Int?
+}
+
+model SaleContainer {
+  id  String  @id @default(uuid())
+  containerId String
+  menuItemId String
+  price Float
+}
+
+model Item {
+  id  String  @id @default(uuid())
+  internalName String
+  displayName String
+  breweryId String?
+  style String?
+  abv Float?
+  description String?
+  category String?
+}
+
+model Menu {
+  id  String  @id @default(uuid())
+  internalName String
+  displayName String
+  logo String?
+}
+
+model SubMenu {
+  id  String  @id @default(uuid())
+  internalName String
+  displayName String
+  menuId String
+  order Int?
+}
+
+model MenuItem {
+  id  String  @id @default(uuid())
+  menuId String
+  itemId String
+  subMenuId String
+  itemLogo String?
+  order Int?
+}

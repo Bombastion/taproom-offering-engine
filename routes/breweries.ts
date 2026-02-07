@@ -6,27 +6,27 @@ import { toggleShowElement } from './viewHelpers/functions';
 export class BreweriesRoutes extends Routes {
   // Order matters here. If we don't specify non-IDs first, they get interpreted as IDs
   registerRoutes(): void {
-    this.router.get("/manage", (req: Request, res: Response) => {
-      const breweryList = this.dataProvider.getBreweries();
+    this.router.get("/manage", async (req: Request, res: Response) => {
+      const breweryList = await this.dataProvider.getBreweries();
       res.render("breweryList", {breweries: breweryList});
       return 
     });
 
-    this.router.post("", (req: Request, res: Response) => {
-      const result = this.dataProvider.addBrewery(new Brewery(null, req.body['newBreweryName'], req.body['newBreweryLogoB64'], req.body['newBreweryLocation']));
+    this.router.post("", async (req: Request, res: Response) => {
+      const result = await this.dataProvider.addBrewery(new Brewery(null, req.body['newBreweryName'], req.body['newBreweryLogoB64'], req.body['newBreweryLocation']));
       
       res.send(result);
       return;
     });
 
-    this.router.patch("/:breweryId", (req: Request, res: Response) => {
+    this.router.patch("/:breweryId", async (req: Request, res: Response) => {
       try{
         if (!req.body) {
           res.status(400).send("Request body expected");
           return;
         }
         console.dir(req.body)
-        const result = this.dataProvider.updateBrewery(req.params.breweryId, new Brewery(null, req.body['newBreweryName'], req.body['newBreweryLogoB64'], req.body['newBreweryLocation']));
+        const result = await this.dataProvider.updateBrewery(req.params.breweryId, new Brewery(null, req.body['newBreweryName'], req.body['newBreweryLogoB64'], req.body['newBreweryLocation']));
         if (result !== null) {
           res.send(result);
           return;
