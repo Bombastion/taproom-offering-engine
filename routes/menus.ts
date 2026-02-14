@@ -24,7 +24,7 @@ export class MenusRoutes extends Routes {
       return;
     });
 
-    this.router.get("/:menuId", (req: Request, res: Response) => {
+    this.router.get("/:menuId", async (req: Request, res: Response) => {
       const result = this.dataProvider.getMenu(req.params.menuId)
 
       if (result === null) {
@@ -55,7 +55,7 @@ export class MenusRoutes extends Routes {
         // Also gathers all container display info for submenus during the loop
         const allItemsForMenu = this.dataProvider.getMenuItemsForMenu(result.id!);
         allItemsForMenu.forEach(async (menuItem: MenuItem) => {
-          const item = this.dataProvider.getItem(menuItem.itemId!)!;
+          const item = (await this.dataProvider.getItem(menuItem.itemId!))!;
 
           // Not all items are associated with a brewery
           let brewery: Brewery | null = null;
@@ -64,7 +64,7 @@ export class MenusRoutes extends Routes {
           }
           
           // Gather all the container names for this item
-          const allSaleContainersForItem = this.dataProvider.getSaleContainersForMenuItem(menuItem.id!);
+          const allSaleContainersForItem = await this.dataProvider.getSaleContainersForMenuItem(menuItem.id!);
           const containerDisplayNameToPrice: Map<string, string> = new Map();
           allSaleContainersForItem.forEach(async saleContainer => {
             const containerInfo = (await this.dataProvider.getContainer(saleContainer.containerId))!!;
@@ -167,12 +167,12 @@ export class SubMenusRoutes extends Routes {
   requiredFieldsAndTypes: Record<string, string> = {"internalName": "string", "displayName": "string"};
 
   registerRoutes(): void {
-    this.router.get("/:itemId/items/manage", (req: Request, res: Response) => {
+    this.router.get("/:itemId/items/manage", async (req: Request, res: Response) => {
       const subMenuId = req.params.itemId;
       const displayList = this.dataProvider.getMenuItemsForSubMenu(subMenuId);
       const subMenu = this.dataProvider.getSubMenu(subMenuId);
       const menu = this.dataProvider.getMenu(subMenu?.menuId!);
-      const allItems = this.dataProvider.getItems();
+      const allItems = await this.dataProvider.getItems();
       const itemMap = new Map<string, Item>();
       for (const item of allItems) {
         itemMap.set(item.id!, item);
@@ -273,10 +273,10 @@ export class MenuItemsRoutes extends Routes {
 
     this.router.get("/:itemId/manage", async (req: Request, res: Response) => {
       const result = this.dataProvider.getMenuItem(req.params.itemId);
-      const itemForMenuItem = this.dataProvider.getItem(result?.itemId!);
+      const itemForMenuItem = await this.dataProvider.getItem(result?.itemId!);
       const subMenu = this.dataProvider.getSubMenu(result?.subMenuId!);
       const parentMenu = this.dataProvider.getMenu(subMenu?.menuId!);
-      const containersList = this.dataProvider.getSaleContainersForMenuItem(result?.id!);
+      const containersList = await this.dataProvider.getSaleContainersForMenuItem(result?.id!);
       const allContainers = await this.dataProvider.getContainers();
       const containerMap = new Map<string, ItemContainer>();
       for (const container of allContainers) {

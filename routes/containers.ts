@@ -68,8 +68,8 @@ export class SaleContainersRoutes extends Routes {
 
   registerRoutes(): void {
     // Gets a specific sale container by ID
-    this.router.get("/:containerId", (req: Request, res: Response) => {
-      const result = this.dataProvider.getSaleContainer(req.params.containerId);
+    this.router.get("/:containerId", async (req: Request, res: Response) => {
+      const result = await this.dataProvider.getSaleContainer(req.params.containerId);
       if (result !== null) {
         res.send(result);
         return
@@ -79,21 +79,21 @@ export class SaleContainersRoutes extends Routes {
     });
     
     // Deletes a specific sale container by ID
-    this.router.delete("/:containerId", (req: Request, res: Response) => {
-      this.dataProvider.removeSaleContainer(req.params.containerId);
+    this.router.delete("/:containerId", async (req: Request, res: Response) => {
+      await this.dataProvider.removeSaleContainer(req.params.containerId);
       res.sendStatus(204);
       return;
     });
 
 
     // Creates a container association with the given info
-    this.router.post("/", (req: Request, res: Response) => {
+    this.router.post("/", async (req: Request, res: Response) => {
       if(!this.validateInput(req, res, this.requiredFieldsAndTypes)) {
         return;
       }
 
       let container = new SaleContainer(null, req.body.containerId, req.body.itemId, parseFloat(req.body.price));
-      container = this.dataProvider.addSaleContainer(container);
+      container = await this.dataProvider.addSaleContainer(container);
 
       res.send(container);
       return;

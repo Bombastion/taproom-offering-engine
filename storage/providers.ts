@@ -26,16 +26,16 @@ export abstract class DataProvider {
     abstract getContainers(): Promise<Array<ItemContainer>>;
     abstract updateContainer(containerId: string, container: ItemContainer): Promise<ItemContainer>;
 
-    abstract addSaleContainer(container: SaleContainer): SaleContainer;
-    abstract getSaleContainer(id: string): SaleContainer | null;
-    abstract getSaleContainersForMenuItem(itemId: string): Array<SaleContainer>;
+    abstract addSaleContainer(container: SaleContainer): Promise<SaleContainer>;
+    abstract getSaleContainer(id: string): Promise<SaleContainer | null>;
+    abstract getSaleContainersForMenuItem(itemId: string): Promise<Array<SaleContainer>>;
     // Deletes a sale container. Returns true if the item was removed, and false if it didn't exist.
-    abstract removeSaleContainer(id: string): boolean;
+    abstract removeSaleContainer(id: string): Promise<boolean>;
 
-    abstract addItem(item: Item): Item;
-    abstract getItem(id: string): Item | null;
-    abstract getItems(): Array<Item>;
-    abstract updateItem(itemId: string, item: Item): Item;
+    abstract addItem(item: Item): Promise<Item>;
+    abstract getItem(id: string): Promise<Item | null>;
+    abstract getItems(): Promise<Array<Item>>;
+    abstract updateItem(itemId: string, item: Item): Promise<Item>;
 
     abstract addMenu(menu: Menu): Menu;
     abstract getMenu(id: string): Menu | null;
@@ -141,38 +141,114 @@ export class PrismaDataProvider extends DataProvider {
                 displayName: container.displayName? container.displayName : original.displayName!!,
                 order: container.displayName? container.order : original.order
             }
-        })
+        });
 
         return updateResult;
     }
 
+    async addSaleContainer(container: SaleContainer): Promise<SaleContainer> { 
+        if (!(await this.getContainer(container.containerId))) {
+            throw new DataProviderError(`Container with ID ${container.containerId} doesn't exist when adding new SaleContainer`, 404);
+        }
+        if (!(await this.getMenuItem(container.menuItemId))) {
+            throw new DataProviderError(`MenuItem with ID ${container.menuItemId} doesn't exist when adding new SaleContainer`, 404);
+        }
+
+        return await this.prismaClient.saleContainer.create({
+            data: {
+                containerId: container.containerId,
+                menuItemId: container.menuItemId,
+                price: container.price
+            }
+        });
+    }
+
+    async getSaleContainer(id: string): Promise<SaleContainer | null> { 
+        return await this.prismaClient.saleContainer.findUnique({
+            where: {
+                id: id
+            }
+        });
+    }
+    async getSaleContainersForMenuItem(itemId: string): Promise<Array<SaleContainer>> {
+        return await this.prismaClient.saleContainer.findMany({
+            where: {
+                menuItemId: itemId
+            }
+        });
+    }
+    
+    async removeSaleContainer(id: string): Promise<boolean> {
+        const deleted = await this.prismaClient.saleContainer.delete({
+            where: {
+                id: id
+            }
+        });
+
+        if (deleted) { 
+            return true;
+        }
+        return false;
+    }
+
+    async validateItem(item: Item) {
+        if (item.breweryId && !(await this.getBrewery(item.breweryId))) {
+            throw new DataProviderError(`Brewery with ID ${item.breweryId} does not exist when modifying item`, 404);
+        } 
+    }
+
+    async addItem(item: Item): Promise<Item> {
+        await this.validateItem(item);
+
+        return await this.prismaClient.item.create({
+            data: {
+                internalName: item.internalName!!,
+                displayName: item.displayName!!,
+                breweryId: item.breweryId,
+                style: item.style,
+                abv: item.abv,
+                description: item.description,
+                category: item.category,
+            }
+        });
+    }
+
+    async getItem(id: string): Promise<Item | null> { 
+        return await this.prismaClient.item.findUnique({
+            where: {
+                id: id
+            }
+        });
+    }
+    
+    async getItems(): Promise<Array<Item>> {
+        return await this.prismaClient.item.findMany({});
+    }
+
+    async updateItem(itemId: string, item: Item): Promise<Item> {
+        await this.validateItem(item);
+
+        const original = await this.getItem(itemId);
+        if (!original) {
+            throw new DataProviderError(`Itemwith ID ${itemId} does not exist`, 404);
+        }
+        return await this.prismaClient.item.update({
+            where: {
+                id: itemId
+            },
+            data: {
+                internalName: item.internalName? item.internalName : original.internalName!!,
+                displayName: item.displayName? item.displayName : original.displayName!!,
+                breweryId: item.breweryId? item.breweryId : original.breweryId,
+                style: item.style? item.style : original.style,
+                abv: item.abv? item.abv : original.abv,
+                description: item.description? item.description : original.description,
+                category: item.category? item.category : original.category,
+            }
+        })
+    }
+
     // TODO: move the line
-    addSaleContainer(container: SaleContainer): SaleContainer { 
-        return container;
-    }
-    getSaleContainer(id: string): SaleContainer | null { 
-        return null;
-    }
-    getSaleContainersForMenuItem(itemId: string): Array<SaleContainer> {
-        return [];
-    }
-    removeSaleContainer(id: string): boolean {
-        return true;
-    }
-
-    addItem(item: Item): Item {
-        return item;
-    }
-    getItem(id: string): Item | null { 
-        return null;
-    }
-    getItems(): Array<Item> {
-        return [];
-    }
-    updateItem(itemId: string, item: Item): Item {
-        return item;
-    }
-
     addMenu(menu: Menu): Menu {
         return menu;
     }
@@ -402,7 +478,7 @@ export class LocalDataProvider extends DataProvider {
         return this.updateGeneric(containerId, this.CONTAINERS_KEY, container, ItemContainer, ['id'])
     }
 
-    addSaleContainer(container: SaleContainer): SaleContainer {
+    async addSaleContainer(container: SaleContainer): Promise<SaleContainer> {
         // As with any "join" object, we need to validate the IDs being entered
         // TODO: would be much nicer with a relational DB
         if (!this.idExists(container.containerId, this.CONTAINERS_KEY)) {
@@ -416,11 +492,11 @@ export class LocalDataProvider extends DataProvider {
         return this.addGeneric(container, this.SALE_CONTAINERS_KEY);
     }
 
-    getSaleContainer(id: string): SaleContainer | null {
+    async getSaleContainer(id: string): Promise<SaleContainer | null> {
         return this.getGeneric(id, this.SALE_CONTAINERS_KEY);
     }
 
-    getSaleContainersForMenuItem(menuItemId: string): Array<SaleContainer> {
+    async getSaleContainersForMenuItem(menuItemId: string): Promise<Array<SaleContainer>> {
         const saleContainers = this._cache.get(this.SALE_CONTAINERS_KEY)!;
         const results: Array<SaleContainer> = [];
         saleContainers.forEach((value: SaleContainer) => {
@@ -432,7 +508,7 @@ export class LocalDataProvider extends DataProvider {
         return results;
     }
 
-    removeSaleContainer(id: string): boolean {
+    async removeSaleContainer(id: string): Promise<boolean> {
         return this.removeGeneric(id, this.SALE_CONTAINERS_KEY);
     }
 
@@ -442,20 +518,20 @@ export class LocalDataProvider extends DataProvider {
         }
     }
 
-    addItem(item: Item): Item {
+    async addItem(item: Item): Promise<Item> {
         this.validateItem(item);
         return this.addGeneric(item, this.ITEMS_KEY);
     }
 
-    getItem(id: string): Item | null {
+    async getItem(id: string): Promise<Item | null> {
         return this.getGeneric(id, this.ITEMS_KEY);
     }
 
-    getItems(): Array<Item> {
+    async getItems(): Promise<Array<Item>> {
         return this.getGenericList(this.ITEMS_KEY);
     }
 
-    updateItem(itemId: string, item: Item): Item {
+    async updateItem(itemId: string, item: Item): Promise<Item> {
         this.validateItem(item);
         return this.updateGeneric(itemId, this.ITEMS_KEY, item, Item, ['id']);
     }
