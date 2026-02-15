@@ -39,7 +39,7 @@ export class ItemsRoutes extends Routes {
         req.body.displayName,
         req.body.breweryId,
         req.body.style,
-        req.body.abv,
+        req.body.abv? parseFloat(req.body.abv): null,
         req.body.description,
         req.body.category,
       );
@@ -62,7 +62,7 @@ export class ItemsRoutes extends Routes {
           req.body.displayName,
           req.body.breweryId,
           req.body.style,
-          req.body.abv,
+          req.body.abv? parseFloat(req.body.abv): null,
           req.body.description,
           req.body.category,
         );
