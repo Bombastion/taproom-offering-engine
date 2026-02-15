@@ -12,20 +12,20 @@ export class MenusRoutes extends Routes {
 
   registerRoutes(): void {
     this.router.get("/manage", async (_: Request, res: Response) => {
-      const displayList = this.dataProvider.getMenus();
+      const displayList = await this.dataProvider.getMenus();
       res.render("menuList", {displayList: displayList})
       return;
     });
 
-    this.router.get("/:menuId/submenus/manage", (req: Request, res: Response) => {
-      const menu = this.dataProvider.getMenu(req.params.menuId);
-      const displayList = this.dataProvider.getSubMenusForMenu(menu?.id!);
+    this.router.get("/:menuId/submenus/manage", async (req: Request, res: Response) => {
+      const menu = await this.dataProvider.getMenu(req.params.menuId);
+      const displayList = await this.dataProvider.getSubMenusForMenu(menu?.id!);
       res.render("subMenuList", {displayList: displayList, menuId: menu?.id!})
       return;
     });
 
     this.router.get("/:menuId", async (req: Request, res: Response) => {
-      const result = this.dataProvider.getMenu(req.params.menuId)
+      const result = await this.dataProvider.getMenu(req.params.menuId)
 
       if (result === null) {
         res.sendStatus(404);
@@ -41,7 +41,7 @@ export class MenusRoutes extends Routes {
       }
       if (req.query.format === "print") {
         // Get all the sub-menus for this menu
-        const allSubMenus = this.dataProvider.getSubMenusForMenu(result.id!);
+        const allSubMenus = await this.dataProvider.getSubMenusForMenu(result.id!);
 
         // Initialize a map we can add things to
         const subMenuToItemMap: Map<string, Array<DisplayItem>> = new Map();
@@ -53,7 +53,7 @@ export class MenusRoutes extends Routes {
 
         // Create DisplayItems for each MenuItem and add it to the appropriate map
         // Also gathers all container display info for submenus during the loop
-        const allItemsForMenu = this.dataProvider.getMenuItemsForMenu(result.id!);
+        const allItemsForMenu = await this.dataProvider.getMenuItemsForMenu(result.id!);
         allItemsForMenu.forEach(async (menuItem: MenuItem) => {
           const item = (await this.dataProvider.getItem(menuItem.itemId!))!;
 
@@ -125,25 +125,25 @@ export class MenusRoutes extends Routes {
     });
 
     // Creates a new menu
-    this.router.post("/", (req: Request, res: Response) => {
+    this.router.post("/", async (req: Request, res: Response) => {
       if(!this.validateInput(req, res, this.requiredFieldsAndTypes)) {
         return;
       }
 
       const menu = new Menu(null, req.body.internalName, req.body.displayName, req.body.logo);
-      const result = this.dataProvider.addMenu(menu);
+      const result = await this.dataProvider.addMenu(menu);
 
       res.send(result);
     });
 
     // Update an existing menu
-    this.router.patch("/:menuId", (req: Request, res: Response) => {
+    this.router.patch("/:menuId", async (req: Request, res: Response) => {
       try{
         if (!req.body) {
           res.status(400).send("Request body expected");
           return;
         }
-        const result = this.dataProvider.updateMenu(req.params.menuId, new Menu(null, req.body.internalName, req.body.displayName, req.body.logo));
+        const result = await this.dataProvider.updateMenu(req.params.menuId, new Menu(null, req.body.internalName, req.body.displayName, req.body.logo));
         if (result !== null) {
           res.send(result);
           return;
@@ -169,9 +169,9 @@ export class SubMenusRoutes extends Routes {
   registerRoutes(): void {
     this.router.get("/:itemId/items/manage", async (req: Request, res: Response) => {
       const subMenuId = req.params.itemId;
-      const displayList = this.dataProvider.getMenuItemsForSubMenu(subMenuId);
-      const subMenu = this.dataProvider.getSubMenu(subMenuId);
-      const menu = this.dataProvider.getMenu(subMenu?.menuId!);
+      const displayList = await this.dataProvider.getMenuItemsForSubMenu(subMenuId);
+      const subMenu = await this.dataProvider.getSubMenu(subMenuId);
+      const menu = await this.dataProvider.getMenu(subMenu?.menuId!);
       const allItems = await this.dataProvider.getItems();
       const itemMap = new Map<string, Item>();
       for (const item of allItems) {
@@ -181,8 +181,8 @@ export class SubMenusRoutes extends Routes {
       return;
     });
 
-    this.router.get("/:menuId", (req: Request, res: Response) => {
-      const result = this.dataProvider.getSubMenu(req.params.menuId);
+    this.router.get("/:menuId", async (req: Request, res: Response) => {
+      const result = await this.dataProvider.getSubMenu(req.params.menuId);
       if (result !== null) {
         res.send(result);
         return
@@ -191,11 +191,11 @@ export class SubMenusRoutes extends Routes {
       return
     });
 
-    this.router.post("/:menuId/menuItems/:itemId", (req: Request, res: Response) => {
-      const subMenu = this.dataProvider.getSubMenu(req.params.menuId);
+    this.router.post("/:menuId/menuItems/:itemId", async (req: Request, res: Response) => {
+      const subMenu = await this.dataProvider.getSubMenu(req.params.menuId);
       if (subMenu !== null) {
         const menuItemToAdd = new MenuItem(null, subMenu.menuId!, req.params.itemId, subMenu.id, null, null);
-        this.dataProvider.addMenuItem(menuItemToAdd);
+        await this.dataProvider.addMenuItem(menuItemToAdd);
         res.status(201).send(menuItemToAdd);
         return;
       }
@@ -203,10 +203,10 @@ export class SubMenusRoutes extends Routes {
       return;
     });
 
-    this.router.delete("/:menuId/menuItems/:itemId", (req: Request, res: Response) => {
-      const subMenu = this.dataProvider.getSubMenu(req.params.menuId);
+    this.router.delete("/:menuId/menuItems/:itemId", async (req: Request, res: Response) => {
+      const subMenu = await this.dataProvider.getSubMenu(req.params.menuId);
       if (subMenu !== null) {
-        this.dataProvider.removeMenuItem(req.params.itemId);
+        await this.dataProvider.removeMenuItem(req.params.itemId);
         res.sendStatus(204);
         return;
       }
@@ -215,7 +215,7 @@ export class SubMenusRoutes extends Routes {
     });
 
     // Creates a new submenu
-    this.router.post("/", (req: Request, res: Response) => {
+    this.router.post("/", async (req: Request, res: Response) => {
       if(!this.validateInput(req, res, this.requiredFieldsAndTypes)) {
         return;
       }
@@ -223,13 +223,13 @@ export class SubMenusRoutes extends Routes {
       const menuId = req.body.menuId;
       const order = req.body.order? parseInt(req.body.order) : null;
       const submenu = new SubMenu(null, req.body.internalName, req.body.displayName, menuId, order);
-      const result = this.dataProvider.addSubMenu(submenu)
+      const result = await this.dataProvider.addSubMenu(submenu)
 
       res.send(result);
     });
 
     // Update an existing submenu
-    this.router.patch("/:menuId", (req: Request, res: Response) => {
+    this.router.patch("/:menuId", async (req: Request, res: Response) => {
       try{
         if (!req.body) {
           res.status(400).send("Request body expected");
@@ -239,7 +239,7 @@ export class SubMenusRoutes extends Routes {
         const menuId = req.body.menuId;
         const order = req.body.order? parseInt(req.body.order) : null;
         const submenu = new SubMenu(null, req.body.internalName, req.body.displayName, menuId, order);
-        const result = this.dataProvider.updateSubMenu(req.params.menuId, submenu);
+        const result = await this.dataProvider.updateSubMenu(req.params.menuId, submenu);
         if (result !== null) {
           res.send(result);
           return;
@@ -261,8 +261,8 @@ export class SubMenusRoutes extends Routes {
 
 export class MenuItemsRoutes extends Routes {
   registerRoutes(): void {
-    this.router.get("/:itemId", (req: Request, res: Response) => {
-      const result = this.dataProvider.getMenuItem(req.params.itemId);
+    this.router.get("/:itemId", async (req: Request, res: Response) => {
+      const result = await this.dataProvider.getMenuItem(req.params.itemId);
       if (result !== null) {
         res.send(result);
         return;
@@ -272,10 +272,10 @@ export class MenuItemsRoutes extends Routes {
     });
 
     this.router.get("/:itemId/manage", async (req: Request, res: Response) => {
-      const result = this.dataProvider.getMenuItem(req.params.itemId);
+      const result = await this.dataProvider.getMenuItem(req.params.itemId);
       const itemForMenuItem = await this.dataProvider.getItem(result?.itemId!);
-      const subMenu = this.dataProvider.getSubMenu(result?.subMenuId!);
-      const parentMenu = this.dataProvider.getMenu(subMenu?.menuId!);
+      const subMenu = await this.dataProvider.getSubMenu(result?.subMenuId!);
+      const parentMenu = await this.dataProvider.getMenu(subMenu?.menuId!);
       const containersList = await this.dataProvider.getSaleContainersForMenuItem(result?.id!);
       const allContainers = await this.dataProvider.getContainers();
       const containerMap = new Map<string, ItemContainer>();
@@ -290,14 +290,14 @@ export class MenuItemsRoutes extends Routes {
       return;
     });
 
-    this.router.patch("/:itemId", (req: Request, res: Response) => {
+    this.router.patch("/:itemId", async (req: Request, res: Response) => {
       try{
         if (!req.body) {
           res.status(400).send("Request body expected");
           return;
         }
         const order = req.body.order? parseInt(req.body.order) : null;
-        const result = this.dataProvider.updateMenuItem(req.params.itemId, new MenuItem(null, null, null, null, req.body.itemLogoB64, order));
+        const result = await this.dataProvider.updateMenuItem(req.params.itemId, new MenuItem(null, null, null, null, req.body.itemLogoB64, order));
         if (result !== null) {
           res.send(result);
           return;
