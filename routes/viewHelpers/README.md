@@ -1,0 +1,2 @@
+A collection of files which get compiled specifically for export to views. Since the server is run on tsx, files here need to be compiled differently in order to be imported normally into HTML views.
+Before running the server, run `npm run build` to refresh the JS versions of the files in this folder.
