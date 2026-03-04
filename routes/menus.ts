@@ -54,7 +54,7 @@ export class MenusRoutes extends Routes {
         // Create DisplayItems for each MenuItem and add it to the appropriate map
         // Also gathers all container display info for submenus during the loop
         const allItemsForMenu = await this.dataProvider.getMenuItemsForMenu(result.id!);
-        allItemsForMenu.forEach(async (menuItem: MenuItem) => {
+        for (const menuItem of allItemsForMenu) {
           const item = (await this.dataProvider.getItem(menuItem.itemId!))!;
 
           // Not all items are associated with a brewery
@@ -66,7 +66,7 @@ export class MenusRoutes extends Routes {
           // Gather all the container names for this item
           const allSaleContainersForItem = await this.dataProvider.getSaleContainersForMenuItem(menuItem.id!);
           const containerDisplayNameToPrice: Map<string, string> = new Map();
-          allSaleContainersForItem.forEach(async saleContainer => {
+          for (const saleContainer of allSaleContainersForItem) {
             const containerInfo = (await this.dataProvider.getContainer(saleContainer.containerId))!!;
             const workingDisplayName = containerInfo.displayName ? containerInfo.displayName : uuidv4();
             containerDisplayNameToPrice.set(workingDisplayName, saleContainer.price.toLocaleString('en-US', { minimumFractionDigits: 2}));
@@ -84,13 +84,13 @@ export class MenusRoutes extends Routes {
                 displayNameToOrder.set(workingDisplayName, workingOrder);
               }
             }
-          });
+          };
 
           const displayItem = new DisplayItem(brewery ? brewery!.name : null, item.displayName!, item.style, item.abv, item.description, menuItem.order, containerDisplayNameToPrice);
           if (menuItem.subMenuId) {
             subMenuToItemMap.get(menuItem.subMenuId)?.push(displayItem);
           } 
-        });
+        };
 
         // For each submenu, gather all the price options
         const displaySubMenus: Array<DisplaySubMenu> = [];
