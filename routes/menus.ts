@@ -5,6 +5,9 @@ import { Item } from '../models/items';
 import { DisplayItem, DisplaySubMenu, Menu, MenuItem, SubMenu } from '../models/menus';
 import { Brewery } from '../models/breweries';
 import { ItemContainer } from '../models/containers';
+import pdfkit from 'pdfkit';
+import fs from 'fs';
+import { DataProvider } from '../storage/providers';
 
 
 export class MenusRoutes extends Routes {
@@ -24,6 +27,140 @@ export class MenusRoutes extends Routes {
       return;
     });
 
+    const initMenuBoardPage = (doc: pdfkit, logoBase64: string, docWidth: number, docHeight: number, backgroundColor: string, imageWidth: number, imageHeight: number) => {
+        // First, paint the background
+        doc.rect(0, 0, docWidth, docHeight).fill(backgroundColor);
+        const menuLogo = Buffer.from(logoBase64, 'base64');
+        doc.image(menuLogo, docWidth/2 - imageWidth/2, 0, {width: imageWidth, height: imageHeight});
+    }
+
+    const generateMenuBoardPdf = (res: Response, dataProvider: DataProvider, mainMenu: Menu) => {
+      return new Promise(async (resolve, reject) => {
+        // Get all the sub-menus for this menu
+        const allSubMenus = (await this.dataProvider.getSubMenusForMenu(mainMenu.id!!)).sort((a, b) => {
+          if(a.order === null && b.order === null) {
+            return 0
+          } else {
+            if (a.order === null) {
+              return 1
+            }
+            if (b.order === null) {
+              return -1
+            }
+            if (a.order < b.order) {
+              return -1
+            }
+            if (b.order < a.order) {
+              return 1
+            }
+            return 0
+          }
+        }); 
+
+        // Set response headers
+        res.setHeader('Content-type', 'application/pdf');
+        // Use 'attachment' to force download, 'inline' to display in browser
+        res.setHeader('Content-disposition', 'attachment; filename=test.pdf')
+
+        // Create a document
+        const docWidth = 1080
+        const docHeight = 1920
+        const doc = new pdfkit({size: [docWidth, docHeight]});
+        doc.pipe(res);
+
+        // Declaring some colors for the menu
+        const zymosBlue = '#175a6c' // Be it forever known
+        const submenuBackground = '#2b2b2b'
+        const submenuHeaderFontColor = '#ffffff'
+        const submenuItemFontColor = '#f3f3f3'
+        const submenuItemStyleFontColor = '#9D9D9D'
+
+
+        // Add header logo
+        const imageHeight = 150;
+        const imageWidth = 150;
+        initMenuBoardPage(doc, mainMenu.logo!!, docWidth, docHeight, zymosBlue, imageHeight, imageHeight);
+        const menuLogo = Buffer.from(mainMenu.logo!!, 'base64');
+        doc.image(menuLogo, docWidth/2 - imageWidth/2, 0, {width: imageWidth, height: imageHeight});
+
+        const fontFolderRoot = 'dist/public/fonts'
+
+        const standardBuffer = 10;
+        const headerBuffer = 5;
+        const backgroundHeight = 50
+        const itemLogoDimensions = 50
+        var totalHeightSoFar = imageHeight
+        // Render the submenus
+        for (const submenu of allSubMenus) {
+          // Draw the background for the header
+          doc.rect(standardBuffer, totalHeightSoFar + standardBuffer, docWidth - 2 * standardBuffer, backgroundHeight).fill(submenuBackground);
+          doc.font(`${fontFolderRoot}/FiraSans-Regular.ttf`).
+            fontSize(backgroundHeight - (2 * headerBuffer)).
+            fillColor(submenuHeaderFontColor).
+            text(submenu.displayName, standardBuffer + headerBuffer, totalHeightSoFar + standardBuffer + (headerBuffer/2));
+          // Update the height for the text displayed
+          totalHeightSoFar = totalHeightSoFar + standardBuffer  + backgroundHeight
+
+          // For each item in the submenu, render the details
+          const menuItemsForSubmenu = await dataProvider.getMenuItemsForSubMenu(submenu.id!!)
+          for (const menuItem of menuItemsForSubmenu){
+            const itemDetails = await dataProvider.getItem(menuItem.itemId!!)
+            // Get the logo for the font
+            // TODO: This should be from the brewery if it's not provided
+            var itemLogo;
+            if (menuItem.itemLogo == null){
+              itemLogo = menuLogo;
+            } else {
+              itemLogo = Buffer.from(menuItem.itemLogo, 'base64')
+            }
+            // Remember the current state, draw a circle, and crop the logo to it
+            doc.save()
+            doc.circle(standardBuffer + itemLogoDimensions/2, totalHeightSoFar + standardBuffer + itemLogoDimensions/2, itemLogoDimensions/2).clip();
+            doc.image(itemLogo, standardBuffer, totalHeightSoFar + standardBuffer, {height: itemLogoDimensions, width: itemLogoDimensions});
+            doc.restore();
+
+            // Precalculate the height of the text and determine if we need to start a new page
+            const nextWidthStart = standardBuffer + itemLogoDimensions + standardBuffer;
+            const nextHeightStart = totalHeightSoFar + standardBuffer/2;
+            
+            const breweryForItem = await dataProvider.getBrewery(itemDetails?.breweryId!!);
+            const itemName = `${breweryForItem?.name} ${itemDetails?.displayName}`
+            const itemStyle = itemDetails?.style
+            const itemDisplay = `${itemName}  ${itemStyle}`
+
+
+            const nextHeight = doc.font(`${fontFolderRoot}/FiraSans-Regular.ttf`).
+              fontSize(itemLogoDimensions).heightOfString(itemDisplay, nextWidthStart, nextHeightStart)
+            console.log(totalHeightSoFar);
+            console.log(totalHeightSoFar + nextHeight);
+            if (totalHeightSoFar + nextHeight > docHeight) {
+              doc.addPage({size: [docWidth, docHeight]})
+              initMenuBoardPage(doc, mainMenu.logo!!, docWidth, docHeight, zymosBlue, imageHeight, imageHeight);
+            }
+
+            // Describe the actual beer
+            doc.save()
+            doc.font(`${fontFolderRoot}/FiraSans-Regular.ttf`).
+              fontSize(itemLogoDimensions).
+              fillColor(submenuItemFontColor).
+              text(itemName, nextWidthStart, nextHeightStart, { continued: true });
+            doc.
+              fillColor(submenuItemStyleFontColor).
+              text("  " + itemDetails?.style);
+            doc.restore();
+
+            totalHeightSoFar = totalHeightSoFar + nextHeight + standardBuffer
+          }
+        };
+
+        doc.end();
+
+        // Wait for the stream to finish before resolving
+        res.on('finish', resolve);
+        res.on('error', reject);
+      });
+    };
+
     this.router.get("/:menuId", async (req: Request, res: Response) => {
       const result = await this.dataProvider.getMenu(req.params.menuId)
 
@@ -39,6 +176,11 @@ export class MenusRoutes extends Routes {
           return
         }
       }
+      if (req.query.format === "digital") {
+        // Basically just need to wrap this since some PdfKit functions are shadow async
+        await (generateMenuBoardPdf(res, this.dataProvider, result));
+        return
+      } 
       if (req.query.format === "print") {
         // Get all the sub-menus for this menu
         const allSubMenus = await this.dataProvider.getSubMenusForMenu(result.id!);
