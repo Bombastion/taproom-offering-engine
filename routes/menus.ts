@@ -34,6 +34,15 @@ export class MenusRoutes extends Routes {
         doc.image(menuLogo, docWidth/2 - imageWidth/2, 0, {width: imageWidth, height: imageHeight});
     }
 
+    const getItemFullLineText = (item: Item | undefined | null, breweryName: String | undefined | null) => {
+      const itemName = `${breweryName} ${item?.displayName}`;
+      const itemStyle = item?.style;
+      const itemAbv = item?.abv;
+      const itemDisplay = `${itemName}  ${itemStyle}  ${itemAbv}%`;
+
+      return itemDisplay;
+    }
+
     const generateMenuBoardPdf = (res: Response, dataProvider: DataProvider, mainMenu: Menu) => {
       return new Promise(async (resolve, reject) => {
         // Get all the sub-menus for this menu
@@ -65,7 +74,7 @@ export class MenusRoutes extends Routes {
         // Create a document
         const docWidth = 1080
         const docHeight = 1920
-        const doc = new pdfkit({size: [docWidth, docHeight]});
+        const doc = new pdfkit({ size: [docWidth, docHeight], margin: 0 });
         doc.pipe(res);
 
         // Declaring some colors for the menu
@@ -76,12 +85,12 @@ export class MenusRoutes extends Routes {
         const submenuItemStyleFontColor = '#9D9D9D'
 
 
-        // Add header logo
-        const imageHeight = 150;
-        const imageWidth = 150;
-        initMenuBoardPage(doc, mainMenu.logo!!, docWidth, docHeight, zymosBlue, imageHeight, imageHeight);
+        // Add header logo and fill the background
+        const headerLogoHeight = 150;
+        const headerLogoWidth = 150;
+        initMenuBoardPage(doc, mainMenu.logo!!, docWidth, docHeight, zymosBlue, headerLogoWidth, headerLogoHeight);
         const menuLogo = Buffer.from(mainMenu.logo!!, 'base64');
-        doc.image(menuLogo, docWidth/2 - imageWidth/2, 0, {width: imageWidth, height: imageHeight});
+        var totalHeightSoFar = headerLogoHeight
 
         const fontFolderRoot = 'dist/public/fonts'
 
@@ -89,9 +98,30 @@ export class MenusRoutes extends Routes {
         const headerBuffer = 5;
         const backgroundHeight = 50
         const itemLogoDimensions = 50
-        var totalHeightSoFar = imageHeight
+        const endOfPageSafetyBuffer = itemLogoDimensions + (2 * standardBuffer);
         // Render the submenus
         for (const submenu of allSubMenus) {
+          const menuItemsForSubmenu = await dataProvider.getMenuItemsForSubMenu(submenu.id!!)
+          // No items, just skip this one
+          if (menuItemsForSubmenu.length <= 0) {
+            continue
+          }
+          
+          // First, make sure we can fit this submenu and at least the first item on the current page
+          // TODO: Consider extracting this to its own function; lots of params, though
+          const firstItem = menuItemsForSubmenu[0]
+          const firstItemDetails = await dataProvider.getItem(firstItem.itemId!!)
+          const breweryForItem = await dataProvider.getBrewery(firstItemDetails?.breweryId!!);
+          const firstItemDisplayText = getItemFullLineText(firstItemDetails, breweryForItem?.name);
+          const firstItemDisplayHeight = doc.font(`${fontFolderRoot}/FiraSans-Regular.ttf`).
+              fontSize(itemLogoDimensions).heightOfString(firstItemDisplayText);
+          const firstBlockHeight = totalHeightSoFar + standardBuffer + backgroundHeight + firstItemDisplayHeight + endOfPageSafetyBuffer;
+          if (firstBlockHeight >= docHeight) {
+            doc.addPage({ size: [docWidth, docHeight], margin: 0 });
+            initMenuBoardPage(doc, mainMenu.logo!!, docWidth, docHeight, zymosBlue, headerLogoWidth, headerLogoHeight);
+            totalHeightSoFar = headerLogoHeight;
+          }
+
           // Draw the background for the header
           doc.rect(standardBuffer, totalHeightSoFar + standardBuffer, docWidth - 2 * standardBuffer, backgroundHeight).fill(submenuBackground);
           doc.font(`${fontFolderRoot}/FiraSans-Regular.ttf`).
@@ -99,10 +129,9 @@ export class MenusRoutes extends Routes {
             fillColor(submenuHeaderFontColor).
             text(submenu.displayName, standardBuffer + headerBuffer, totalHeightSoFar + standardBuffer + (headerBuffer/2));
           // Update the height for the text displayed
-          totalHeightSoFar = totalHeightSoFar + standardBuffer  + backgroundHeight
+          totalHeightSoFar = totalHeightSoFar + standardBuffer + backgroundHeight
 
           // For each item in the submenu, render the details
-          const menuItemsForSubmenu = await dataProvider.getMenuItemsForSubMenu(submenu.id!!)
           for (const menuItem of menuItemsForSubmenu){
             const itemDetails = await dataProvider.getItem(menuItem.itemId!!)
             // Get the logo for the font
@@ -111,42 +140,47 @@ export class MenusRoutes extends Routes {
             if (menuItem.itemLogo == null){
               itemLogo = menuLogo;
             } else {
-              itemLogo = Buffer.from(menuItem.itemLogo, 'base64')
+              itemLogo = Buffer.from(menuItem.itemLogo, 'base64');
             }
-            // Remember the current state, draw a circle, and crop the logo to it
+            
+            // Get some details about the item
+            const breweryForItem = await dataProvider.getBrewery(itemDetails?.breweryId!!);
+
+            // Precalculate the height of the text and determine if we need to start a new page
+            const itemFullText = getItemFullLineText(itemDetails, breweryForItem?.name);
+            const nextHeight = doc.font(`${fontFolderRoot}/FiraSans-Regular.ttf`).
+              fontSize(itemLogoDimensions).heightOfString(itemFullText);
+            if (totalHeightSoFar + nextHeight + endOfPageSafetyBuffer > docHeight) {
+              doc.addPage({ size: [docWidth, docHeight], margin: 0 })
+              initMenuBoardPage(doc, mainMenu.logo!!, docWidth, docHeight, zymosBlue, headerLogoWidth, headerLogoHeight);
+              totalHeightSoFar = headerLogoHeight;
+              // Draw 
+              doc.rect(standardBuffer, totalHeightSoFar + standardBuffer, docWidth - 2 * standardBuffer, backgroundHeight).fill(submenuBackground);
+              doc.font(`${fontFolderRoot}/FiraSans-Regular.ttf`).
+                fontSize(backgroundHeight - (2 * headerBuffer)).
+                fillColor(submenuHeaderFontColor).
+                text(submenu.displayName + ", Continued", standardBuffer + headerBuffer, totalHeightSoFar + standardBuffer + (headerBuffer/2));
+              // Update the height for the text displayed
+              totalHeightSoFar = totalHeightSoFar + standardBuffer + backgroundHeight
+            }
+
+            // Draw a circle, and crop the logo to it
             doc.save()
-            doc.circle(standardBuffer + itemLogoDimensions/2, totalHeightSoFar + standardBuffer + itemLogoDimensions/2, itemLogoDimensions/2).clip();
+            doc.circle(standardBuffer + itemLogoDimensions / 2, totalHeightSoFar + standardBuffer + itemLogoDimensions/2, itemLogoDimensions/2).clip();
             doc.image(itemLogo, standardBuffer, totalHeightSoFar + standardBuffer, {height: itemLogoDimensions, width: itemLogoDimensions});
             doc.restore();
 
-            // Precalculate the height of the text and determine if we need to start a new page
-            const nextWidthStart = standardBuffer + itemLogoDimensions + standardBuffer;
-            const nextHeightStart = totalHeightSoFar + standardBuffer/2;
-            
-            const breweryForItem = await dataProvider.getBrewery(itemDetails?.breweryId!!);
-            const itemName = `${breweryForItem?.name} ${itemDetails?.displayName}`
-            const itemStyle = itemDetails?.style
-            const itemDisplay = `${itemName}  ${itemStyle}`
-
-
-            const nextHeight = doc.font(`${fontFolderRoot}/FiraSans-Regular.ttf`).
-              fontSize(itemLogoDimensions).heightOfString(itemDisplay, nextWidthStart, nextHeightStart)
-            console.log(totalHeightSoFar);
-            console.log(totalHeightSoFar + nextHeight);
-            if (totalHeightSoFar + nextHeight > docHeight) {
-              doc.addPage({size: [docWidth, docHeight]})
-              initMenuBoardPage(doc, mainMenu.logo!!, docWidth, docHeight, zymosBlue, imageHeight, imageHeight);
-            }
-
             // Describe the actual beer
+            const nextWidthStart = standardBuffer + itemLogoDimensions + standardBuffer;
+            const nextHeightStart = totalHeightSoFar + standardBuffer / 2;
             doc.save()
             doc.font(`${fontFolderRoot}/FiraSans-Regular.ttf`).
               fontSize(itemLogoDimensions).
               fillColor(submenuItemFontColor).
-              text(itemName, nextWidthStart, nextHeightStart, { continued: true });
+              text(`${breweryForItem?.name} ${itemDetails?.displayName}`, nextWidthStart, nextHeightStart, { continued: true });
             doc.
               fillColor(submenuItemStyleFontColor).
-              text("  " + itemDetails?.style);
+              text("  " + itemDetails?.style + "  " + itemDetails?.abv + "%");
             doc.restore();
 
             totalHeightSoFar = totalHeightSoFar + nextHeight + standardBuffer
