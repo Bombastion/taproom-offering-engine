@@ -5,6 +5,9 @@ import { Item } from '../models/items';
 import { DisplayItem, DisplaySubMenu, Menu, MenuItem, SubMenu } from '../models/menus';
 import { Brewery } from '../models/breweries';
 import { ItemContainer } from '../models/containers';
+import pdfkit from 'pdfkit';
+import fs from 'fs';
+import { DataProvider } from '../storage/providers';
 
 
 export class MenusRoutes extends Routes {
@@ -24,6 +27,174 @@ export class MenusRoutes extends Routes {
       return;
     });
 
+    const initMenuBoardPage = (doc: pdfkit, logoBase64: string, docWidth: number, docHeight: number, backgroundColor: string, imageWidth: number, imageHeight: number) => {
+        // First, paint the background
+        doc.rect(0, 0, docWidth, docHeight).fill(backgroundColor);
+        const menuLogo = Buffer.from(logoBase64, 'base64');
+        doc.image(menuLogo, docWidth/2 - imageWidth/2, 0, {width: imageWidth, height: imageHeight});
+    }
+
+    const getItemFullLineText = (item: Item | undefined | null, breweryName: String | undefined | null) => {
+      const itemName = `${breweryName} ${item?.displayName}`;
+      const itemStyle = item?.style;
+      const itemAbv = item?.abv;
+      const itemDisplay = `${itemName}  ${itemStyle}  ${itemAbv}%`;
+
+      return itemDisplay;
+    }
+
+    const generateMenuBoardPdf = (res: Response, dataProvider: DataProvider, mainMenu: Menu) => {
+      return new Promise(async (resolve, reject) => {
+        // Get all the sub-menus for this menu
+        const allSubMenus = (await this.dataProvider.getSubMenusForMenu(mainMenu.id!!)).sort((a, b) => {
+          if(a.order === null && b.order === null) {
+            return 0
+          } else {
+            if (a.order === null) {
+              return 1
+            }
+            if (b.order === null) {
+              return -1
+            }
+            if (a.order < b.order) {
+              return -1
+            }
+            if (b.order < a.order) {
+              return 1
+            }
+            return 0
+          }
+        }); 
+
+        // Set response headers
+        res.setHeader('Content-type', 'application/pdf');
+        // Use 'attachment' to force download, 'inline' to display in browser
+        res.setHeader('Content-disposition', 'attachment; filename=test.pdf')
+
+        // Create a document
+        const docWidth = 1080
+        const docHeight = 1920
+        const doc = new pdfkit({ size: [docWidth, docHeight], margin: 0 });
+        doc.pipe(res);
+
+        // Declaring some colors for the menu
+        const zymosBlue = '#175a6c' // Be it forever known
+        const submenuBackground = '#2b2b2b'
+        const submenuHeaderFontColor = '#ffffff'
+        const submenuItemFontColor = '#f3f3f3'
+        const submenuItemStyleFontColor = '#9D9D9D'
+
+
+        // Add header logo and fill the background
+        const headerLogoHeight = 150;
+        const headerLogoWidth = 150;
+        initMenuBoardPage(doc, mainMenu.logo!!, docWidth, docHeight, zymosBlue, headerLogoWidth, headerLogoHeight);
+        const menuLogo = Buffer.from(mainMenu.logo!!, 'base64');
+        var totalHeightSoFar = headerLogoHeight
+
+        const fontFolderRoot = 'dist/public/fonts'
+
+        const standardBuffer = 10;
+        const headerBuffer = 5;
+        const backgroundHeight = 50
+        const itemLogoDimensions = 50
+        const endOfPageSafetyBuffer = itemLogoDimensions + (2 * standardBuffer);
+        // Render the submenus
+        for (const submenu of allSubMenus) {
+          const menuItemsForSubmenu = await dataProvider.getMenuItemsForSubMenu(submenu.id!!)
+          // No items, just skip this one
+          if (menuItemsForSubmenu.length <= 0) {
+            continue
+          }
+          
+          // First, make sure we can fit this submenu and at least the first item on the current page
+          // TODO: Consider extracting this to its own function; lots of params, though
+          const firstItem = menuItemsForSubmenu[0]
+          const firstItemDetails = await dataProvider.getItem(firstItem.itemId!!)
+          const breweryForItem = await dataProvider.getBrewery(firstItemDetails?.breweryId!!);
+          const firstItemDisplayText = getItemFullLineText(firstItemDetails, breweryForItem?.name);
+          const firstItemDisplayHeight = doc.font(`${fontFolderRoot}/FiraSans-Regular.ttf`).
+              fontSize(itemLogoDimensions).heightOfString(firstItemDisplayText);
+          const firstBlockHeight = totalHeightSoFar + standardBuffer + backgroundHeight + firstItemDisplayHeight + endOfPageSafetyBuffer;
+          if (firstBlockHeight >= docHeight) {
+            doc.addPage({ size: [docWidth, docHeight], margin: 0 });
+            initMenuBoardPage(doc, mainMenu.logo!!, docWidth, docHeight, zymosBlue, headerLogoWidth, headerLogoHeight);
+            totalHeightSoFar = headerLogoHeight;
+          }
+
+          // Draw the background for the header
+          doc.rect(standardBuffer, totalHeightSoFar + standardBuffer, docWidth - 2 * standardBuffer, backgroundHeight).fill(submenuBackground);
+          doc.font(`${fontFolderRoot}/FiraSans-Regular.ttf`).
+            fontSize(backgroundHeight - (2 * headerBuffer)).
+            fillColor(submenuHeaderFontColor).
+            text(submenu.displayName, standardBuffer + headerBuffer, totalHeightSoFar + standardBuffer + (headerBuffer/2));
+          // Update the height for the text displayed
+          totalHeightSoFar = totalHeightSoFar + standardBuffer + backgroundHeight
+
+          // For each item in the submenu, render the details
+          for (const menuItem of menuItemsForSubmenu){
+            const itemDetails = await dataProvider.getItem(menuItem.itemId!!)
+            // Get the logo for the font
+            // TODO: This should be from the brewery if it's not provided
+            var itemLogo;
+            if (menuItem.itemLogo == null){
+              itemLogo = menuLogo;
+            } else {
+              itemLogo = Buffer.from(menuItem.itemLogo, 'base64');
+            }
+            
+            // Get some details about the item
+            const breweryForItem = await dataProvider.getBrewery(itemDetails?.breweryId!!);
+
+            // Precalculate the height of the text and determine if we need to start a new page
+            const itemFullText = getItemFullLineText(itemDetails, breweryForItem?.name);
+            const nextHeight = doc.font(`${fontFolderRoot}/FiraSans-Regular.ttf`).
+              fontSize(itemLogoDimensions).heightOfString(itemFullText);
+            if (totalHeightSoFar + nextHeight + endOfPageSafetyBuffer > docHeight) {
+              doc.addPage({ size: [docWidth, docHeight], margin: 0 })
+              initMenuBoardPage(doc, mainMenu.logo!!, docWidth, docHeight, zymosBlue, headerLogoWidth, headerLogoHeight);
+              totalHeightSoFar = headerLogoHeight;
+              // Draw 
+              doc.rect(standardBuffer, totalHeightSoFar + standardBuffer, docWidth - 2 * standardBuffer, backgroundHeight).fill(submenuBackground);
+              doc.font(`${fontFolderRoot}/FiraSans-Regular.ttf`).
+                fontSize(backgroundHeight - (2 * headerBuffer)).
+                fillColor(submenuHeaderFontColor).
+                text(submenu.displayName + ", Continued", standardBuffer + headerBuffer, totalHeightSoFar + standardBuffer + (headerBuffer/2));
+              // Update the height for the text displayed
+              totalHeightSoFar = totalHeightSoFar + standardBuffer + backgroundHeight
+            }
+
+            // Draw a circle, and crop the logo to it
+            doc.save()
+            doc.circle(standardBuffer + itemLogoDimensions / 2, totalHeightSoFar + standardBuffer + itemLogoDimensions/2, itemLogoDimensions/2).clip();
+            doc.image(itemLogo, standardBuffer, totalHeightSoFar + standardBuffer, {height: itemLogoDimensions, width: itemLogoDimensions});
+            doc.restore();
+
+            // Describe the actual beer
+            const nextWidthStart = standardBuffer + itemLogoDimensions + standardBuffer;
+            const nextHeightStart = totalHeightSoFar + standardBuffer / 2;
+            doc.save()
+            doc.font(`${fontFolderRoot}/FiraSans-Regular.ttf`).
+              fontSize(itemLogoDimensions).
+              fillColor(submenuItemFontColor).
+              text(`${breweryForItem?.name} ${itemDetails?.displayName}`, nextWidthStart, nextHeightStart, { continued: true });
+            doc.
+              fillColor(submenuItemStyleFontColor).
+              text("  " + itemDetails?.style + "  " + itemDetails?.abv + "%");
+            doc.restore();
+
+            totalHeightSoFar = totalHeightSoFar + nextHeight + standardBuffer
+          }
+        };
+
+        doc.end();
+
+        // Wait for the stream to finish before resolving
+        res.on('finish', resolve);
+        res.on('error', reject);
+      });
+    };
+
     this.router.get("/:menuId", async (req: Request, res: Response) => {
       const result = await this.dataProvider.getMenu(req.params.menuId)
 
@@ -39,6 +210,11 @@ export class MenusRoutes extends Routes {
           return
         }
       }
+      if (req.query.format === "digital") {
+        // Basically just need to wrap this since some PdfKit functions are shadow async
+        await (generateMenuBoardPdf(res, this.dataProvider, result));
+        return
+      } 
       if (req.query.format === "print") {
         // Get all the sub-menus for this menu
         const allSubMenus = await this.dataProvider.getSubMenusForMenu(result.id!);
@@ -54,7 +230,7 @@ export class MenusRoutes extends Routes {
         // Create DisplayItems for each MenuItem and add it to the appropriate map
         // Also gathers all container display info for submenus during the loop
         const allItemsForMenu = await this.dataProvider.getMenuItemsForMenu(result.id!);
-        allItemsForMenu.forEach(async (menuItem: MenuItem) => {
+        for (const menuItem of allItemsForMenu) {
           const item = (await this.dataProvider.getItem(menuItem.itemId!))!;
 
           // Not all items are associated with a brewery
@@ -66,7 +242,7 @@ export class MenusRoutes extends Routes {
           // Gather all the container names for this item
           const allSaleContainersForItem = await this.dataProvider.getSaleContainersForMenuItem(menuItem.id!);
           const containerDisplayNameToPrice: Map<string, string> = new Map();
-          allSaleContainersForItem.forEach(async saleContainer => {
+          for (const saleContainer of allSaleContainersForItem) {
             const containerInfo = (await this.dataProvider.getContainer(saleContainer.containerId))!!;
             const workingDisplayName = containerInfo.displayName ? containerInfo.displayName : uuidv4();
             containerDisplayNameToPrice.set(workingDisplayName, saleContainer.price.toLocaleString('en-US', { minimumFractionDigits: 2}));
@@ -84,13 +260,13 @@ export class MenusRoutes extends Routes {
                 displayNameToOrder.set(workingDisplayName, workingOrder);
               }
             }
-          });
+          };
 
           const displayItem = new DisplayItem(brewery ? brewery!.name : null, item.displayName!, item.style, item.abv, item.description, menuItem.order, containerDisplayNameToPrice);
           if (menuItem.subMenuId) {
             subMenuToItemMap.get(menuItem.subMenuId)?.push(displayItem);
           } 
-        });
+        };
 
         // For each submenu, gather all the price options
         const displaySubMenus: Array<DisplaySubMenu> = [];

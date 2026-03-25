@@ -60,8 +60,10 @@ html
           input(name="internalName" id="internalName")
           label(for="displayName") Display Name:
           input(name="displayName" id="displayName")
-          label(for="breweryId") Brewery ID:
-          input(name="breweryId" id="breweryId")
+          label(for="breweryId") Brewery:
+          select(id="breweryId" name="breweryId")
+            each brewery, id in breweryMap 
+              option(value=id) #{brewery.name}
           label(for="style") Style:
           input(name="style" id="style")
           label(for="abv") ABV:
@@ -75,7 +77,7 @@ html
         tr
           th Internal Name
           th Display Name
-          th Brewery ID
+          th Brewery Name
           th Style
           th ABV
           th Description
@@ -84,7 +86,7 @@ html
         each item in displayList
           - var internalName = item.internalName
           - var displayName = item.displayName
-          - var breweryId = item.breweryId
+          - var breweryName = breweryMap[item.breweryId].name
           - var style = item.style
           - var abv = item.abv
           - var description = item.description
@@ -93,7 +95,7 @@ html
           tr 
             td #{internalName}
             td #{displayName}
-            td #{breweryId}
+            td #{breweryName}
             td #{style}
             td #{abv}
             td #{description}

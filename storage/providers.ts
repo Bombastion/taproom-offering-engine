@@ -83,7 +83,7 @@ export class PrismaDataProvider extends DataProvider {
     }
 
     async getBreweries(): Promise<Array<Brewery>> {
-        return await this.prismaClient.brewery.findMany();
+        return await this.prismaClient.brewery.findMany({});
     }
 
     async updateBrewery(breweryId: string, brewery: Brewery): Promise<Brewery> {
@@ -124,7 +124,7 @@ export class PrismaDataProvider extends DataProvider {
     }
 
     async getContainers(): Promise<Array<ItemContainer>> {
-        return await this.prismaClient.itemContainer.findMany();
+        return await this.prismaClient.itemContainer.findMany({});
     }
 
     async updateContainer(containerId: string, container: ItemContainer): Promise<ItemContainer> {

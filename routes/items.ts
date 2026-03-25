@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import Routes from './common';
 import { Item } from '../models/items';
+import { Brewery } from '../models/breweries';
 
 
 export class ItemsRoutes extends Routes {
@@ -9,7 +10,12 @@ export class ItemsRoutes extends Routes {
     // Copy/paste that thought to all routes
     this.router.get("/manage", async (_req: Request, res: Response) => {
       const displayList = await this.dataProvider.getItems();
-      res.render("itemList", {displayList: displayList});
+      const allBreweries = await this.dataProvider.getBreweries();
+      const breweryMap = new Map<string, Brewery>();
+      for (const brewery of allBreweries) {
+        breweryMap.set(brewery.id!, brewery)
+      }
+      res.render("itemList", {displayList: displayList, breweryMap: Object.fromEntries(breweryMap)});
       return;
     });
 
@@ -28,6 +34,7 @@ export class ItemsRoutes extends Routes {
       const requiredFieldsAndTypes: Record<string, string> = {
         "internalName": "string",
         "displayName": "string",
+        "breweryId": "string",
       }
       if(!this.validateInput(req, res, requiredFieldsAndTypes)) {
         return;
