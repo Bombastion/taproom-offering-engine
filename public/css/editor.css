@@ -1,13 +1,22 @@
+html * { 
+  font-size: 3vh;
+}
+
 table {
     border-collapse: collapse;
+    table-layout:auto;
 }
 
 tr, th, td {
-  border: 1px solid;
+  border: 3px solid;
+}
+
+td {
+  width: 14vw;
 }
 
 .logo {
-  max-width: 8%;
+  max-width: 90%;
   height: auto;
 }
 
@@ -16,5 +25,15 @@ tr, th, td {
 }
 
 .visible-element {
-  display: block; 
+  display: flex; 
+}
+
+.menu-button {
+  margin: 0 auto;
+  display: block;
+}
+
+td > input {
+  display: block;
+  width: 80%;
 }

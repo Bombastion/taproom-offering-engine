@@ -50,29 +50,73 @@ script.
     });
   }
 
+  function filterTable(formId, tableId) {
+    // Declare variables
+    var input, filter, table, tr, td, i, txtValue;
+    input = document.getElementById(formId);
+    filter = input.value.toUpperCase();
+    table = document.getElementById(tableId);
+    tr = table.getElementsByTagName("tr"); // Get all rows in the table
+
+    // Loop through all table rows, and hide those who don't match the search query
+    for (i = 0; i < tr.length; i++) {
+      // Skip the header row or any hidable edit rows
+      if (tr[i].classList.contains("header") || tr[i].classList.contains("editRow")
+          || tr[i].getElementsByTagName("th").length > 0) {
+        continue;
+      }
+      
+      // Get the cells (td) in the current row. To search all columns, loop through cells.
+      // This example searches the first column (index 0)
+      var cells = tr[i].getElementsByTagName("td"); 
+      var shouldShowRow = false;
+      for(cellIndex = 0; cellIndex < cells.length; cellIndex++) {
+        var td = cells[cellIndex]
+        txtValue = td.textContent || td.innerText;
+        if (txtValue.toUpperCase().indexOf(filter) > -1) {
+          shouldShowRow = true;
+        }
+      }
+
+      if (shouldShowRow) {
+        tr[i].style.display = ""; // Show the row
+      } else {
+        tr[i].style.display = "none"; // Hide the row
+      }
+    }
+  }
+
 html
   body
-    table
+    table(id='itemsTable')
       button(onclick="toggleShowElement('createItemNewDiv')") Add New
+      br
       div(style="display: none", id="createItemNewDiv")
         form(id="addItemForm")
           label(for="internalName") Internal Name:
           input(name="internalName" id="internalName")
+          br
           label(for="displayName") Display Name:
           input(name="displayName" id="displayName")
+          br
           label(for="breweryId") Brewery:
           select(id="breweryId" name="breweryId")
             each brewery, id in breweryMap 
               option(value=id) #{brewery.name}
+              br
           label(for="style") Style:
           input(name="style" id="style")
+          br
           label(for="abv") ABV:
           input(name="abv" id="abv")
+          br
           label(for="description") Description:
           input(name="description" id="description")
+          br
           label(for="category") Menu Category:
           input(name="category" id="category")
         button(onclick="submitAddForm('addItemForm')" type="button") Create Item
+      input(type="text" id="tableFilter" onkeyup="filterTable('tableFilter', 'itemsTable')" placeholder="Search table...")
       tbody
         tr
           th Internal Name
@@ -102,7 +146,7 @@ html
             td #{category}
             td
               button(onclick=`toggleShowElement('editElement${itemId}')`) Edit
-          tr(style="display: none", id=`editElement${itemId}`)
+          tr(style="display: none", id=`editElement${itemId}` class='editRow')
             form(id=`updateForm${itemId}`)
               td
                 label(for="internalName") Internal Name:

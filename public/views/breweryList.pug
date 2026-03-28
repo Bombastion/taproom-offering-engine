@@ -62,10 +62,13 @@ html
         form(id="addBreweryForm")
           label(for="newBreweryName") Name:
           input(name="newBreweryName" id="newBreweryName")
+          br
           label(for="newBreweryLocation") Location:
           input(name="newBreweryLocation" id="newBreweryLocation")
+          br
           label(for="newBreweryLogo") Logo:
           input(name="newBreweryLogo" id="newBreweryLogo" type="file" accept="image/png, image/jpeg" onchange="setB64FormFieldFromImage(document.getElementById('addBreweryForm'), 'newBreweryLogo', 'newBreweryLogoB64')")
+          br
           input(name="newBreweryLogoB64" id="newBreweryLogoB64" type="hidden")
         button(onclick="submitAddForm('addBreweryForm')" type="button") Create Brewery
       tbody

@@ -59,10 +59,13 @@ html
         form(id="addItemForm")
           label(for="logoFile") Logo:
           input(name="logoFile" id="logoFile" type="file" accept="image/png, image/jpeg" onchange="setB64FormFieldFromImage(document.getElementById('addItemForm'), 'logoFile', 'logo')")
+          br
           label(for="internalName") Internal Name:
           input(name="internalName" id="internalName")
+          br
           label(for="displayName") Display Name:
           input(name="displayName" id="displayName")
+          br
           input(name="logo" id="logo" type="hidden")
         button(onclick="submitAddForm('addItemForm')" type="button") Create Menu
       tbody
@@ -78,7 +81,7 @@ html
           - var displayName = item.displayName
           - var itemId = item.id
           tr 
-            td 
+            td
               img(class='logo' src='data:image;base64, ' + existingLogo)
             td #{internalName}
             td #{displayName}

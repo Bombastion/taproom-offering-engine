@@ -222,7 +222,13 @@ export class PrismaDataProvider extends DataProvider {
     }
     
     async getItems(): Promise<Array<Item>> {
-        return await this.prismaClient.item.findMany({});
+        return await this.prismaClient.item.findMany({
+            orderBy: [
+                {
+                    displayName: 'asc'
+                }
+            ]
+        });
     }
 
     async updateItem(itemId: string, item: Item): Promise<Item> {

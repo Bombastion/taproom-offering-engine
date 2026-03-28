@@ -57,30 +57,30 @@ html
         form(id="addItemForm")
           label(for="internalName") Internal Name:
           input(name="internalName" id="internalName")
+          br
           label(for="displayName") Display Name:
           input(name="displayName" id="displayName")
+          br
           label(for="order") Display Order:
           input(name="order" id="order")
+          br
           input(name="menuId" id="menuId" type="hidden" value=menuId)
         button(onclick="submitAddForm('addItemForm')" type="button") Create Menu
       tbody
         tr
           th Internal Name
           th Display Name
-          th Menu ID
           th Display Order
           th 
           th
         each item in displayList
           - var internalName = item.internalName
           - var displayName = item.displayName
-          - var menuId = item.menuId
           - var order = item.order
           - var itemId = item.id
           tr 
             td #{internalName}
             td #{displayName}
-            td #{menuId}
             td #{order}
             td
               button(onclick=`toggleShowElement('editElement${itemId}')`) Edit
@@ -95,9 +95,6 @@ html
               td
                 label(for="displayName") Display Name:
                 input(name="displayName" id="displayName")
-              td
-                label(for="menuId") Menu ID:
-                input(name="menuId" id="menuId")
               td
                 label(for="order") Display Order:
                 input(name="order" id="order")

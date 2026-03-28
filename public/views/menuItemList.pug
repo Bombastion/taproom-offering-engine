@@ -1,23 +1,35 @@
 <link rel="stylesheet" type="text/css" href="/editor.css" />
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+
+script(src="https://code.jquery.com/jquery-4.0.0.min.js" integrity="sha256-OaVG6prZf4v69dPg6PhVattBXkcOWQB62pdZ3ORyrao=" crossorigin="anonymous")
+script(src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js")
+
 script.
   var exports = {};
 
 script(src="/functions.js")
 
+script(type="text/javascript"). 
+  $(document).ready(function() {
+    $('#menuItemSelect').select2();
+  });
+
 script.
   function addItemToSubMenu(subMenuId) {
     const selectedId = document.getElementById('menuItemSelect').value;
-    fetch(`/submenus/${subMenuId}/menuItems/${selectedId}`, {
-      method:'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    }).then(data => {
-      window.location.reload();
-    })
-    .catch(error => {
-      alert(`Problem making request: ${error}`);
-    });
+    if (selectedId) {
+      fetch(`/submenus/${subMenuId}/menuItems/${selectedId}`, {
+        method:'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      }).then(data => {
+        window.location.reload();
+      })
+      .catch(error => {
+        alert(`Problem making request: ${error}`);
+      });
+    }
   }
 
   function removeMenuItemFromSubMenu(subMenuId, itemId) {
@@ -43,6 +55,7 @@ html
     - var subMenuId = subMenu.id
     h1 Editing #{parentMenu.displayName} -> #{subMenu.displayName}
     select(id="menuItemSelect")
+      option(disabled selected value="") -- select an option -- 
       each item, id in itemMap
         option(value=id) #{item.displayName}
     button(onclick=`addItemToSubMenu('${subMenuId}')`) Add Item to Category
