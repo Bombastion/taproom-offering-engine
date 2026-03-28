@@ -3,14 +3,14 @@
 html
   body
     div
-      a(href='/menus/manage')
-        button Manage Menus
+      form(action='/menus/manage')
+        input(class='menu-button' type='submit' value='Manage Menus')
     div
-      a(href='/breweries/manage')
-        button Manage Breweries
+      form(action='/breweries/manage')
+        input(class='menu-button' type='submit' value='Manage Breweries')
     div
-      a(href='/items/manage')
-        button Manage Items (Beers, snacks, etc.)
+      form(action='/items/manage')
+        input(class='menu-button' type='submit' value='Manage Items (Beers, snacks, etc.)')
     div
-      a(href='/containers/manage')
-        button Manage Containers
+      form(action='/containers/manage')
+        input(class='menu-button' type='submit' value='Manage Containers')

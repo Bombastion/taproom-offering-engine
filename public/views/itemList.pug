@@ -58,18 +58,24 @@ html
         form(id="addItemForm")
           label(for="internalName") Internal Name:
           input(name="internalName" id="internalName")
+          br
           label(for="displayName") Display Name:
           input(name="displayName" id="displayName")
+          br
           label(for="breweryId") Brewery:
           select(id="breweryId" name="breweryId")
             each brewery, id in breweryMap 
               option(value=id) #{brewery.name}
+              br
           label(for="style") Style:
           input(name="style" id="style")
+          br
           label(for="abv") ABV:
           input(name="abv" id="abv")
+          br
           label(for="description") Description:
           input(name="description" id="description")
+          br
           label(for="category") Menu Category:
           input(name="category" id="category")
         button(onclick="submitAddForm('addItemForm')" type="button") Create Item
