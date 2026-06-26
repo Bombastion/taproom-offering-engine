@@ -14,6 +14,8 @@ RUN npm install
 # Copy the rest of the application code
 COPY . .
 
+RUN npm run copy-files
+
 RUN npm run build
 
 # Expose the port your Node.js server listens on

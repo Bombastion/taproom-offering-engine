@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "build": "tsc --project ./routes/viewHelpers/tsconfig-views.json && yarn copy-files && rm -r public/js/* && cp -r dist/routes/viewHelpers/*.js public/js/",
+    "build": "npx tsc --project ./routes/viewHelpers/tsconfig-views.json && yarn copy-files && mkdir public/js && cp -r ./routes/viewHelpers/dist/*.js public/js/",
     "start": "npx tsx server.ts",
     "test": "echo \"Error: no test specified\" && exit 1",
     "copy-files": "cp -r public dist"
