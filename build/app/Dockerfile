@@ -8,6 +8,9 @@ WORKDIR /taproom-offering-engine
 # This allows installing dependencies before copying the entire application code
 COPY package*.json ./
 
+# Copy the generated Prisma files
+COPY prisma ./prisma
+
 # Install dependencies
 RUN npm install
 
