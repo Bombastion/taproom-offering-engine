@@ -17,6 +17,11 @@ services:
       - "3000:3000"
     environment:
       - DATABASE_URL=postgres://postgres:postgres@db:5432/postgres
+      # Shared admin login for the "/manage" editor pages and all POST/PATCH/DELETE routes.
+      # Set these in a local .env file (see .env.example) rather than editing this file —
+      # docker compose reads .env automatically and it's gitignored.
+      - TOE_ADMIN_USERNAME=${TOE_ADMIN_USERNAME:-admin}
+      - TOE_ADMIN_PASSWORD=${TOE_ADMIN_PASSWORD:?TOE_ADMIN_PASSWORD must be set before starting this service}
 
 volumes:
   pg_data:
