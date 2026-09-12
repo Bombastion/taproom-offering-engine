@@ -215,6 +215,92 @@ export class MenusRoutes extends Routes {
         await (generateMenuBoardPdf(res, this.dataProvider, result));
         return
       } 
+      if (req.query.format === "widget") {
+        // Returns a nested JSON representation of this menu (sections -> items -> pour/price
+        // options), suitable for a lightweight external display like the Wix "currently on tap"
+        // embed. This mirrors the same data the print/digital views build, just as JSON instead
+        // of a rendered document.
+        const allSubMenus = (await this.dataProvider.getSubMenusForMenu(result.id!)).sort((a, b) => {
+          if (a.order === null && b.order === null) {
+            return 0;
+          }
+          if (a.order === null) {
+            return 1;
+          }
+          if (b.order === null) {
+            return -1;
+          }
+          return a.order - b.order;
+        });
+
+        const sections = [];
+        for (const subMenu of allSubMenus) {
+          const menuItemsForSubmenu = (await this.dataProvider.getMenuItemsForSubMenu(subMenu.id!)).sort((a, b) => {
+            if (a.order === null && b.order === null) {
+              return 0;
+            }
+            if (a.order === null) {
+              return 1;
+            }
+            if (b.order === null) {
+              return -1;
+            }
+            return a.order - b.order;
+          });
+          if (menuItemsForSubmenu.length <= 0) {
+            continue;
+          }
+
+          const items = [];
+          for (const menuItem of menuItemsForSubmenu) {
+            const itemDetails = await this.dataProvider.getItem(menuItem.itemId!);
+
+            let brewery: Brewery | null = null;
+            if (itemDetails?.breweryId) {
+              brewery = await this.dataProvider.getBrewery(itemDetails.breweryId);
+            }
+
+            const allSaleContainersForItem = await this.dataProvider.getSaleContainersForMenuItem(menuItem.id!);
+            const pours = [];
+            for (const saleContainer of allSaleContainersForItem) {
+              const containerInfo = await this.dataProvider.getContainer(saleContainer.containerId);
+              pours.push({
+                label: containerInfo?.displayName ?? "Pour",
+                price: saleContainer.price,
+                order: containerInfo?.order ?? 999,
+              });
+            }
+            pours.sort((a, b) => a.order - b.order);
+
+            const logoSource = menuItem.itemLogo ?? brewery?.defaultLogo ?? result.logo ?? null;
+
+            items.push({
+              breweryName: brewery?.name ?? null,
+              breweryLocation: brewery?.location ?? null,
+              displayName: itemDetails?.displayName ?? "",
+              style: itemDetails?.style ?? null,
+              abv: itemDetails?.abv ?? null,
+              description: itemDetails?.description ?? null,
+              logo: logoSource ? `data:image/png;base64,${logoSource}` : null,
+              pours: pours.map(({ label, price }) => ({ label, price })),
+            });
+          }
+
+          sections.push({
+            displayName: subMenu.displayName,
+            items,
+          });
+        }
+
+        res.json({
+          id: result.id,
+          displayName: result.displayName,
+          logo: result.logo ? `data:image/png;base64,${result.logo}` : null,
+          generatedAt: new Date().toISOString(),
+          sections,
+        });
+        return;
+      }
       if (req.query.format === "print") {
         // Get all the sub-menus for this menu
         const allSubMenus = await this.dataProvider.getSubMenusForMenu(result.id!);

@@ -1,4 +1,4 @@
-import express, { Request, Response } from 'express';
+import express, { Request, Response, NextFunction } from 'express';
 import path from 'path';
 import { ContainersRoutes, SaleContainersRoutes } from './routes/containers';
 import { ItemsRoutes } from './routes/items';
@@ -12,6 +12,20 @@ const port = process.env.TOE_SERVER_PORT || 3000;
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
+// Allow cross-origin requests (e.g., the Wix "currently on tap" widget fetching
+// menu data from this server's domain). Menu data served here is public/read-only,
+// so an open CORS policy is fine.
+app.use((req: Request, res: Response, next: NextFunction) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') {
+    res.sendStatus(204);
+    return;
+  }
+  next();
+});
 
 app.get('/', (_req: Request, res: Response) => {
   res.render('index')
