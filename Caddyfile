@@ -1,0 +1,6 @@
+# Reverse proxy in front of the taproom-offering-engine service. Caddy handles HTTPS
+# automatically (Let's Encrypt) once DOMAIN is a real domain pointed at this machine's public
+# IP and ports 80+443 are forwarded through the router.
+{$DOMAIN} {
+	reverse_proxy taproom-offering-engine:3000
+}

@@ -4,7 +4,7 @@
   "main": "index.js",
   "scripts": {
     "build": "npx tsc --project ./routes/viewHelpers/tsconfig-views.json && yarn copy-files && mkdir public/js && cp -r ./routes/viewHelpers/dist/*.js public/js/",
-    "start": "npx tsx server.ts",
+    "start": "tsx server.ts",
     "test": "echo \"Error: no test specified\" && exit 1",
     "copy-files": "cp -r public dist"
   },
@@ -17,9 +17,13 @@
     "@prisma/adapter-pg": "^7.3.0",
     "@prisma/client": "^6.19.2",
     "express": "^5.1.0",
+    "express-rate-limit": "^8.7.0",
+    "helmet": "^8.3.0",
     "pdfkit": "^0.18.0",
     "pg": "^8.18.0",
-    "pug": "^3.0.3"
+    "pug": "^3.0.3",
+    "tsx": "^4.23.13",
+    "uuid": "^14.0.2"
   },
   "devDependencies": {
     "@types/express": "^5.0.2",
@@ -31,9 +35,7 @@
     "nodemon": "^3.1.9",
     "prettier": "^3.5.3",
     "prisma": "^6.19.2",
-    "sharp": "^0.34.5",
     "ts-node": "^10.9.2",
-    "typescript": "^5.9.3",
-    "uuid": "^13.0.0"
+    "typescript": "^5.9.3"
   }
 }

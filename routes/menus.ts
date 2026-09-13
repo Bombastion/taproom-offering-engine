@@ -328,10 +328,7 @@ export class MenusRoutes extends Routes {
         res.send("Invalid Argument");
         return
       } catch(e: any) {
-        const statusCode = "statusCode" in e ? e["statusCode"] : 500;
-        const message = "message" in e ? e["message"] : "Unexpected error occurred";
-        res.status(statusCode);
-        res.send(message);
+        this.handleError(res, e);
       }
       
       return
@@ -424,10 +421,7 @@ export class SubMenusRoutes extends Routes {
         res.send("Invalid Argument");
         return
       } catch(e: any) {
-        const statusCode = "statusCode" in e ? e["statusCode"] : 500;
-        const message = "message" in e ? e["message"] : "Unexpected error occurred";
-        res.status(statusCode);
-        res.send(message);
+        this.handleError(res, e);
       }
       
       return
@@ -482,10 +476,7 @@ export class MenuItemsRoutes extends Routes {
         res.send("Invalid Argument");
         return;
       } catch(e: any) {
-        const statusCode = "statusCode" in e ? e["statusCode"] : 500;
-        const message = "message" in e ? e["message"] : "Unexpected error occurred";
-        res.status(statusCode);
-        res.send(message);
+        this.handleError(res, e);
         return;
       }
     });

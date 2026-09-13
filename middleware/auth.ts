@@ -35,7 +35,7 @@ function safeStringEqual(a: string, b: string): boolean {
 // this same "/manage" suffix convention for their HTML editor routes). Everything else — the
 // public menu JSON/print/digital formats, and plain GETs by id — stays open, since the public
 // site and the Wix widget depend on those being reachable without a login.
-function requiresAuth(req: Request): boolean {
+export function requiresAuth(req: Request): boolean {
   if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') {
     return req.path.endsWith('/manage');
   }

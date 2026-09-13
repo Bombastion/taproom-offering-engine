@@ -13,15 +13,49 @@ services:
     build:
       dockerfile: ./build/app/Dockerfile
     command: sh -c "npx prisma migrate dev --name init && npm run start"
+    restart: always
     ports:
-      - "3000:3000"
+      # Bound to loopback only. The app is reached through the Caddy reverse proxy below, not
+      # directly — this keeps it unreachable from the network even if the router ever forwards
+      # port 3000 by mistake. Only Caddy's 80/443 below should be forwarded through the router.
+      - "127.0.0.1:3000:3000"
     environment:
       - DATABASE_URL=postgres://postgres:postgres@db:5432/postgres
+      - NODE_ENV=production
+      # Exactly one reverse proxy (Caddy, below) sits in front of this service, so it's safe to
+      # trust its X-Forwarded-* headers for the real client IP. Don't set this if the app is
+      # ever run without a proxy in front of it.
+      - TOE_TRUST_PROXY=true
       # Shared admin login for the "/manage" editor pages and all POST/PATCH/DELETE routes.
       # Set these in a local .env file (see .env.example) rather than editing this file —
       # docker compose reads .env automatically and it's gitignored.
       - TOE_ADMIN_USERNAME=${TOE_ADMIN_USERNAME:-admin}
       - TOE_ADMIN_PASSWORD=${TOE_ADMIN_PASSWORD:?TOE_ADMIN_PASSWORD must be set before starting this service}
+  caddy:
+    image: caddy:2-alpine
+    restart: always
+    depends_on:
+      - taproom-offering-engine
+    ports:
+      # These are the ONLY two ports that should be forwarded through your router. Port 80 is
+      # needed even though everything redirects to HTTPS: Caddy uses it for the Let's Encrypt
+      # HTTP-01 challenge that issues/renews your certificate.
+      - "80:80"
+      - "443:443"
+    environment:
+      # Your real domain once it's ready (e.g. menu.zymosbrewing.com), pointed at this
+      # machine's public IP. Defaults to "localhost" for local testing, where Caddy uses its
+      # own local CA instead of Let's Encrypt (your browser will warn about the certificate —
+      # that's expected for local-only testing).
+      - DOMAIN=${DOMAIN:-localhost}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Caddy stores its issued certificates here. Keep this volume across deployments —
+      # losing it means re-issuing certs from Let's Encrypt, which is rate-limited.
+      - caddy_data:/data
+      - caddy_config:/config
 
 volumes:
   pg_data:
+  caddy_data:
+  caddy_config:
