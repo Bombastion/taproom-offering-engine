@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Currently On Tap</title>
+<style>
+  /* ============================================================
+     CONFIG — the only part of this file most updates will touch.
+     ============================================================ */
+
+  /*
+    Everything below this comment is just styling. The values that
+    actually need to change when you go live are in the <script>
+    block near the bottom, inside `const CONFIG = { ... }`.
+  */
+
+  :root {
+    --cot-bg: #050505;
+    --cot-panel: #0d0d0d;
+    --cot-border: rgba(255, 255, 255, 0.10);
+    --cot-text: #f5f5f3;
+    --cot-text-dim: rgba(245, 245, 243, 0.62);
+    --cot-text-faint: rgba(245, 245, 243, 0.38);
+    --cot-accent: #e0a940;
+    --cot-accent-dim: rgba(224, 169, 64, 0.35);
+  }
+
+  #cot-widget, #cot-widget * {
+    box-sizing: border-box;
+  }
+
+  #cot-widget {
+    background: var(--cot-bg);
+    color: var(--cot-text);
+    font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif;
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 28px 20px 36px;
+    line-height: 1.4;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  #cot-widget a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  /* ---------- Header ---------- */
+
+  .cot-header {
+    text-align: center;
+    padding-bottom: 18px;
+    margin-bottom: 22px;
+    border-bottom: 1px solid var(--cot-border);
+  }
+
+  .cot-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--cot-accent);
+    margin-bottom: 6px;
+  }
+
+  .cot-eyebrow-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--cot-accent);
+    box-shadow: 0 0 0 3px var(--cot-accent-dim);
+  }
+
+  .cot-title {
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    margin: 0;
+  }
+
+  .cot-updated {
+    margin-top: 6px;
+    font-size: 12px;
+    color: var(--cot-text-faint);
+  }
+
+  /* ---------- Sections ---------- */
+
+  .cot-section {
+    margin-bottom: 30px;
+  }
+
+  .cot-section:last-child {
+    margin-bottom: 0;
+  }
+
+  .cot-section-header {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin: 0 0 14px;
+  }
+
+  .cot-section-header h3 {
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: var(--cot-text);
+    margin: 0;
+    white-space: nowrap;
+  }
+
+  .cot-section-header .cot-rule {
+    flex: 1 1 auto;
+    height: 1px;
+    background: linear-gradient(to right, var(--cot-accent-dim), transparent);
+  }
+
+  /* ---------- Items ---------- */
+
+  .cot-item {
+    display: flex;
+    gap: 14px;
+    padding: 16px 0;
+    border-bottom: 1px solid var(--cot-border);
+  }
+
+  .cot-item:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+  }
+
+  .cot-item-logo {
+    flex: 0 0 auto;
+    width: 52px;
+    height: 52px;
+    border-radius: 10px;
+    background: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+
+  .cot-item-logo img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+
+  .cot-item-logo svg {
+    width: 26px;
+    height: 26px;
+    opacity: 0.35;
+  }
+
+  .cot-item-body {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .cot-item-name {
+    font-size: 16px;
+    font-weight: 700;
+    margin: 0 0 2px;
+  }
+
+  .cot-item-name .cot-style {
+    font-weight: 400;
+    font-style: italic;
+    color: var(--cot-text-dim);
+  }
+
+  .cot-item-meta {
+    font-size: 12.5px;
+    color: var(--cot-text-dim);
+    margin-bottom: 6px;
+  }
+
+  .cot-item-meta .cot-brewery {
+    font-weight: 700;
+    color: var(--cot-text);
+  }
+
+  .cot-item-meta .cot-sep {
+    margin: 0 6px;
+    color: var(--cot-text-faint);
+  }
+
+  .cot-item-desc {
+    font-size: 13px;
+    color: var(--cot-text-dim);
+    margin: 0 0 10px;
+  }
+
+  /* ---------- Pours / prices ---------- */
+
+  .cot-pours {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .cot-pour-row {
+    display: flex;
+    align-items: baseline;
+    font-size: 13px;
+  }
+
+  .cot-pour-label {
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .cot-pour-leader {
+    flex: 1 1 auto;
+    margin: 0 6px;
+    border-bottom: 1px dotted var(--cot-text-faint);
+    transform: translateY(-3px);
+  }
+
+  .cot-pour-price {
+    font-weight: 600;
+    white-space: nowrap;
+    color: var(--cot-accent);
+  }
+
+  /* ---------- States ---------- */
+
+  .cot-state {
+    text-align: center;
+    padding: 40px 16px;
+    color: var(--cot-text-dim);
+    font-size: 14px;
+  }
+
+  .cot-state.cot-error {
+    color: #e08a8a;
+  }
+
+  .cot-banner {
+    display: none;
+    text-align: center;
+    font-size: 12px;
+    color: #e08a8a;
+    background: rgba(224, 138, 138, 0.10);
+    border: 1px solid rgba(224, 138, 138, 0.25);
+    border-radius: 8px;
+    padding: 8px 12px;
+    margin-bottom: 18px;
+  }
+
+  .cot-spinner {
+    width: 22px;
+    height: 22px;
+    margin: 0 auto 12px;
+    border-radius: 50%;
+    border: 2px solid var(--cot-border);
+    border-top-color: var(--cot-accent);
+    animation: cot-spin 0.8s linear infinite;
+  }
+
+  @keyframes cot-spin {
+    to { transform: rotate(360deg); }
+  }
+
+  @media (max-width: 420px) {
+    #cot-widget { padding: 20px 14px 28px; }
+    .cot-title { font-size: 22px; }
+    .cot-item { gap: 12px; }
+    .cot-item-logo { width: 44px; height: 44px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="cot-widget">
+  <div class="cot-header">
+    <div class="cot-eyebrow"><span class="cot-eyebrow-dot"></span>Live Menu</div>
+    <h2 class="cot-title" id="cot-menu-title">Currently On Tap</h2>
+    <div class="cot-updated" id="cot-updated"></div>
+  </div>
+
+  <div class="cot-banner" id="cot-banner">Couldn't refresh the menu — showing the last version we loaded.</div>
+
+  <div id="cot-content">
+    <div class="cot-state" id="cot-loading">
+      <div class="cot-spinner"></div>
+      Loading menu&hellip;
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ============================================================
+     CONFIG — edit these three values for your setup.
+     ============================================================ */
+  var CONFIG = {
+    // Base URL of the taproom-offering-engine server.
+    // Right now this points at your local dev server. Once the
+    // server has a real domain (e.g. https://menu.zymosbrewing.com),
+    // change this one line and nothing else needs to move.
+    API_BASE_URL: "http://localhost:3000",
+
+    // The id of the menu to display. This is the seed/dev "Zymos
+    // Current Menu" id — swap it for your production menu's id.
+    MENU_ID: "537e5b47-eaf0-4aa0-a6f0-ef58e4ca40ff",
+
+    // How often to silently re-fetch and redraw, in milliseconds.
+    REFRESH_INTERVAL_MS: 15 * 60 * 1000
+  };
+
+  var root = document.getElementById("cot-widget");
+  var contentEl = document.getElementById("cot-content");
+  var titleEl = document.getElementById("cot-menu-title");
+  var updatedEl = document.getElementById("cot-updated");
+  var bannerEl = document.getElementById("cot-banner");
+
+  var hasRenderedOnce = false;
+
+  var BEER_GLASS_SVG =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="1.5">' +
+    '<path d="M6 3h9l-1 15a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L6 3z"/>' +
+    '<path d="M15 7h2a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2h-2.5"/>' +
+    "</svg>";
+
+  function escapeHtml(str) {
+    return String(str == null ? "" : str).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+
+  function formatPrice(price) {
+    var n = Number(price);
+    if (isNaN(n)) return escapeHtml(price);
+    return "$" + n.toFixed(2);
+  }
+
+  function formatUpdatedTime(isoString) {
+    try {
+      var d = new Date(isoString);
+      return "Updated " + d.toLocaleString(undefined, {
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit"
+      });
+    } catch (e) {
+      return "";
+    }
+  }
+
+  function renderItem(item) {
+    var logoHtml = item.logo
+      ? '<img src="' + escapeHtml(item.logo) + '" alt="" />'
+      : BEER_GLASS_SVG;
+
+    var metaParts = [];
+    if (item.abv != null) metaParts.push(escapeHtml(item.abv) + "% ABV");
+    if (item.breweryName) metaParts.push('<span class="cot-brewery">' + escapeHtml(item.breweryName) + "</span>");
+    if (item.breweryLocation) metaParts.push(escapeHtml(item.breweryLocation));
+    var metaHtml = metaParts.join('<span class="cot-sep">&bull;</span>');
+
+    var poursHtml = (item.pours || []).map(function (pour) {
+      return (
+        '<div class="cot-pour-row">' +
+          '<span class="cot-pour-label">' + escapeHtml(pour.label) + "</span>" +
+          '<span class="cot-pour-leader"></span>' +
+          '<span class="cot-pour-price">' + formatPrice(pour.price) + "</span>" +
+        "</div>"
+      );
+    }).join("");
+
+    return (
+      '<div class="cot-item">' +
+        '<div class="cot-item-logo">' + logoHtml + "</div>" +
+        '<div class="cot-item-body">' +
+          '<h4 class="cot-item-name">' + escapeHtml(item.displayName) +
+            (item.style ? '  <span class="cot-style">' + escapeHtml(item.style) + "</span>" : "") +
+          "</h4>" +
+          (metaHtml ? '<div class="cot-item-meta">' + metaHtml + "</div>" : "") +
+          (item.description ? '<p class="cot-item-desc">' + escapeHtml(item.description) + "</p>" : "") +
+          (poursHtml ? '<div class="cot-pours">' + poursHtml + "</div>" : "") +
+        "</div>" +
+      "</div>"
+    );
+  }
+
+  function renderSection(section) {
+    var itemsHtml = (section.items || []).map(renderItem).join("");
+    return (
+      '<div class="cot-section">' +
+        '<div class="cot-section-header"><h3>' + escapeHtml(section.displayName) + '</h3><span class="cot-rule"></span></div>' +
+        itemsHtml +
+      "</div>"
+    );
+  }
+
+  function render(menu) {
+    titleEl.textContent = menu.displayName || "Currently On Tap";
+    updatedEl.textContent = menu.generatedAt ? formatUpdatedTime(menu.generatedAt) : "";
+
+    var sections = (menu.sections || []).filter(function (s) {
+      return s.items && s.items.length;
+    });
+
+    if (!sections.length) {
+      contentEl.innerHTML = '<div class="cot-state">Nothing on tap right now — check back soon.</div>';
+      return;
+    }
+
+    contentEl.innerHTML = sections.map(renderSection).join("");
+  }
+
+  function showError() {
+    contentEl.innerHTML = '<div class="cot-state cot-error">We couldn’t load the menu right now. Please try again shortly.</div>';
+  }
+
+  function fetchMenu(isBackgroundRefresh) {
+    var url = CONFIG.API_BASE_URL.replace(/\/+$/, "") + "/menus/" + encodeURIComponent(CONFIG.MENU_ID) + "?format=widget";
+
+    fetch(url, { cache: "no-store" })
+      .then(function (res) {
+        if (!res.ok) throw new Error("Request failed with status " + res.status);
+        return res.json();
+      })
+      .then(function (menu) {
+        bannerEl.style.display = "none";
+        hasRenderedOnce = true;
+        render(menu);
+      })
+      .catch(function (err) {
+        console.error("[currently-on-tap] failed to load menu:", err);
+        if (hasRenderedOnce) {
+          // Keep showing the last good menu, just flag that the refresh failed.
+          bannerEl.style.display = "block";
+        } else {
+          showError();
+        }
+      });
+  }
+
+  fetchMenu(false);
+  setInterval(function () { fetchMenu(true); }, CONFIG.REFRESH_INTERVAL_MS);
+})();
+</script>
+
+</body>
+</html>
