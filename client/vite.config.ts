@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
@@ -13,5 +14,13 @@ export default defineConfig({
     proxy: {
       '/api': process.env.TOE_API_TARGET ?? 'http://localhost:3000',
     },
+  },
+  // Unit tests (`npm test`), run in a simulated browser (jsdom)
+  test: {
+    environment: 'jsdom',
+    include: ['test/**/*.test.{ts,tsx}'],
+    setupFiles: ['test/setup.ts'],
+    restoreMocks: true,
+    unstubGlobals: true,
   },
 });

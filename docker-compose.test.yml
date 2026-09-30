@@ -1,0 +1,22 @@
+# Unit tests for the server and the admin client, each in its own container. Nothing here
+# needs a database or network access to other services.
+#
+#   npm run test:docker                      # both suites, from the repo root
+#
+# or one at a time:
+#
+#   docker compose -f docker-compose.test.yml run --rm --build server-tests
+#   docker compose -f docker-compose.test.yml run --rm --build client-tests
+#
+# Extra arguments go to Vitest, e.g. to run a single file:
+#
+#   docker compose -f docker-compose.test.yml run --rm --build server-tests npm test -- test/routes/api.test.ts
+services:
+  server-tests:
+    build:
+      context: .
+      dockerfile: build/test/server.Dockerfile
+  client-tests:
+    build:
+      context: ./client
+      dockerfile: ../build/test/client.Dockerfile

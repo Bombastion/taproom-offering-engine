@@ -32,6 +32,9 @@ somewhere else.
 
 `npm run build` type-checks and writes the production build to `dist/`.
 
+`npm test` runs the unit tests in `test/` (Vitest + Testing Library in jsdom); `npm run
+test:watch` re-runs them as you edit. See `TESTING.md` at the repo root for running them in Docker.
+
 ## Layout
 
 - `src/main.tsx`: routes. Every screen has a real URL, so the phone's back gesture, reloads and

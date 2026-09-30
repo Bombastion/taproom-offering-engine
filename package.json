@@ -5,7 +5,9 @@
   "scripts": {
     "build": "npx tsc --project ./routes/viewHelpers/tsconfig-views.json && yarn copy-files && mkdir public/js && cp -r ./routes/viewHelpers/dist/*.js public/js/",
     "start": "tsx server.ts",
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:docker": "docker compose -f docker-compose.test.yml build && docker compose -f docker-compose.test.yml run --rm server-tests && docker compose -f docker-compose.test.yml run --rm client-tests",
     "copy-files": "cp -r public dist"
   },
   "type": "module",
@@ -29,13 +31,16 @@
     "@types/express": "^5.0.2",
     "@types/node": "^22.19.9",
     "@types/pg": "^8.16.0",
+    "@types/supertest": "^7.2.1",
     "body-parser": "^2.2.1",
     "eslint": "^9.22.0",
     "multer": "^2.0.2",
     "nodemon": "^3.1.9",
     "prettier": "^3.5.3",
     "prisma": "^6.19.2",
+    "supertest": "^7.3.0",
     "ts-node": "^10.9.2",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.2"
   }
 }
