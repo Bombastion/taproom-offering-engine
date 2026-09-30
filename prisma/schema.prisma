@@ -69,4 +69,6 @@ model MenuItem {
   subMenuId String
   itemLogo String?
   order Int?
+  // When the item was placed here, so "most recent placement" has a real answer
+  createdAt DateTime @default(now())
 }

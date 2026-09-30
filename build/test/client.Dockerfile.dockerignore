@@ -1,0 +1,5 @@
+# Build context rules for client.Dockerfile only (the client's own image is unaffected).
+# Dependencies are installed fresh inside the image, never copied from the host.
+node_modules
+dist
+*.tsbuildinfo

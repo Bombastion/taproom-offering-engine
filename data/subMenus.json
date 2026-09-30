@@ -5,5 +5,12 @@
         "displayName": "Light & Crisp",
         "menuId": "e41f6bff-48b5-4958-8c46-5f5115a10b5b",
         "order": 1
+    },
+    {
+        "id": "7b1f0c2e-5a4d-4e8b-9c3f-2d6a8e1b4f70",
+        "internalName": "malty",
+        "displayName": "Malty & Balanced",
+        "menuId": "e41f6bff-48b5-4958-8c46-5f5115a10b5b",
+        "order": 2
     }
 ]

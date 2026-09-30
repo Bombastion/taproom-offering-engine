@@ -1,0 +1,7 @@
+# Build context rules for server.Dockerfile only (the app's own image is unaffected).
+# Dependencies are installed fresh inside the image, never copied from the host.
+**/node_modules
+dist
+client
+.git
+.env

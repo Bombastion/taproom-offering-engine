@@ -389,6 +389,7 @@ export class ApiRoutes extends Routes {
         const item = await this.dataProvider.getItem(req.body.itemId);
         if (!item) throw notFound('Item');
         itemId = item.id!;
+        // Oldest first, so the last one is the most recent placement
         const otherPlacements = await this.dataProvider.getMenuItemsForItem(itemId);
         const source = otherPlacements[otherPlacements.length - 1];
         if (source) {

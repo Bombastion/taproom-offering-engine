@@ -63,8 +63,9 @@ export abstract class DataProvider {
     abstract getMenuItem(id: string): Promise<MenuItem | null>
     abstract getMenuItemsForMenu(menuId: string): Promise<Array<MenuItem>>
     abstract getMenuItemsForSubMenu(subMenuId: string): Promise<Array<MenuItem>>
-    // Every placement of a given item across all menus
+    // Every placement of a given item across all menus, oldest first
     abstract getMenuItemsForItem(itemId: string): Promise<Array<MenuItem>>
+    // Deletes a menu item. Returns true if it was removed, and false if it didn't exist.
     abstract removeMenuItem(id: string): Promise<boolean>
     abstract updateMenuItem(id: string, item: MenuItem): Promise<MenuItem>
 }
@@ -172,7 +173,7 @@ export class PrismaDataProvider extends DataProvider {
             data: {
                 containerName: container.containerName? container.containerName : original.containerName!!,
                 displayName: container.displayName? container.displayName : original.displayName!!,
-                order: container.displayName? container.order : original.order
+                order: container.order? container.order : original.order
             }
         });
 
@@ -212,16 +213,14 @@ export class PrismaDataProvider extends DataProvider {
     }
     
     async removeSaleContainer(id: string): Promise<boolean> {
-        const deleted = await this.prismaClient.saleContainer.delete({
+        // deleteMany rather than delete: delete throws when the ID doesn't exist, but callers
+        // expect false for that (see DataProvider.removeSaleContainer)
+        const { count } = await this.prismaClient.saleContainer.deleteMany({
             where: {
                 id: id
             }
         });
-
-        if (deleted) { 
-            return true;
-        }
-        return false;
+        return count > 0;
     }
 
     async validateItem(item: Item) {
@@ -496,21 +495,25 @@ export class PrismaDataProvider extends DataProvider {
         return await this.prismaClient.menuItem.findMany({
             where: {
                 itemId: itemId,
-            }
+            },
+            // Oldest placement first. Placements that existed before createdAt was added all
+            // share the migration's timestamp, so the ID breaks ties to keep the order stable.
+            orderBy: [
+                { createdAt: 'asc' },
+                { id: 'asc' },
+            ]
         });
     }
 
     async removeMenuItem(id: string): Promise<boolean> {
-        const deleted = await this.prismaClient.menuItem.delete({
+        // deleteMany rather than delete: delete throws when the ID doesn't exist, but callers
+        // expect false for that (see DataProvider.removeMenuItem)
+        const { count } = await this.prismaClient.menuItem.deleteMany({
             where: {
                 id: id
             }
         });
-
-        if (deleted) { 
-            return true;
-        }
-        return false;
+        return count > 0;
     }
 
     async updateMenuItem(id: string, item: MenuItem): Promise<MenuItem> { 
@@ -915,6 +918,7 @@ export class LocalDataProvider extends DataProvider {
     }
 
     async getMenuItemsForItem(itemId: string): Promise<Array<MenuItem>> {
+        // Maps iterate in insertion order (updates keep an entry's place), so this is oldest first
         const results: Array<MenuItem> = [];
         this._cache.get(this.MENU_ITEMS_KEY)!.forEach((value: MenuItem) => {
             if (value.itemId === itemId) {
