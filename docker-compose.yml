@@ -31,11 +31,19 @@ services:
       # docker compose reads .env automatically and it's gitignored.
       - TOE_ADMIN_USERNAME=${TOE_ADMIN_USERNAME:-admin}
       - TOE_ADMIN_PASSWORD=${TOE_ADMIN_PASSWORD:?TOE_ADMIN_PASSWORD must be set before starting this service}
+  admin-client:
+    # The mobile-friendly admin app in client/: a React build served by nginx. Not published on
+    # any host port; Caddy below routes https://$DOMAIN/admin/ to it, and the app talks to the
+    # server through Caddy too (same origin, /api).
+    build:
+      context: ./client
+    restart: always
   caddy:
     image: caddy:2-alpine
     restart: always
     depends_on:
       - taproom-offering-engine
+      - admin-client
     ports:
       # These are the ONLY two ports that should be forwarded through your router. Port 80 is
       # needed even though everything redirects to HTTPS: Caddy uses it for the Let's Encrypt
@@ -48,6 +56,12 @@ services:
       # own local CA instead of Let's Encrypt (your browser will warn about the certificate —
       # that's expected for local-only testing).
       - DOMAIN=${DOMAIN:-localhost}
+      # Optional: this machine's IP on your local network, for testing from other devices by
+      # IP. Also add it to DOMAIN (see .env.example).
+      - LAN_IP=${LAN_IP:-}
+      # Only needed to test from other devices on your network by IP address: set it to that IP
+      # (and include the IP in DOMAIN too). See the Caddyfile for why.
+      - DEFAULT_SNI=${DEFAULT_SNI:-localhost}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       # Caddy stores its issued certificates here. Keep this volume across deployments —

@@ -1,6 +1,25 @@
-# Reverse proxy in front of the taproom-offering-engine service. Caddy handles HTTPS
-# automatically (Let's Encrypt) once DOMAIN is a real domain pointed at this machine's public
-# IP and ports 80+443 are forwarded through the router.
+# Reverse proxy in front of the app. Caddy handles HTTPS automatically (Let's Encrypt) once
+# DOMAIN is a real domain pointed at this machine's public IP and ports 80+443 are forwarded
+# through the router.
+{
+	# Browsers don't send a server name (SNI) when you browse to a bare IP address, e.g.
+	# https://192.168.1.20 from another device on the local network. Caddy would then look for a
+	# certificate matching the IP the connection arrived on, which inside Docker is the
+	# container's own internal IP, find none, and drop the connection. This tells it which
+	# certificate to use in that case. Set DEFAULT_SNI to the LAN IP listed in DOMAIN when
+	# testing from other devices; it has no effect on normal visits by domain name.
+	default_sni {$DEFAULT_SNI:localhost}
+}
+
 {$DOMAIN} {
-	reverse_proxy taproom-offering-engine:3000
+	# The admin client app (client/ in this repo) lives at /admin/. It calls the server's JSON
+	# API at /api on this same origin, which falls through to the server below.
+	handle /admin* {
+		reverse_proxy admin-client:80
+	}
+
+	# Everything else (public menu routes, /api, the classic /manage editor) is the server
+	handle {
+		reverse_proxy taproom-offering-engine:3000
+	}
 }

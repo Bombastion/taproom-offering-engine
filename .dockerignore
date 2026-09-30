@@ -1,0 +1,8 @@
+# Build context for the server image (build/app/Dockerfile). The image runs its own
+# `npm install`, so the host's node_modules shouldn't be copied over it; the admin client has
+# its own image (client/Dockerfile).
+node_modules
+dist
+client
+.git
+.env
