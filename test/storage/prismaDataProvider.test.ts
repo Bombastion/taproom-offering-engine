@@ -17,6 +17,7 @@ function fakeModel() {
     update: vi.fn(async ({ where, data }: { where: { id: string }; data: object }) => ({ id: where.id, ...data })),
     delete: vi.fn(async ({ where }: { where: { id: string } }) => ({ id: where.id })),
     deleteMany: vi.fn(async () => ({ count: 1 })),
+    count: vi.fn(async () => 0),
   };
 }
 
@@ -60,20 +61,6 @@ describe('breweries', () => {
     expect(prisma.brewery.create).toHaveBeenCalledWith({ data: { name: 'Zymos', defaultLogo: 'logo', location: 'Littleton' } });
   });
 
-  it('update keeps the original value for any empty field', async () => {
-    prisma.brewery.findUnique.mockResolvedValue(original);
-    await provider.updateBrewery('b1', new Brewery(null, 'Zymos Brewing', null, ''));
-    expect(prisma.brewery.update).toHaveBeenCalledWith({
-      where: { id: 'b1' },
-      data: { name: 'Zymos Brewing', location: 'Littleton', defaultLogo: 'logo' },
-    });
-  });
-
-  it('update 404s for an unknown brewery', async () => {
-    await expectProviderError(provider.updateBrewery('nope', new Brewery(null, 'x', null, null)), 404, /nope/);
-    expect(prisma.brewery.update).not.toHaveBeenCalled();
-  });
-
   it('replace sets every field exactly, so values can be cleared', async () => {
     prisma.brewery.findUnique.mockResolvedValue(original);
     await provider.replaceBrewery('b1', new Brewery(null, 'Zymos', null, null));
@@ -111,6 +98,39 @@ describe('containers', () => {
 
   it('update 404s for an unknown container', async () => {
     await expectProviderError(provider.updateContainer('nope', new ItemContainer(null, 'x', 'x', 1)), 404);
+  });
+
+  it('only counts prices on menu items that still exist as uses', async () => {
+    prisma.saleContainer.findMany.mockResolvedValue([
+      { id: 'sc1', containerId: 'c1', menuItemId: 'mi1', price: 5 },
+      { id: 'sc2', containerId: 'c1', menuItemId: 'gone', price: 5 },
+    ]);
+    prisma.menuItem.findMany.mockResolvedValue([{ id: 'mi1' }]);
+    const uses = await provider.getSaleContainersForContainer('c1');
+    expect(uses.map((u) => u.id)).toEqual(['sc1']);
+    expect(prisma.saleContainer.findMany).toHaveBeenCalledWith({ where: { containerId: 'c1' } });
+    expect(prisma.menuItem.findMany).toHaveBeenCalledWith({ where: { id: { in: ['mi1', 'gone'] } } });
+  });
+
+  it('refuses to remove a container that prices still use', async () => {
+    prisma.saleContainer.findMany.mockResolvedValue([{ id: 'sc1', containerId: 'c1', menuItemId: 'mi1', price: 5 }]);
+    prisma.menuItem.findMany.mockResolvedValue([{ id: 'mi1' }]);
+    await expectProviderError(provider.removeContainer('c1'), 409, /still used by 1 price\./);
+    expect(prisma.itemContainer.deleteMany).not.toHaveBeenCalled();
+    expect(prisma.saleContainer.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it('removes an unused container, with any leftover prices, in one transaction', async () => {
+    prisma.saleContainer.findMany.mockResolvedValue([{ id: 'sc2', containerId: 'c1', menuItemId: 'gone', price: 5 }]);
+    expect(await provider.removeContainer('c1')).toBe(true);
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(prisma.saleContainer.deleteMany).toHaveBeenCalledWith({ where: { containerId: 'c1' } });
+    expect(prisma.itemContainer.deleteMany).toHaveBeenCalledWith({ where: { id: 'c1' } });
+  });
+
+  it('reports false when removing a container that does not exist', async () => {
+    prisma.itemContainer.deleteMany.mockResolvedValue({ count: 0 });
+    expect(await provider.removeContainer('nope')).toBe(false);
   });
 });
 
@@ -161,15 +181,6 @@ describe('items', () => {
     expect(prisma.item.findMany).toHaveBeenCalledWith({ orderBy: [{ displayName: 'asc' }] });
   });
 
-  it('update keeps the original for empty fields (including an ABV of 0)', async () => {
-    prisma.item.findUnique.mockResolvedValue(original);
-    await provider.updateItem('i1', new Item(null, null, 'Pils v2', null, '', 0, null, null));
-    expect(prisma.item.update).toHaveBeenCalledWith({
-      where: { id: 'i1' },
-      data: { ...original, id: undefined, displayName: 'Pils v2' },
-    });
-  });
-
   it('replace sets every field exactly, including falsy ones', async () => {
     prisma.item.findUnique.mockResolvedValue(original);
     await provider.replaceItem('i1', new Item(null, 'pils', 'Pils', null, null, 0, null, 'beer'));
@@ -185,9 +196,28 @@ describe('items', () => {
     await expectProviderError(provider.replaceItem('i1', new Item(null, null, 'Pils', null, null, null, null, null)), 422);
   });
 
-  it('update and replace 404 for an unknown item', async () => {
-    await expectProviderError(provider.updateItem('nope', new Item(null, 'x', 'x', null, null, null, null, null)), 404);
+  it('replace 404s for an unknown item', async () => {
     await expectProviderError(provider.replaceItem('nope', new Item(null, 'x', 'x', null, null, null, null, null)), 404);
+  });
+});
+
+describe('removing items', () => {
+  it('refuses to remove an item that is still on a menu', async () => {
+    prisma.menuItem.count.mockResolvedValue(2);
+    await expectProviderError(provider.removeItem('i1'), 409, /still on 2 menu sections/);
+    expect(prisma.menuItem.count).toHaveBeenCalledWith({ where: { itemId: 'i1' } });
+    expect(prisma.item.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it('removes an item that is on no menu, in a transaction', async () => {
+    expect(await provider.removeItem('i1')).toBe(true);
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(prisma.item.deleteMany).toHaveBeenCalledWith({ where: { id: 'i1' } });
+  });
+
+  it('reports false when removing an item that does not exist', async () => {
+    prisma.item.deleteMany.mockResolvedValue({ count: 0 });
+    expect(await provider.removeItem('nope')).toBe(false);
   });
 });
 

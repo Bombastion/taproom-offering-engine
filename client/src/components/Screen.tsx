@@ -2,7 +2,7 @@ import { ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router';
 import { signOut } from '../auth';
 import { useQueryClient } from '@tanstack/react-query';
-import { BackIcon, BreweryIcon, ChevronRight, ExternalIcon, GlassIcon, HomeIcon, ListIcon, MoreIcon, MugIcon, PourIcon } from './Icons';
+import { BackIcon, BreweryIcon, ChevronRight, GlassIcon, HomeIcon, ListIcon, MoreIcon, MugIcon, PourIcon } from './Icons';
 
 export type Crumb = { label: string; to: string };
 
@@ -142,9 +142,6 @@ function MoreMenu() {
       </button>
       {open && (
         <div className="more-menu">
-          <a href="/" className="more-item" target="_blank" rel="noopener">
-            Classic editor <ExternalIcon />
-          </a>
           <button
             type="button"
             className="more-item"

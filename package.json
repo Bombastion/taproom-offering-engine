@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "build": "npx tsc --project ./routes/viewHelpers/tsconfig-views.json && yarn copy-files && mkdir public/js && cp -r ./routes/viewHelpers/dist/*.js public/js/",
+    "build": "yarn copy-files",
     "start": "tsx server.ts",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -32,9 +32,7 @@
     "@types/node": "^22.19.9",
     "@types/pg": "^8.16.0",
     "@types/supertest": "^7.2.1",
-    "body-parser": "^2.2.1",
     "eslint": "^9.22.0",
-    "multer": "^2.0.2",
     "nodemon": "^3.1.9",
     "prettier": "^3.5.3",
     "prisma": "^6.19.2",

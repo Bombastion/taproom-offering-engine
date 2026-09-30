@@ -72,6 +72,12 @@ export type MenuItemDetail = {
   otherPlacementCount: number;
 };
 
+// Where an item sits on a menu, for linking to it in the item editor
+export type Placement = { menuItemId: string; menuId: string; menuName: string; sectionId: string; sectionName: string };
+
+// An item on its own, from the library, with the menu sections it's on
+export type LibraryItemDetail = ItemDetail & { placementCount: number; placements: Placement[] };
+
 export type LibraryItem = {
   id: string;
   displayName: string;
@@ -92,7 +98,11 @@ export type BreweryDetail = {
   items: { id: string; displayName: string; style: string | null; abv: number | null }[];
 };
 
-export type Container = { id: string; displayName: string; containerName: string; order: number | null };
+// priceCount: how many item prices use this pour size. It can only be deleted at 0.
+export type Container = { id: string; displayName: string; containerName: string; order: number | null; priceCount: number };
+
+// An item priced in a given pour size
+export type ContainerUse = Placement & { itemName: string; price: number };
 
 export type ItemInput = {
   displayName: string;
@@ -183,6 +193,10 @@ export const api = {
   removeMenuItem: (menuItemId: string) => request<void>('DELETE', `/menu-items/${encodeURIComponent(menuItemId)}`),
 
   items: () => request<LibraryItem[]>('GET', '/items'),
+  createItem: (item: ItemInput) => request<ItemDetail>('POST', '/items', item),
+  item: (itemId: string) => request<LibraryItemDetail>('GET', `/items/${encodeURIComponent(itemId)}`),
+  saveItem: (itemId: string, item: ItemInput) => request<ItemDetail>('PUT', `/items/${encodeURIComponent(itemId)}`, item),
+  deleteItem: (itemId: string) => request<void>('DELETE', `/items/${encodeURIComponent(itemId)}`),
   breweries: () => request<Brewery[]>('GET', '/breweries'),
   createBrewery: (name: string) => request<Brewery>('POST', '/breweries', { name }),
   brewery: (breweryId: string) => request<BreweryDetail>('GET', `/breweries/${encodeURIComponent(breweryId)}`),
@@ -192,6 +206,13 @@ export const api = {
     request<{ logo: string }>('PUT', `/breweries/${encodeURIComponent(breweryId)}/logo`, { logo }),
   removeBreweryLogo: (breweryId: string) => request<void>('DELETE', `/breweries/${encodeURIComponent(breweryId)}/logo`),
   containers: () => request<Container[]>('GET', '/containers'),
+  createContainer: (displayName: string, containerName: string | null) =>
+    request<Container>('POST', '/containers', { displayName, containerName }),
+  updateContainer: (containerId: string, displayName: string, containerName: string | null) =>
+    request<Container>('PATCH', `/containers/${encodeURIComponent(containerId)}`, { displayName, containerName }),
+  reorderContainers: (containerIds: string[]) => request<void>('PUT', '/containers/order', { containerIds }),
+  containerUses: (containerId: string) => request<ContainerUse[]>('GET', `/containers/${encodeURIComponent(containerId)}/uses`),
+  deleteContainer: (containerId: string) => request<void>('DELETE', `/containers/${encodeURIComponent(containerId)}`),
 };
 
 export function errorMessage(error: unknown): string {

@@ -37,11 +37,6 @@ describe('requiresAuth', () => {
     expect(requiresAuth(fakeRequest('OPTIONS', '/menus/abc'))).toBe(false);
   });
 
-  it('protects the classic /manage pages', () => {
-    expect(requiresAuth(fakeRequest('GET', '/menus/manage'))).toBe(true);
-    expect(requiresAuth(fakeRequest('GET', '/menus/abc/submenus/manage'))).toBe(true);
-  });
-
   it('protects every write outside /api too', () => {
     for (const method of ['POST', 'PATCH', 'PUT', 'DELETE']) {
       expect(requiresAuth(fakeRequest(method, '/menus/abc'))).toBe(true);
@@ -132,8 +127,8 @@ describe('adminAuth', () => {
     expect(res.status).toBe(200);
   });
 
-  it('sends a Basic challenge for the classic pages so the browser prompts for a login', async () => {
-    const res = await request(app).get('/menus/manage');
+  it('sends a Basic challenge outside /api', async () => {
+    const res = await request(app).post('/menus');
     expect(res.status).toBe(401);
     expect(res.headers['www-authenticate']).toBe('Basic realm="Taproom Admin", charset="UTF-8"');
   });

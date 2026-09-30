@@ -4,13 +4,12 @@ import os from 'os';
 import path from 'path';
 import request from 'supertest';
 import express, { Express } from 'express';
-import { MenuItemsRoutes, MenusRoutes, SubMenusRoutes } from '../../routes/menus';
+import { MenusRoutes } from '../../routes/menus';
 import { LocalDataProvider } from '../../storage/providers';
 import { Fixture, memoryProvider, seed, TINY_PNG } from '../helpers';
 
 // The public, read-only menu formats: the JSON the Wix widget polls (?format=widget), the
-// printable HTML menu (?format=print) and the menu board PDF (?format=digital). The classic
-// /manage editor pages in this router aren't covered, since they're being retired.
+// printable HTML menu (?format=print) and the menu board PDF (?format=digital).
 
 const repoRoot = path.resolve(import.meta.dirname, '../..');
 
@@ -25,8 +24,6 @@ beforeEach(async () => {
   app.set('view engine', 'pug');
   app.set('views', path.join(repoRoot, 'public/views'));
   app.use('/menus', new MenusRoutes(provider).router);
-  app.use('/submenus', new SubMenusRoutes(provider).router);
-  app.use('/menu-items', new MenuItemsRoutes(provider).router);
 });
 
 describe('GET /menus/:menuId', () => {
@@ -172,21 +169,5 @@ describe('?format=digital', () => {
     const pdf = res.body as Buffer;
     expect(pdf.subarray(0, 5).toString('latin1')).toBe('%PDF-');
     expect(pdf.subarray(-6).toString('latin1')).toMatch(/%%EOF/);
-  });
-});
-
-describe('other public reads', () => {
-  it('returns a section by ID', async () => {
-    const res = await request(app).get(`/submenus/${data.sections.drafts.id}`);
-    expect(res.status).toBe(200);
-    expect(res.body).toMatchObject({ displayName: 'Drafts', menuId: data.menu.id, order: 1 });
-    expect((await request(app).get('/submenus/nope')).status).toBe(404);
-  });
-
-  it('returns a menu item by ID', async () => {
-    const res = await request(app).get(`/menu-items/${data.menuItems.hazyOnDrafts.id}`);
-    expect(res.status).toBe(200);
-    expect(res.body).toMatchObject({ itemId: data.items.hazy.id, subMenuId: data.sections.drafts.id });
-    expect((await request(app).get('/menu-items/nope')).status).toBe(404);
   });
 });

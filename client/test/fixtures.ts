@@ -1,4 +1,4 @@
-import type { Brewery, BreweryDetail, Container, LibraryItem, MenuDetail, MenuItemDetail, MenuSummary, SectionDetail } from '../src/api';
+import type { Brewery, BreweryDetail, Container, ContainerUse, LibraryItem, LibraryItemDetail, MenuDetail, MenuItemDetail, MenuSummary, SectionDetail } from '../src/api';
 
 // Canned API responses shaped like routes/api.ts on the server
 
@@ -21,8 +21,8 @@ export const menu: MenuDetail = {
 };
 
 export const containers: Container[] = [
-  { id: 'c1', displayName: 'Taster', containerName: 'Taster', order: 1 },
-  { id: 'c2', displayName: 'Full Pour', containerName: 'Pint glass', order: 2 },
+  { id: 'c1', displayName: 'Taster', containerName: 'Taster', order: 1, priceCount: 0 },
+  { id: 'c2', displayName: 'Full Pour', containerName: 'Pint glass', order: 2, priceCount: 2 },
 ];
 
 export const breweries: Brewery[] = [
@@ -79,6 +79,22 @@ export const library: LibraryItem[] = [
   { id: 'i3', displayName: 'Guest Sour', internalName: 'guest-sour', breweryId: 'b2', breweryName: 'Guest Co', style: 'Sour', abv: 5.2 },
   { id: 'i1', displayName: 'Hazy Sequence', internalName: 'hazy-sequence', breweryId: 'b1', breweryName: 'Zymos Brewing', style: 'NEIPA', abv: 6.5 },
   { id: 'i4', displayName: 'Pretzel', internalName: 'pretzel', breweryId: null, breweryName: null, style: null, abv: null },
+];
+
+export const libraryItem: LibraryItemDetail = {
+  ...hazy,
+  placementCount: 2,
+  placements: [
+    { menuItemId: 'mi1', menuId: 'm1', menuName: 'Currently On Tap', sectionId: 's1', sectionName: 'Drafts' },
+    { menuItemId: 'mi7', menuId: 'm2', menuName: 'Patio', sectionId: 's9', sectionName: 'Cans' },
+  ],
+};
+
+export const unplacedItem: LibraryItemDetail = { ...libraryItem, id: 'i4', displayName: 'Pretzel', placementCount: 0, placements: [] };
+
+export const fullPourUses: ContainerUse[] = [
+  { menuItemId: 'mi1', menuId: 'm1', menuName: 'Currently On Tap', sectionId: 's1', sectionName: 'Drafts', itemName: 'Hazy Sequence', price: 8.5 },
+  { menuItemId: 'mi7', menuId: 'm2', menuName: 'Patio', sectionId: 's9', sectionName: 'Cans', itemName: 'Hazy Sequence', price: 9 },
 ];
 
 export const brewery: BreweryDetail = {

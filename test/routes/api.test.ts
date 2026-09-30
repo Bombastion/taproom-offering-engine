@@ -506,7 +506,140 @@ describe('library', () => {
     await provider.addContainer(new ItemContainer(null, 'Snifter', 'Snifter', 0.5));
     const res = await request(app).get('/api/containers');
     expect(res.body.map((c: { displayName: string }) => c.displayName)).toEqual(['Snifter', 'Taster', 'Full Pour', 'Crowler']);
-    expect(res.body[1]).toEqual({ id: data.containers.taster.id, displayName: 'Taster', containerName: 'Taster glass', order: 1 });
+    expect(res.body[1]).toEqual({ id: data.containers.taster.id, displayName: 'Taster', containerName: 'Taster glass', order: 1, priceCount: 1 });
+    expect(res.body[2].priceCount).toBe(2);
+  });
+});
+
+describe('library items', () => {
+  it('adds an item to the library without placing it on a menu', async () => {
+    const res = await request(app)
+      .post('/api/items')
+      .send({ displayName: ' Cold IPA ', breweryId: data.breweries.zymos.id, style: 'IPA', abv: '6.8', description: '' });
+    expect(res.status).toBe(201);
+    expect(res.body).toEqual({
+      id: expect.any(String),
+      displayName: 'Cold IPA',
+      internalName: 'cold-ipa',
+      breweryId: data.breweries.zymos.id,
+      breweryName: 'Zymos Brewing',
+      style: 'IPA',
+      abv: 6.8,
+      description: null,
+      category: null,
+    });
+    expect(await provider.getMenuItemsForItem(res.body.id)).toEqual([]);
+    expect((await request(app).get('/api/items')).body).toHaveLength(5);
+  });
+
+  it('validates a new item', async () => {
+    expect((await request(app).post('/api/items').send({ style: 'IPA' })).status).toBe(422);
+    expect((await request(app).post('/api/items').send({ displayName: 'x', abv: 120 })).status).toBe(400);
+    expect((await request(app).post('/api/items').send({ displayName: 'x', breweryId: 'nope' })).status).toBe(404);
+  });
+
+  it('shows an item with how many menus it is on', async () => {
+    const res = await request(app).get(`/api/items/${data.items.hazy.id}`);
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ id: data.items.hazy.id, displayName: 'Hazy Sequence', breweryName: 'Zymos Brewing', placementCount: 1 });
+    expect(res.body.placements).toEqual([
+      { menuItemId: data.menuItems.hazyOnDrafts.id, menuId: data.menu.id, menuName: 'Currently On Tap', sectionId: data.sections.drafts.id, sectionName: 'Drafts' },
+    ]);
+    const pretzel = (await request(app).get(`/api/items/${data.items.pretzel.id}`)).body;
+    expect(pretzel.placementCount).toBe(0);
+    expect(pretzel.placements).toEqual([]);
+    expect((await request(app).get('/api/items/nope')).status).toBe(404);
+  });
+
+  it('saves an item, clearing fields and keeping its category', async () => {
+    const res = await request(app)
+      .put(`/api/items/${data.items.hazy.id}`)
+      .send({ displayName: 'Hazy Sequence v2', internalName: 'hazy-v2', breweryId: null, style: null, abv: 0, description: null });
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ displayName: 'Hazy Sequence v2', breweryId: null, style: null, abv: 0, description: null });
+    const saved = await provider.getItem(data.items.hazy.id!);
+    expect(saved).toMatchObject({ displayName: 'Hazy Sequence v2', internalName: 'hazy-v2', abv: 0, category: 'beer' });
+  });
+
+  it('404s when saving an unknown item', async () => {
+    expect((await request(app).put('/api/items/nope').send({ displayName: 'x' })).status).toBe(404);
+  });
+
+  it('deletes an item that is on no menu', async () => {
+    const res = await request(app).delete(`/api/items/${data.items.pretzel.id}`);
+    expect(res.status).toBe(204);
+    expect(await provider.getItem(data.items.pretzel.id!)).toBeNull();
+    expect((await request(app).delete(`/api/items/${data.items.pretzel.id}`)).status).toBe(404);
+  });
+
+  it('refuses to delete an item that is still on a menu', async () => {
+    const res = await request(app).delete(`/api/items/${data.items.hazy.id}`);
+    expect(res.status).toBe(409);
+    expect(res.text).toBe('This item is still on 1 menu section. Take it off first.');
+    expect(await provider.getItem(data.items.hazy.id!)).not.toBeNull();
+  });
+});
+
+describe('pour sizes', () => {
+  it('adds a pour size to the end of the list', async () => {
+    const res = await request(app).post('/api/containers').send({ displayName: 'Half Pour', containerName: 'Half pint glass' });
+    expect(res.status).toBe(201);
+    expect(res.body).toEqual({ id: expect.any(String), displayName: 'Half Pour', containerName: 'Half pint glass', order: 3, priceCount: 0 });
+  });
+
+  it('uses the display name as the container name when none is given', async () => {
+    const res = await request(app).post('/api/containers').send({ displayName: 'Growler', containerName: '  ' });
+    expect(res.body).toMatchObject({ displayName: 'Growler', containerName: 'Growler' });
+  });
+
+  it('requires a display name', async () => {
+    expect((await request(app).post('/api/containers').send({ containerName: 'Glass' })).status).toBe(422);
+  });
+
+  it('renames a pour size, keeping its place in the order', async () => {
+    const res = await request(app).patch(`/api/containers/${data.containers.taster.id}`).send({ displayName: 'Sampler', containerName: 'Sampler glass' });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ id: data.containers.taster.id, displayName: 'Sampler', containerName: 'Sampler glass', order: 1, priceCount: 1 });
+    expect((await request(app).patch('/api/containers/nope').send({ displayName: 'x' })).status).toBe(404);
+  });
+
+  it('reorders pour sizes', async () => {
+    const { crowler, fullPour, taster } = data.containers;
+    const res = await request(app).put('/api/containers/order').send({ containerIds: [crowler.id, fullPour.id, taster.id] });
+    expect(res.status).toBe(204);
+    const list = (await request(app).get('/api/containers')).body;
+    expect(list.map((c: { id: string; order: number }) => [c.id, c.order])).toEqual([[crowler.id, 1], [fullPour.id, 2], [taster.id, 3]]);
+  });
+
+  it('lists the items priced in a pour size, and where', async () => {
+    const res = await request(app).get(`/api/containers/${data.containers.fullPour.id}/uses`);
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual([
+      { menuItemId: data.menuItems.hazyOnDrafts.id, menuId: data.menu.id, menuName: 'Currently On Tap', sectionId: data.sections.drafts.id, sectionName: 'Drafts', itemName: 'Hazy Sequence', price: 8 },
+      { menuItemId: data.menuItems.pilsOnDrafts.id, menuId: data.menu.id, menuName: 'Currently On Tap', sectionId: data.sections.drafts.id, sectionName: 'Drafts', itemName: 'Pils', price: 6.5 },
+    ]);
+    expect((await request(app).get('/api/containers/nope/uses')).status).toBe(404);
+  });
+
+  it('refuses to delete a pour size that prices still use', async () => {
+    const res = await request(app).delete(`/api/containers/${data.containers.fullPour.id}`);
+    expect(res.status).toBe(409);
+    expect(res.text).toBe('This pour size is still used by 2 prices. Remove it from those items first.');
+    expect(await provider.getContainer(data.containers.fullPour.id!)).not.toBeNull();
+  });
+
+  it('deletes a pour size once nothing uses it', async () => {
+    await request(app).delete(`/api/menu-items/${data.menuItems.sourOnGuest.id}`).expect(204);
+    const res = await request(app).delete(`/api/containers/${data.containers.crowler.id}`);
+    expect(res.status).toBe(204);
+    expect((await request(app).get('/api/containers')).body).toHaveLength(2);
+    expect((await request(app).delete(`/api/containers/${data.containers.crowler.id}`)).status).toBe(404);
+  });
+
+  it('rejects a reorder that leaves out or repeats a pour size', async () => {
+    const { crowler, fullPour, taster } = data.containers;
+    expect((await request(app).put('/api/containers/order').send({ containerIds: [crowler.id, fullPour.id] })).status).toBe(400);
+    expect((await request(app).put('/api/containers/order').send({ containerIds: [crowler.id, crowler.id, taster.id] })).status).toBe(400);
   });
 });
 
