@@ -15,33 +15,47 @@ export class DataProviderError extends Error {
     }
 }
 
+function containerInUse(count: number): DataProviderError {
+    return new DataProviderError(`This pour size is still used by ${count} ${count === 1 ? 'price' : 'prices'}. Remove it from those items first.`, 409);
+}
+
+function itemInUse(count: number): DataProviderError {
+    return new DataProviderError(`This item is still on ${count} menu ${count === 1 ? 'section' : 'sections'}. Take it off first.`, 409);
+}
+
 export abstract class DataProvider {
     abstract addBrewery(brewery: Brewery): Promise<Brewery>;
     abstract getBrewery(id: string): Promise<Brewery | null>;
     abstract getBreweries(): Promise<Array<Brewery>>;
-    abstract updateBrewery(breweryId: string, brewery: Brewery): Promise<Brewery>;
-    // Like updateBrewery, but sets every field exactly as given (so the location or logo can be
-    // cleared) instead of only overwriting truthy ones.
+    // Sets every field exactly as given, so the location or logo can be cleared
     abstract replaceBrewery(breweryId: string, brewery: Brewery): Promise<Brewery>;
 
     abstract addContainer(container: ItemContainer): Promise<ItemContainer>;
     abstract getContainer(id: string): Promise<ItemContainer | null>;
     abstract getContainers(): Promise<Array<ItemContainer>>;
     abstract updateContainer(containerId: string, container: ItemContainer): Promise<ItemContainer>;
+    // Deletes a container (pour size). Returns true if it was removed, and false if it didn't
+    // exist. Refuses with a 409 while any price (sale container) still uses it; prices left
+    // behind by an already-deleted menu item don't count, and are removed along with it.
+    abstract removeContainer(id: string): Promise<boolean>;
 
     abstract addSaleContainer(container: SaleContainer): Promise<SaleContainer>;
-    abstract getSaleContainer(id: string): Promise<SaleContainer | null>;
     abstract getSaleContainersForMenuItem(itemId: string): Promise<Array<SaleContainer>>;
+    // Every price using a given container (pour size) on a menu item that still exists. (Some
+    // since-removed routes deleted menu items without their prices; those leftovers are skipped.)
+    abstract getSaleContainersForContainer(containerId: string): Promise<Array<SaleContainer>>;
     // Deletes a sale container. Returns true if the item was removed, and false if it didn't exist.
     abstract removeSaleContainer(id: string): Promise<boolean>;
 
     abstract addItem(item: Item): Promise<Item>;
     abstract getItem(id: string): Promise<Item | null>;
     abstract getItems(): Promise<Array<Item>>;
-    abstract updateItem(itemId: string, item: Item): Promise<Item>;
-    // Unlike updateItem (which only overwrites truthy fields), replaces every field except the ID
-    // with exactly what's given, so fields can be cleared and set to falsy values like an ABV of 0.
+    // Replaces every field except the ID with exactly what's given, so fields can be cleared and
+    // set to falsy values like an ABV of 0.
     abstract replaceItem(itemId: string, item: Item): Promise<Item>;
+    // Deletes an item from the library. Returns true if it was removed, and false if it didn't
+    // exist. Refuses with a 409 while the item is still placed on any menu.
+    abstract removeItem(id: string): Promise<boolean>;
 
     abstract addMenu(menu: Menu): Promise<Menu>;
     abstract getMenu(id: string): Promise<Menu | null>;
@@ -98,25 +112,6 @@ export class PrismaDataProvider extends DataProvider {
 
     async getBreweries(): Promise<Array<Brewery>> {
         return await this.prismaClient.brewery.findMany({});
-    }
-
-    async updateBrewery(breweryId: string, brewery: Brewery): Promise<Brewery> {
-        const original = await this.getBrewery(breweryId);
-        if (!original) {
-            throw new DataProviderError(`Brewery with ID ${breweryId} does not exist`, 404);
-        }
-        const updateResult = await this.prismaClient.brewery.update({
-            where: {
-                id: breweryId
-            },
-            data: {
-                name: brewery.name ? brewery.name : original.name!!,
-                location: brewery.location ? brewery.location : original.location,
-                defaultLogo: brewery.defaultLogo ? brewery.defaultLogo : original.defaultLogo
-            }
-        })
-
-        return updateResult; 
     }
 
     async replaceBrewery(breweryId: string, brewery: Brewery): Promise<Brewery> {
@@ -180,6 +175,23 @@ export class PrismaDataProvider extends DataProvider {
         return updateResult;
     }
 
+    async removeContainer(id: string): Promise<boolean> {
+        // Check and delete in one transaction, so a price added in between can't be orphaned
+        return await this.prismaClient.$transaction(async (tx) => {
+            const prices = await tx.saleContainer.findMany({ where: { containerId: id } });
+            const menuItems = await tx.menuItem.findMany({ where: { id: { in: prices.map((p) => p.menuItemId) } } });
+            const liveIds = new Set(menuItems.map((m) => m.id));
+            const uses = prices.filter((p) => liveIds.has(p.menuItemId)).length;
+            if (uses > 0) {
+                throw containerInUse(uses);
+            }
+            // Only leftovers from deleted menu items remain at this point
+            await tx.saleContainer.deleteMany({ where: { containerId: id } });
+            const { count } = await tx.itemContainer.deleteMany({ where: { id: id } });
+            return count > 0;
+        });
+    }
+
     async addSaleContainer(container: SaleContainer): Promise<SaleContainer> { 
         if (!(await this.getContainer(container.containerId))) {
             throw new DataProviderError(`Container with ID ${container.containerId} doesn't exist when adding new SaleContainer`, 404);
@@ -197,19 +209,27 @@ export class PrismaDataProvider extends DataProvider {
         });
     }
 
-    async getSaleContainer(id: string): Promise<SaleContainer | null> { 
-        return await this.prismaClient.saleContainer.findUnique({
-            where: {
-                id: id
-            }
-        });
-    }
     async getSaleContainersForMenuItem(itemId: string): Promise<Array<SaleContainer>> {
         return await this.prismaClient.saleContainer.findMany({
             where: {
                 menuItemId: itemId
             }
         });
+    }
+
+    async getSaleContainersForContainer(containerId: string): Promise<Array<SaleContainer>> {
+        const prices = await this.prismaClient.saleContainer.findMany({
+            where: {
+                containerId: containerId
+            }
+        });
+        const menuItems = await this.prismaClient.menuItem.findMany({
+            where: {
+                id: { in: prices.map((p) => p.menuItemId) }
+            }
+        });
+        const liveIds = new Set(menuItems.map((m) => m.id));
+        return prices.filter((p) => liveIds.has(p.menuItemId));
     }
     
     async removeSaleContainer(id: string): Promise<boolean> {
@@ -263,29 +283,6 @@ export class PrismaDataProvider extends DataProvider {
         });
     }
 
-    async updateItem(itemId: string, item: Item): Promise<Item> {
-        await this.validateItem(item);
-
-        const original = await this.getItem(itemId);
-        if (!original) {
-            throw new DataProviderError(`Item with ID ${itemId} does not exist`, 404);
-        }
-        return await this.prismaClient.item.update({
-            where: {
-                id: itemId
-            },
-            data: {
-                internalName: item.internalName? item.internalName : original.internalName!!,
-                displayName: item.displayName? item.displayName : original.displayName!!,
-                breweryId: item.breweryId? item.breweryId : original.breweryId,
-                style: item.style? item.style : original.style,
-                abv: item.abv? item.abv : original.abv,
-                description: item.description? item.description : original.description,
-                category: item.category? item.category : original.category,
-            }
-        });
-    }
-
     async replaceItem(itemId: string, item: Item): Promise<Item> {
         await this.validateItem(item);
 
@@ -309,6 +306,17 @@ export class PrismaDataProvider extends DataProvider {
                 description: item.description,
                 category: item.category,
             }
+        });
+    }
+
+    async removeItem(id: string): Promise<boolean> {
+        return await this.prismaClient.$transaction(async (tx) => {
+            const placements = await tx.menuItem.count({ where: { itemId: id } });
+            if (placements > 0) {
+                throw itemInUse(placements);
+            }
+            const { count } = await tx.item.deleteMany({ where: { id: id } });
+            return count > 0;
         });
     }
 
@@ -701,10 +709,6 @@ export class LocalDataProvider extends DataProvider {
         return this.getGenericList(this.BREWERIES_KEY);
     }
 
-    async updateBrewery(breweryId: string, brewery: Brewery): Promise<Brewery> {
-        return this.updateGeneric(breweryId, this.BREWERIES_KEY, brewery, Brewery, ['id']);
-    }
-
     async replaceBrewery(breweryId: string, brewery: Brewery): Promise<Brewery> {
         if (!this.idExists(breweryId, this.BREWERIES_KEY)) {
             throw new DataProviderError(`${breweryId} not found`, 404);
@@ -730,6 +734,20 @@ export class LocalDataProvider extends DataProvider {
         return this.updateGeneric(containerId, this.CONTAINERS_KEY, container, ItemContainer, ['id'])
     }
 
+    async removeContainer(id: string): Promise<boolean> {
+        const uses = await this.getSaleContainersForContainer(id);
+        if (uses.length > 0) {
+            throw containerInUse(uses.length);
+        }
+        // Only leftovers from deleted menu items remain at this point
+        this._cache.get(this.SALE_CONTAINERS_KEY)!.forEach((value: SaleContainer, key: string) => {
+            if (value.containerId === id) {
+                this._cache.get(this.SALE_CONTAINERS_KEY)!.delete(key);
+            }
+        });
+        return this.removeGeneric(id, this.CONTAINERS_KEY);
+    }
+
     async addSaleContainer(container: SaleContainer): Promise<SaleContainer> {
         // As with any "join" object, we need to validate the IDs being entered
         // TODO: would be much nicer with a relational DB
@@ -744,10 +762,6 @@ export class LocalDataProvider extends DataProvider {
         return this.addGeneric(container, this.SALE_CONTAINERS_KEY);
     }
 
-    async getSaleContainer(id: string): Promise<SaleContainer | null> {
-        return this.getGeneric(id, this.SALE_CONTAINERS_KEY);
-    }
-
     async getSaleContainersForMenuItem(menuItemId: string): Promise<Array<SaleContainer>> {
         const saleContainers = this._cache.get(this.SALE_CONTAINERS_KEY)!;
         const results: Array<SaleContainer> = [];
@@ -757,6 +771,16 @@ export class LocalDataProvider extends DataProvider {
             }
         });
 
+        return results;
+    }
+
+    async getSaleContainersForContainer(containerId: string): Promise<Array<SaleContainer>> {
+        const results: Array<SaleContainer> = [];
+        this._cache.get(this.SALE_CONTAINERS_KEY)!.forEach((value: SaleContainer) => {
+            if (value.containerId === containerId && this.idExists(value.menuItemId, this.MENU_ITEMS_KEY)) {
+                results.push(value);
+            }
+        });
         return results;
     }
 
@@ -783,11 +807,6 @@ export class LocalDataProvider extends DataProvider {
         return this.getGenericList(this.ITEMS_KEY);
     }
 
-    async updateItem(itemId: string, item: Item): Promise<Item> {
-        this.validateItem(item);
-        return this.updateGeneric(itemId, this.ITEMS_KEY, item, Item, ['id']);
-    }
-
     async replaceItem(itemId: string, item: Item): Promise<Item> {
         this.validateItem(item);
         if (!this.idExists(itemId, this.ITEMS_KEY)) {
@@ -796,6 +815,14 @@ export class LocalDataProvider extends DataProvider {
         const replacement = new Item(itemId, item.internalName, item.displayName, item.breweryId, item.style, item.abv, item.description, item.category);
         this._cache.get(this.ITEMS_KEY)!.set(itemId, replacement);
         return replacement;
+    }
+
+    async removeItem(id: string): Promise<boolean> {
+        const placements = await this.getMenuItemsForItem(id);
+        if (placements.length > 0) {
+            throw itemInUse(placements.length);
+        }
+        return this.removeGeneric(id, this.ITEMS_KEY);
     }
 
     async addMenu(menu: Menu): Promise<Menu> {

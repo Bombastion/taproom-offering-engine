@@ -1,10 +1,7 @@
 import express, { Express, Request, Response, NextFunction } from 'express';
 import path from 'path';
-import { ContainersRoutes, SaleContainersRoutes } from './routes/containers';
-import { ItemsRoutes } from './routes/items';
 import { DataProvider } from './storage/providers';
-import { BreweriesRoutes } from './routes/breweries';
-import { MenuItemsRoutes, MenusRoutes, SubMenusRoutes } from './routes/menus';
+import { MenusRoutes } from './routes/menus';
 import { ApiRoutes } from './routes/api';
 import { adminAuth, isApiPath } from './middleware/auth';
 import helmet from 'helmet';
@@ -25,9 +22,7 @@ export function createApp(dataProvider: DataProvider): Express {
   }
 
   // Standard security headers (HSTS, X-Content-Type-Options, X-Frame-Options, etc.). CSP is
-  // turned off deliberately: the admin editor pages (pug views under routes/viewHelpers) rely on
-  // inline <script> blocks and inline onclick handlers, which a default CSP would break. The
-  // other protections helmet adds still apply.
+  // left off for now; the other protections helmet adds still apply.
   app.use(helmet({ contentSecurityPolicy: false }));
 
   // A generous, app-wide rate limit as a backstop against scripted abuse (see
@@ -36,15 +31,13 @@ export function createApp(dataProvider: DataProvider): Express {
   app.use(generalLimiter);
 
   app.use(express.json({ limit: '5mb' }));
-  app.use(express.urlencoded({ limit: '5mb', extended: true }));
 
   // PDF generation (?format=digital / ?format=print) is public and CPU-heavy; keep it from being
   // used to tie up the server.
   app.use(expensiveFormatLimiter);
 
-  // Gate every write (POST/PATCH/PUT/DELETE) and every "/manage" admin editor page behind a
-  // shared admin password. Public read routes (the menu JSON/print/digital formats the Wix
-  // widget and the public site use) are left open. adminLimiter runs first so that repeated
+  // Gate the admin JSON API (and, as a safety net, any write outside it) behind a shared admin
+  // password. The public menu formats the Wix widget and the public site use are left open. adminLimiter runs first so that repeated
   // *failed* login attempts are throttled too, not just successful admin usage. See
   // middleware/auth.ts for the exact rule and how to set the password.
   app.use(adminLimiter);
@@ -70,24 +63,14 @@ export function createApp(dataProvider: DataProvider): Express {
     next();
   });
 
-  app.get('/', (_req: Request, res: Response) => {
-    res.render('index')
-  });
-
   // Setting up HTML rendering
   app.set('view engine', 'pug');
   app.set('views', './dist/public/views')
   app.use(express.static(path.join(import.meta.dirname, 'public', 'css')));
-  app.use(express.static(path.join(import.meta.dirname, 'public', 'js')));
 
   // Register routers
-  app.use('/breweries', new BreweriesRoutes(dataProvider).router)
-  app.use('/containers', new ContainersRoutes(dataProvider).router)
-  app.use('/sale-containers', new SaleContainersRoutes(dataProvider).router)
-  app.use('/items', new ItemsRoutes(dataProvider).router);
-  app.use('/menu-items', new MenuItemsRoutes(dataProvider).router);
+  // Public menu formats (JSON, widget, print, PDF)
   app.use('/menus', new MenusRoutes(dataProvider).router);
-  app.use('/submenus', new SubMenusRoutes(dataProvider).router);
   // JSON API for the admin client app (/client). Always behind the admin login, and never cached,
   // since it serves the editing surface rather than public menu data.
   app.use('/api', (_req: Request, res: Response, next: NextFunction) => {

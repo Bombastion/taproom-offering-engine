@@ -1,9 +1,10 @@
 import { FormEvent, useId, useRef, useState } from 'react';
 import { useParams } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { api, Brewery, Container, errorMessage, ItemInput, MenuItemDetail, PourInput, plural } from '../api';
+import { api, Brewery, Container, errorMessage, MenuItemDetail, PourInput, plural } from '../api';
 import { PageHeader, Screen, useGoBack } from '../components/Screen';
 import { TrashIcon } from '../components/Icons';
+import { FieldErrors, initialItemFields, ItemFields, parseNumber, SaveBar, validateItemFields } from '../components/ItemFields';
 import { Loading, LoadError } from '../components/QueryState';
 import { ConfirmSheet } from '../components/Sheet';
 import { useToast } from '../components/Toast';
@@ -45,7 +46,7 @@ export function ItemEditorPage() {
         { label: itemName, to: isNew ? `${basePath}/items/new` : `${basePath}/items/${menuItemId}` },
       ]}
       tabs={false}
-      footer={ready ? <EditorFooter formId="item-form" parent={basePath} isNew={isNew} /> : undefined}
+      footer={ready ? <SaveBar formId="item-form" parent={basePath} submitLabel={isNew ? 'Add item' : 'Save item'} /> : undefined}
     >
       <div className="page">
         {!ready && !failed && <Loading />}
@@ -66,16 +67,6 @@ export function ItemEditorPage() {
   );
 }
 
-function EditorFooter({ formId, parent, isNew }: { formId: string; parent: string; isNew: boolean }) {
-  const goBack = useGoBack(parent);
-  return (
-    <div className="save-bar">
-      <button type="button" className="btn-secondary" onClick={goBack}>Cancel</button>
-      <button type="submit" form={formId} className="btn-primary save-btn">{isNew ? 'Add item' : 'Save item'}</button>
-    </div>
-  );
-}
-
 type PourRow = { containerId: string; label: string; detail: string | null; on: boolean; price: string };
 
 type FormProps = {
@@ -88,13 +79,7 @@ type FormProps = {
 };
 
 function ItemForm({ menuId, sectionId, sectionName, existing, containers, breweries }: FormProps) {
-  const item = existing?.item;
-  const [displayName, setDisplayName] = useState(item?.displayName ?? '');
-  const [internalName, setInternalName] = useState(item?.internalName ?? '');
-  const [breweryId, setBreweryId] = useState(item?.breweryId ?? (existing ? '' : breweries[0]?.id ?? ''));
-  const [style, setStyle] = useState(item?.style ?? '');
-  const [abv, setAbv] = useState(item?.abv !== null && item?.abv !== undefined ? String(item.abv) : '');
-  const [description, setDescription] = useState(item?.description ?? '');
+  const [fields, setFields] = useState(() => initialItemFields(existing?.item, breweries, !existing));
   const [pours, setPours] = useState<PourRow[]>(() =>
     containers.map((container) => {
       const price = existing?.pours.find((p) => p.containerId === container.id)?.price;
@@ -104,7 +89,7 @@ function ItemForm({ menuId, sectionId, sectionName, existing, containers, brewer
       return { containerId: container.id, label: container.displayName, detail, on: price !== undefined, price: price !== undefined ? String(price) : '' };
     }),
   );
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [errors, setErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState(false);
@@ -120,16 +105,8 @@ function ItemForm({ menuId, sectionId, sectionName, existing, containers, brewer
     setPours((rows) => rows.map((row, i) => (i === index ? { ...row, ...patch } : row)));
   };
 
-  const parseNumber = (text: string) => parseFloat(text.trim().replace(',', '.').replace(/^\$/, ''));
-
-  const validate = (): { item: ItemInput; pours: PourInput[] } | null => {
-    const next: Record<string, string> = {};
-    if (!displayName.trim()) next.displayName = 'Give the item a name guests will see.';
-    let abvValue: number | null = null;
-    if (abv.trim()) {
-      abvValue = parseNumber(abv);
-      if (!Number.isFinite(abvValue) || abvValue < 0 || abvValue > 100) next.abv = 'Enter a percentage like 5.4';
-    }
+  const validate = () => {
+    const { item, errors: next } = validateItemFields(fields);
     const pourValues: PourInput[] = [];
     pours.forEach((row) => {
       if (!row.on) return;
@@ -138,21 +115,11 @@ function ItemForm({ menuId, sectionId, sectionName, existing, containers, brewer
       else pourValues.push({ containerId: row.containerId, price });
     });
     setErrors(next);
-    if (Object.keys(next).length) {
+    if (!item || Object.keys(next).length) {
       setFormError('Check the highlighted fields.');
       return null;
     }
-    return {
-      item: {
-        displayName: displayName.trim(),
-        internalName: internalName.trim() || null,
-        breweryId: breweryId || null,
-        style: style.trim() || null,
-        abv: abvValue,
-        description: description.trim() || null,
-      },
-      pours: pourValues,
-    };
+    return { item, pours: pourValues };
   };
 
   const refresh = () =>
@@ -162,6 +129,7 @@ function ItemForm({ menuId, sectionId, sectionName, existing, containers, brewer
       queryClient.invalidateQueries({ queryKey: ['menus'] }),
       queryClient.invalidateQueries({ queryKey: ['items'] }),
       queryClient.invalidateQueries({ queryKey: ['menuItem'] }),
+      queryClient.invalidateQueries({ queryKey: ['item'] }),
     ]);
 
   const submit = async (event: FormEvent) => {
@@ -184,13 +152,11 @@ function ItemForm({ menuId, sectionId, sectionName, existing, containers, brewer
   };
 
   const fieldId = (name: string) => `${ids}-${name}`;
-  const errorFor = (name: string) =>
-    errors[name] ? <span className="field-error" id={fieldId(`${name}-error`)}>{errors[name]}</span> : null;
   const describedBy = (name: string) => (errors[name] ? fieldId(`${name}-error`) : undefined);
 
   return (
     <>
-      <PageHeader eyebrow={`Item · ${sectionName}`} title={displayName.trim() || (existing ? 'Untitled item' : 'New item')} />
+      <PageHeader eyebrow={`Item · ${sectionName}`} title={fields.displayName.trim() || (existing ? 'Untitled item' : 'New item')} />
 
       {existing && existing.otherPlacementCount > 0 && (
         <p className="note">
@@ -200,78 +166,20 @@ function ItemForm({ menuId, sectionId, sectionName, existing, containers, brewer
       )}
 
       <form id="item-form" className="stack" onSubmit={submit} noValidate>
-        <fieldset className="panel stack">
-          <legend className="sr-only">Details</legend>
-          <label className="field-label">
-            Display name
-            <input
-              className="field"
-              value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
-              placeholder="What guests see"
-              maxLength={200}
-              aria-invalid={errors.displayName ? true : undefined}
-              aria-describedby={describedBy('displayName')}
-            />
-            {errorFor('displayName')}
-          </label>
-          <label className="field-label">
-            Internal name
-            <input
-              className="field"
-              value={internalName}
-              onChange={(e) => setInternalName(e.target.value)}
-              placeholder="Optional — for your team only"
-              maxLength={200}
-              autoCapitalize="none"
-            />
-          </label>
-          <label className="field-label">
-            Brewery
-            <select className="field" value={breweryId} onChange={(e) => setBreweryId(e.target.value)}>
-              <option value="">No brewery</option>
-              {breweries.map((brewery) => (
-                <option key={brewery.id} value={brewery.id}>{brewery.name}</option>
-              ))}
-            </select>
-          </label>
-          <div className="grid-2">
-            <label className="field-label">
-              Style
-              <input className="field" value={style} onChange={(e) => setStyle(e.target.value)} placeholder="e.g. Pilsner" maxLength={200} />
-            </label>
-            <label className="field-label">
-              ABV (%)
-              <input
-                className="field"
-                inputMode="decimal"
-                value={abv}
-                onChange={(e) => setAbv(e.target.value)}
-                placeholder="0.0"
-                aria-invalid={errors.abv ? true : undefined}
-                aria-describedby={describedBy('abv')}
-              />
-              {errorFor('abv')}
-            </label>
-          </div>
-          <label className="field-label">
-            Description
-            <textarea
-              className="field"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Tasting notes, hops, anything worth a line"
-              maxLength={2000}
-            />
-          </label>
-        </fieldset>
+        <ItemFields
+          values={fields}
+          onChange={(patch) => setFields((current) => ({ ...current, ...patch }))}
+          errors={errors}
+          breweries={breweries}
+          idPrefix={ids}
+        />
 
         <fieldset className="panel">
           <legend className="panel-legend">
             <span>Pours &amp; prices</span>
             <span className="muted-sm">Check the sizes you sell</span>
           </legend>
-          {pours.length === 0 && <p className="muted">No pour sizes are set up yet. Add them in the classic editor under containers.</p>}
+          {pours.length === 0 && <p className="muted">No pour sizes are set up yet.</p>}
           {pours.map((row, index) => {
             const key = `pour-${row.containerId}`;
             return (

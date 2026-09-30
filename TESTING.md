@@ -7,9 +7,6 @@ Unit tests use [Vitest](https://vitest.dev) for both halves of the project:
 | Server | `test/`        | Auth and rate-limit middleware, the admin JSON API (`routes/api.ts`), the public menu formats (`?format=json/widget/print/digital`), the shared route helpers, both data providers, and the full middleware stack in `app.ts` |
 | Client | `client/test/` | The API client and sign-in storage, shared components (sheets, toasts, reordering, logo editor) and each screen, rendered in jsdom against a mocked API |
 
-The classic `/manage` editor pages (and the old CRUD routes that only they use) aren't covered,
-since they're being retired.
-
 Nothing needs a database: server tests run against the in-memory `LocalDataProvider` (or a mocked
 Prisma client for `PrismaDataProvider`'s own logic), and client tests replace `fetch` with a fake
 server (`client/test/utils.tsx`).

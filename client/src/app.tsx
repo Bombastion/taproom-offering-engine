@@ -8,6 +8,7 @@ import { MenuPage } from './pages/MenuPage';
 import { SectionPage } from './pages/SectionPage';
 import { ItemEditorPage } from './pages/ItemEditorPage';
 import { ItemsPage } from './pages/ItemsPage';
+import { LibraryItemPage } from './pages/LibraryItemPage';
 import { BreweriesPage } from './pages/BreweriesPage';
 import { BreweryPage } from './pages/BreweryPage';
 import { PourSizesPage } from './pages/PourSizesPage';
@@ -51,6 +52,8 @@ export const routes: RouteObject[] = [
       { path: '/menus/:menuId/sections/:sectionId/items/new', element: <ItemEditorPage /> },
       { path: '/menus/:menuId/sections/:sectionId/items/:menuItemId', element: <ItemEditorPage /> },
       { path: '/items', element: <ItemsPage /> },
+      { path: '/items/new', element: <LibraryItemPage /> },
+      { path: '/items/:itemId', element: <LibraryItemPage /> },
       { path: '/breweries', element: <BreweriesPage /> },
       { path: '/breweries/:breweryId', element: <BreweryPage /> },
       { path: '/pour-sizes', element: <PourSizesPage /> },

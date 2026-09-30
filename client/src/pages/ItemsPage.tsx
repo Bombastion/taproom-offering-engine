@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { api, plural } from '../api';
 import { PageHeader, Screen } from '../components/Screen';
-import { ExternalIcon, SearchIcon } from '../components/Icons';
+import { ChevronRight, PlusIcon, SearchIcon } from '../components/Icons';
 import { Loading, LoadError } from '../components/QueryState';
 
 // The item library: every beer the system knows about, whether or not it's on a menu right now.
@@ -33,21 +34,22 @@ export function ItemsPage() {
         {items.data && (
           <div className="list-panel">
             {matches.map((item) => (
-              <div key={item.id} className="lib-row">
+              <Link key={item.id} to={`/items/${item.id}`} className="lib-row lib-link">
                 <div className="lib-main">
                   <div className="lib-name">{item.displayName}</div>
                   <div className="card-meta truncate">
                     {[item.style, item.abv !== null ? `${item.abv}%` : null, item.breweryName].filter(Boolean).join(' · ') || item.internalName}
                   </div>
                 </div>
-              </div>
+                <span className="card-chevron"><ChevronRight /></span>
+              </Link>
             ))}
             {matches.length === 0 && <p className="muted lib-empty">{query ? `No items match "${query}".` : 'No items yet.'}</p>}
           </div>
         )}
-        <a className="link-row" href="/items/manage" target="_blank" rel="noopener">
-          Manage items in the classic editor <ExternalIcon />
-        </a>
+        <Link to="/items/new" className="btn-dashed">
+          <PlusIcon />New item
+        </Link>
       </div>
     </Screen>
   );

@@ -2,31 +2,18 @@ import { Request, Response } from 'express';
 import Routes from './common';
 import {v4 as uuidv4} from 'uuid';
 import { Item } from '../models/items';
-import { DisplayItem, DisplaySubMenu, Menu, MenuItem, SubMenu } from '../models/menus';
+import { DisplayItem, DisplaySubMenu, Menu, SubMenu } from '../models/menus';
 import { Brewery } from '../models/breweries';
-import { ItemContainer } from '../models/containers';
 import pdfkit from 'pdfkit';
 import fs from 'fs';
 import { DataProvider } from '../storage/providers';
 
 
+// The public, read-only menu formats (no login): the raw menu as JSON, the nested JSON the Wix
+// widget polls (?format=widget), the printable HTML menu (?format=print) and the menu board PDF
+// (?format=digital). All editing goes through the admin JSON API in api.ts.
 export class MenusRoutes extends Routes {
-  requiredFieldsAndTypes: Record<string, string> = {"internalName": "string", "displayName": "string"};
-
   registerRoutes(): void {
-    this.router.get("/manage", async (_: Request, res: Response) => {
-      const displayList = await this.dataProvider.getMenus();
-      res.render("menuList", {displayList: displayList})
-      return;
-    });
-
-    this.router.get("/:menuId/submenus/manage", async (req: Request, res: Response) => {
-      const menu = await this.dataProvider.getMenu(req.params.menuId);
-      const displayList = await this.dataProvider.getSubMenusForMenu(menu?.id!);
-      res.render("subMenuList", {displayList: displayList, menuId: menu?.id!})
-      return;
-    });
-
     const initMenuBoardPage = (doc: pdfkit, logoBase64: string, docWidth: number, docHeight: number, backgroundColor: string, imageWidth: number, imageHeight: number) => {
         // First, paint the background
         doc.rect(0, 0, docWidth, docHeight).fill(backgroundColor);
@@ -384,187 +371,6 @@ export class MenusRoutes extends Routes {
       
       res.sendStatus(400);
       return
-    });
-
-    // Creates a new menu
-    this.router.post("/", async (req: Request, res: Response) => {
-      if(!this.validateInput(req, res, this.requiredFieldsAndTypes)) {
-        return;
-      }
-
-      const menu = new Menu(null, req.body.internalName, req.body.displayName, req.body.logo);
-      const result = await this.dataProvider.addMenu(menu);
-
-      res.send(result);
-    });
-
-    // Update an existing menu
-    this.router.patch("/:menuId", async (req: Request, res: Response) => {
-      try{
-        if (!req.body) {
-          res.status(400).send("Request body expected");
-          return;
-        }
-        const result = await this.dataProvider.updateMenu(req.params.menuId, new Menu(null, req.body.internalName, req.body.displayName, req.body.logo));
-        if (result !== null) {
-          res.send(result);
-          return;
-        }
-        res.status(400);
-        res.send("Invalid Argument");
-        return
-      } catch(e: any) {
-        this.handleError(res, e);
-      }
-      
-      return
-    });
-  }
-}
-
-export class SubMenusRoutes extends Routes {
-  requiredFieldsAndTypes: Record<string, string> = {"internalName": "string", "displayName": "string"};
-
-  registerRoutes(): void {
-    this.router.get("/:itemId/items/manage", async (req: Request, res: Response) => {
-      const subMenuId = req.params.itemId;
-      const displayList = await this.dataProvider.getMenuItemsForSubMenu(subMenuId);
-      const subMenu = await this.dataProvider.getSubMenu(subMenuId);
-      const menu = await this.dataProvider.getMenu(subMenu?.menuId!);
-      const allItems = await this.dataProvider.getItems();
-      const itemMap = new Map<string, Item>();
-      for (const item of allItems) {
-        itemMap.set(item.id!, item);
-      }
-      res.render("menuItemList", {displayList: displayList, subMenu: subMenu, itemMap: Object.fromEntries(itemMap), parentMenu: menu});
-      return;
-    });
-
-    this.router.get("/:menuId", async (req: Request, res: Response) => {
-      const result = await this.dataProvider.getSubMenu(req.params.menuId);
-      if (result !== null) {
-        res.send(result);
-        return
-      }
-      res.sendStatus(404);
-      return
-    });
-
-    this.router.post("/:menuId/menuItems/:itemId", async (req: Request, res: Response) => {
-      const subMenu = await this.dataProvider.getSubMenu(req.params.menuId);
-      if (subMenu !== null) {
-        const menuItemToAdd = new MenuItem(null, subMenu.menuId!, req.params.itemId, subMenu.id, null, null);
-        await this.dataProvider.addMenuItem(menuItemToAdd);
-        res.status(201).send(menuItemToAdd);
-        return;
-      }
-      res.sendStatus(400);
-      return;
-    });
-
-    this.router.delete("/:menuId/menuItems/:itemId", async (req: Request, res: Response) => {
-      const subMenu = await this.dataProvider.getSubMenu(req.params.menuId);
-      if (subMenu !== null) {
-        await this.dataProvider.removeMenuItem(req.params.itemId);
-        res.sendStatus(204);
-        return;
-      }
-      res.sendStatus(400);
-      return;
-    });
-
-    // Creates a new submenu
-    this.router.post("/", async (req: Request, res: Response) => {
-      if(!this.validateInput(req, res, this.requiredFieldsAndTypes)) {
-        return;
-      }
-
-      const menuId = req.body.menuId;
-      const order = req.body.order? parseInt(req.body.order) : null;
-      const submenu = new SubMenu(null, req.body.internalName, req.body.displayName, menuId, order);
-      const result = await this.dataProvider.addSubMenu(submenu)
-
-      res.send(result);
-    });
-
-    // Update an existing submenu
-    this.router.patch("/:menuId", async (req: Request, res: Response) => {
-      try{
-        if (!req.body) {
-          res.status(400).send("Request body expected");
-          return;
-        }
-
-        const menuId = req.body.menuId;
-        const order = req.body.order? parseInt(req.body.order) : null;
-        const submenu = new SubMenu(null, req.body.internalName, req.body.displayName, menuId, order);
-        const result = await this.dataProvider.updateSubMenu(req.params.menuId, submenu);
-        if (result !== null) {
-          res.send(result);
-          return;
-        }
-        res.status(400);
-        res.send("Invalid Argument");
-        return
-      } catch(e: any) {
-        this.handleError(res, e);
-      }
-      
-      return
-    });
-  }
-}
-
-export class MenuItemsRoutes extends Routes {
-  registerRoutes(): void {
-    this.router.get("/:itemId", async (req: Request, res: Response) => {
-      const result = await this.dataProvider.getMenuItem(req.params.itemId);
-      if (result !== null) {
-        res.send(result);
-        return;
-      }
-      res.sendStatus(404);
-      return;
-    });
-
-    this.router.get("/:itemId/manage", async (req: Request, res: Response) => {
-      const result = await this.dataProvider.getMenuItem(req.params.itemId);
-      const itemForMenuItem = await this.dataProvider.getItem(result?.itemId!);
-      const subMenu = await this.dataProvider.getSubMenu(result?.subMenuId!);
-      const parentMenu = await this.dataProvider.getMenu(subMenu?.menuId!);
-      const containersList = await this.dataProvider.getSaleContainersForMenuItem(result?.id!);
-      const allContainers = await this.dataProvider.getContainers();
-      const containerMap = new Map<string, ItemContainer>();
-      for (const container of allContainers) {
-        containerMap.set(container.id!, container);
-      }
-      if (result !== null) {
-        res.render("menuItemDetails", {menuItem: result, itemDetails: itemForMenuItem, subMenu: subMenu, parentMenu: parentMenu, containersList: containersList, containerDetailMap: Object.fromEntries(containerMap)});
-        return;
-      }
-      res.sendStatus(404);
-      return;
-    });
-
-    this.router.patch("/:itemId", async (req: Request, res: Response) => {
-      try{
-        if (!req.body) {
-          res.status(400).send("Request body expected");
-          return;
-        }
-        const order = req.body.order? parseInt(req.body.order) : null;
-        const result = await this.dataProvider.updateMenuItem(req.params.itemId, new MenuItem(null, null, null, null, req.body.itemLogoB64, order));
-        if (result !== null) {
-          res.send(result);
-          return;
-        }
-        res.status(400);
-        res.send("Invalid Argument");
-        return;
-      } catch(e: any) {
-        this.handleError(res, e);
-        return;
-      }
     });
   }
 }

@@ -26,7 +26,7 @@ services:
       # trust its X-Forwarded-* headers for the real client IP. Don't set this if the app is
       # ever run without a proxy in front of it.
       - TOE_TRUST_PROXY=true
-      # Shared admin login for the "/manage" editor pages and all POST/PATCH/DELETE routes.
+      # Shared admin login for the admin client (/api).
       # Set these in a local .env file (see .env.example) rather than editing this file —
       # docker compose reads .env automatically and it's gitignored.
       - TOE_ADMIN_USERNAME=${TOE_ADMIN_USERNAME:-admin}

@@ -646,16 +646,6 @@ a.card:active {
   border-bottom: 0;
 }
 
-.link-row {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 44px;
-  font-weight: 600;
-  font-size: 14px;
-  text-decoration: none;
-}
-
 /* Buttons */
 
 .btn-primary,
@@ -717,6 +707,7 @@ a.card:active {
   gap: 8px;
   font-weight: 600;
   color: var(--accent);
+  text-decoration: none;
 }
 
 .btn-dashed:active {
@@ -1010,6 +1001,26 @@ textarea.field {
   gap: 12px;
   min-height: 64px;
   border-bottom: 1px solid var(--line-soft);
+}
+
+.lib-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.lib-button {
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid var(--line-soft);
+  background: transparent;
+  padding: 0;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.lib-link:active {
+  background: var(--accent-tint);
 }
 
 .lib-main {

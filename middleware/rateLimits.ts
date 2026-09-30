@@ -13,8 +13,8 @@ export const generalLimiter = rateLimit({
 });
 
 // The main defense against brute-forcing the admin Basic Auth password: caps *failed* login
-// attempts (401 responses) per IP at every route `adminAuth` protects (every write, every
-// "/manage" page, and the /api used by the admin client). It runs before `adminAuth` so a
+// attempts (401 responses) per IP at every route `adminAuth` protects (every write, and the
+// /api used by the admin client). It runs before `adminAuth` so a
 // client that's already over the limit is turned away before its credentials are even checked.
 // Successful requests don't count: the admin client makes several API calls per screen, and a
 // signed-in admin editing a menu shouldn't be locked out. `generalLimiter` still caps overall

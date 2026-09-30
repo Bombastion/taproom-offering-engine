@@ -41,7 +41,7 @@ describe('public menu data', () => {
     expect(res.headers['content-security-policy']).toBeUndefined();
   });
 
-  it('still requires a login to change menu data through the classic routes', async () => {
+  it('requires a login for any write outside the admin API', async () => {
     const res = await request(app).patch(`/menus/${data.menu.id}`).send({ displayName: 'Hacked' });
     expect(res.status).toBe(401);
   });

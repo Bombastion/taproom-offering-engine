@@ -30,10 +30,9 @@ function safeStringEqual(a: string, b: string): boolean {
   return bufA.length === bufB.length && crypto.timingSafeEqual(paddedA, paddedB);
 }
 
-// Every write (POST/PATCH/PUT/DELETE) is an admin action, and every "/manage" page is part of
-// the admin editor UI (see breweries.ts, containers.ts, items.ts, menus.ts — they all follow
-// this same "/manage" suffix convention for their HTML editor routes). Everything else — the
-// public menu JSON/print/digital formats, and plain GETs by id — stays open, since the public
+// All editing happens through the JSON API under /api, but any write (POST/PATCH/PUT/DELETE)
+// elsewhere is treated as an admin action too, so a route added later can't be left open by
+// accident. Reads outside /api — the public menu JSON/widget/print/digital formats — stay open, since the public
 // site and the Wix widget depend on those being reachable without a login.
 //
 // The one exception is the JSON API under /api used by the admin client app (see /client): it
@@ -46,10 +45,7 @@ export function requiresAuth(req: Request): boolean {
   if (isApiPath(req)) {
     return true;
   }
-  if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') {
-    return req.path.endsWith('/manage');
-  }
-  return true;
+  return !(req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS');
 }
 
 export function adminAuth(req: Request, res: Response, next: NextFunction): void {

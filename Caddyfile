@@ -18,7 +18,7 @@
 		reverse_proxy admin-client:80
 	}
 
-	# Everything else (public menu routes, /api, the classic /manage editor) is the server
+	# Everything else (public menu routes, /api) is the server
 	handle {
 		reverse_proxy taproom-offering-engine:3000
 	}

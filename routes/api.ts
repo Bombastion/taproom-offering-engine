@@ -4,7 +4,7 @@ import { DataProviderError } from '../storage/providers';
 import { Menu, MenuItem, SubMenu } from '../models/menus';
 import { Item } from '../models/items';
 import { Brewery } from '../models/breweries';
-import { SaleContainer } from '../models/containers';
+import { ItemContainer, SaleContainer } from '../models/containers';
 
 /*
 JSON API for the admin client app (see /client). Everything under /api requires the admin login
@@ -13,7 +13,7 @@ public menu data.
 
 The shapes returned here are tailored to the client's screens (menu list -> menu -> section ->
 item editor) so each screen needs a single request, rather than mirroring the database tables
-one-to-one like the older routes do.
+one-to-one.
 */
 
 type Ordered = { order: number | null };
@@ -303,6 +303,22 @@ export class ApiRoutes extends Routes {
       };
     };
 
+    // Where a menu item sits, for linking to it
+    const describePlacement = async (menuItem: MenuItem) => {
+      const section = await this.dataProvider.getSubMenu(menuItem.subMenuId!);
+      const menu = await this.dataProvider.getMenu(menuItem.menuId!);
+      return {
+        menuItemId: menuItem.id,
+        menuId: menu?.id ?? menuItem.menuId,
+        menuName: menu?.displayName ?? 'Menu',
+        sectionId: section?.id ?? menuItem.subMenuId,
+        sectionName: section?.displayName ?? 'Section',
+      };
+    };
+
+    const byPlacement = (a: { menuName: string; sectionName: string }, b: { menuName: string; sectionName: string }) =>
+      a.menuName.localeCompare(b.menuName) || a.sectionName.localeCompare(b.sectionName);
+
     this.router.get('/sections/:sectionId', handle(async (req, res) => {
       const { section, menu } = await loadSection(req.params.sectionId as string);
       const menuItems = (await this.dataProvider.getMenuItemsForSubMenu(section.id!)).sort(byOrder);
@@ -487,6 +503,44 @@ export class ApiRoutes extends Routes {
         .sort((a, b) => (a.displayName ?? '').localeCompare(b.displayName ?? '')));
     }));
 
+    // Adds an item to the library without putting it on a menu
+    this.router.post('/items', handle(async (req, res) => {
+      const created = await this.dataProvider.addItem(await itemFromBody(req.body));
+      res.status(201).json(await describeItem(created));
+    }));
+
+    const loadItem = async (itemId: string) => {
+      const item = await this.dataProvider.getItem(itemId);
+      if (!item) throw notFound('Item');
+      return item;
+    };
+
+    this.router.get('/items/:itemId', handle(async (req, res) => {
+      const item = await loadItem(req.params.itemId as string);
+      const placements = [];
+      for (const menuItem of await this.dataProvider.getMenuItemsForItem(item.id!)) {
+        placements.push(await describePlacement(menuItem));
+      }
+      placements.sort(byPlacement);
+      res.json({ ...(await describeItem(item)), placementCount: placements.length, placements });
+    }));
+
+    // Saves an item's details. They're shared by every menu the item is on.
+    this.router.put('/items/:itemId', handle(async (req, res) => {
+      const original = await loadItem(req.params.itemId as string);
+      const updated = await itemFromBody(req.body);
+      // Category isn't edited in the client; keep whatever it was
+      updated.category = original.category;
+      res.json(await describeItem(await this.dataProvider.replaceItem(original.id!, updated)));
+    }));
+
+    // Deletes an item from the library. Only allowed once it's off every menu (409 otherwise).
+    this.router.delete('/items/:itemId', handle(async (req, res) => {
+      const removed = await this.dataProvider.removeItem(req.params.itemId as string);
+      if (!removed) throw notFound('Item');
+      res.sendStatus(204);
+    }));
+
     this.router.get('/breweries', handle(async (_req, res) => {
       const breweries = await this.dataProvider.getBreweries();
       res.json(breweries
@@ -549,11 +603,86 @@ export class ApiRoutes extends Routes {
       res.sendStatus(204);
     }));
 
+    // ---- Pour sizes (containers) ----
+
+    // priceCount: how many item prices use this pour size. It can only be deleted at 0.
+    const describeContainer = async (c: ItemContainer) => ({
+      id: c.id,
+      displayName: c.displayName,
+      containerName: c.containerName,
+      order: c.order,
+      priceCount: (await this.dataProvider.getSaleContainersForContainer(c.id!)).length,
+    });
+
+    const loadContainer = async (containerId: string) => {
+      const container = await this.dataProvider.getContainer(containerId);
+      if (!container) throw notFound('Pour size');
+      return container;
+    };
+
+    // The container name (e.g. "Pint glass") tells apart pour sizes that share a display name;
+    // when it's left blank it's the same as the display name.
+    const containerFromBody = (body: any, order: number | null): ItemContainer => {
+      const displayName = requiredString(body, 'displayName');
+      const containerName = optionalString(body, 'containerName', 200) ?? displayName;
+      return new ItemContainer(null, containerName, displayName, order);
+    };
+
     this.router.get('/containers', handle(async (_req, res) => {
       const containers = await this.dataProvider.getContainers();
-      res.json(containers
-        .map((c) => ({ id: c.id, displayName: c.displayName, containerName: c.containerName, order: c.order }))
-        .sort(byOrder));
+      const described = [];
+      for (const container of containers) described.push(await describeContainer(container));
+      res.json(described.sort(byOrder));
+    }));
+
+    // Adds a pour size to the end of the list
+    this.router.post('/containers', handle(async (req, res) => {
+      const existing = await this.dataProvider.getContainers();
+      const nextOrder = existing.reduce((max, c) => Math.max(max, c.order ?? 0), 0) + 1;
+      const container = await this.dataProvider.addContainer(containerFromBody(req.body, nextOrder));
+      res.status(201).json(await describeContainer(container));
+    }));
+
+    // Reorders the pour sizes (the column order on menus) to match the given list of IDs
+    this.router.put('/containers/order', handle(async (req, res) => {
+      const ids = idList(req.body, 'containerIds');
+      const existing = await this.dataProvider.getContainers();
+      const existingIds = new Set(existing.map((c) => c.id));
+      if (ids.length !== existing.length || new Set(ids).size !== ids.length || ids.some((id) => !existingIds.has(id))) {
+        throw badRequest('containerIds must list every pour size exactly once');
+      }
+      // Orders start at 1: the data layer treats a falsy order as "unchanged"
+      for (let i = 0; i < ids.length; i++) {
+        await this.dataProvider.updateContainer(ids[i], new ItemContainer(null, null, null, i + 1));
+      }
+      res.sendStatus(204);
+    }));
+
+    this.router.patch('/containers/:containerId', handle(async (req, res) => {
+      const container = await loadContainer(req.params.containerId as string);
+      const updated = await this.dataProvider.updateContainer(container.id!, containerFromBody(req.body, null));
+      res.json(await describeContainer(updated));
+    }));
+
+    // The items priced in this pour size, and where, so they can be found before deleting it
+    this.router.get('/containers/:containerId/uses', handle(async (req, res) => {
+      const container = await loadContainer(req.params.containerId as string);
+      const uses = [];
+      for (const saleContainer of await this.dataProvider.getSaleContainersForContainer(container.id!)) {
+        const menuItem = await this.dataProvider.getMenuItem(saleContainer.menuItemId);
+        if (!menuItem) continue;
+        const item = await this.dataProvider.getItem(menuItem.itemId!);
+        uses.push({ ...(await describePlacement(menuItem)), itemName: item?.displayName ?? 'Item', price: saleContainer.price });
+      }
+      uses.sort((a, b) => byPlacement(a, b) || a.itemName.localeCompare(b.itemName));
+      res.json(uses);
+    }));
+
+    // Deletes a pour size. Only allowed once no item prices use it (409 otherwise).
+    this.router.delete('/containers/:containerId', handle(async (req, res) => {
+      const removed = await this.dataProvider.removeContainer(req.params.containerId as string);
+      if (!removed) throw notFound('Pour size');
+      res.sendStatus(204);
     }));
 
     // Unknown /api routes get a JSON 404 rather than falling through to the HTML routes

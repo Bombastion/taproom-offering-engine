@@ -67,9 +67,6 @@ export const MugIcon = (p: IconProps) => (
     <path d="M6 8c0-2 1.5-4 4-4 1 0 1.5.5 2 1 .5-.5 1.5-1 2.5-1C16 4 16 6 16 8" />
   </Svg>
 );
-export const ExternalIcon = (p: IconProps) => (
-  <Svg size={16} {...p}><path d="M14 4h6v6" /><path d="M20 4l-9 9" /><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" /></Svg>
-);
 export const UploadIcon = (p: IconProps) => (
   <Svg size={18} {...p}><path d="M12 16V4" /><path d="M7 9l5-5 5 5" /><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" /></Svg>
 );

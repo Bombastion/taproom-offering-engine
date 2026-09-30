@@ -135,10 +135,10 @@ describe('adding and reading', () => {
 describe('updating', () => {
   it('only overwrites the fields that are given', async () => {
     const provider = memoryProvider();
-    await provider.addItem(new Item('i1', 'pils', 'Pils', null, 'Pilsner', 4.8, 'Crisp', 'beer'));
-    const updated = await provider.updateItem('i1', new Item(null, null, 'Pils v2', null, null, 0, null, null));
-    expect(updated).toEqual(new Item('i1', 'pils', 'Pils v2', null, 'Pilsner', 4.8, 'Crisp', 'beer'));
-    expect(await provider.getItem('i1')).toEqual(updated);
+    await provider.addSubMenu(new SubMenu('s1', 'drafts', 'Drafts', 'm1', 2));
+    const updated = await provider.updateSubMenu('s1', new SubMenu(null, null, 'On Draft', null, null));
+    expect(updated).toEqual(new SubMenu('s1', 'drafts', 'On Draft', 'm1', 2));
+    expect(await provider.getSubMenu('s1')).toEqual(updated);
   });
 
   it('refuses to change an ID', async () => {
@@ -205,10 +205,47 @@ describe('removing', () => {
     expect(await provider.removeSubMenu('s1')).toBe(true);
     expect(await provider.getSubMenu('s1')).toBeNull();
     expect(await provider.getMenuItem('mi1')).toBeNull();
-    expect(await provider.getSaleContainer('sc1')).toBeNull();
+    expect(await provider.getSaleContainersForMenuItem('mi1')).toEqual([]);
     expect(await provider.getMenuItem('mi2')).not.toBeNull();
-    expect(await provider.getSaleContainer('sc2')).not.toBeNull();
+    expect((await provider.getSaleContainersForMenuItem('mi2')).map((p) => p.id)).toEqual(['sc2']);
 
     expect(await provider.removeSubMenu('s1')).toBe(false);
+  });
+
+  it('only removes a container once no live prices use it, clearing leftovers', async () => {
+    const provider = memoryProvider();
+    await provider.addContainer(new ItemContainer('c1', 'Pint glass', 'Full Pour', 1));
+    await provider.addMenuItem(new MenuItem('mi1', 'm1', 'i1', 's1', null, 1));
+    await provider.addSaleContainer(new SaleContainer('sc1', 'c1', 'mi1', 5));
+    // A price whose menu item is already gone doesn't count as a use
+    await provider.addSaleContainer(new SaleContainer('sc2', 'c1', 'gone', 5));
+    expect((await provider.getSaleContainersForContainer('c1')).map((u) => u.id)).toEqual(['sc1']);
+
+    const error = await provider.removeContainer('c1').catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(DataProviderError);
+    expect((error as DataProviderError).statusCode).toBe(409);
+    expect(await provider.getContainer('c1')).not.toBeNull();
+
+    await provider.removeMenuItem('mi1');
+    expect(await provider.removeContainer('c1')).toBe(true);
+    expect(await provider.getContainer('c1')).toBeNull();
+    expect(await provider.getSaleContainersForMenuItem('mi1')).toEqual([]);
+    expect(await provider.getSaleContainersForMenuItem('gone')).toEqual([]);
+    expect(await provider.removeContainer('c1')).toBe(false);
+  });
+
+  it('only removes an item once it is off every menu', async () => {
+    const provider = memoryProvider();
+    await provider.addItem(new Item('i1', 'pils', 'Pils', null, null, null, null, null));
+    await provider.addMenuItem(new MenuItem('mi1', 'm1', 'i1', 's1', null, 1));
+
+    const error = await provider.removeItem('i1').catch((e: unknown) => e);
+    expect((error as DataProviderError).statusCode).toBe(409);
+    expect(await provider.getItem('i1')).not.toBeNull();
+
+    await provider.removeMenuItem('mi1');
+    expect(await provider.removeItem('i1')).toBe(true);
+    expect(await provider.getItem('i1')).toBeNull();
+    expect(await provider.removeItem('i1')).toBe(false);
   });
 });
