@@ -30,6 +30,10 @@ docker compose -f docker-compose.test.yml run --rm --build server-tests npm test
 
 ## Running locally
 
+The Prisma client in `generated/` isn't committed; `npm install` generates it from
+`prisma/schema.prisma`. After changing the schema (or pulling a change to it), regenerate it with
+`npm run generate`.
+
 ```sh
 npm test              # server, from the repo root
 npm run test:watch    # re-runs as you edit

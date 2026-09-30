@@ -15,7 +15,11 @@ export type SectionSummary = {
   displayName: string;
   internalName: string;
   order: number | null;
+  // Every item on the section, active or not
   itemCount: number;
+  // How many of those are inactive (left off the published menus)
+  inactiveCount: number;
+  // Names of the active items only
   itemNames: string[];
 };
 
@@ -51,6 +55,8 @@ export type Pour = {
 export type SectionEntry = {
   menuItemId: string;
   order: number | null;
+  // Inactive items keep their place and prices, but don't show on the published menus
+  active: boolean;
   item: ItemDetail | null;
   pours: Pour[];
 };
@@ -65,6 +71,7 @@ export type SectionDetail = {
 
 export type MenuItemDetail = {
   menuItemId: string;
+  active: boolean;
   section: { id: string; displayName: string };
   menu: { id: string; displayName: string };
   item: ItemDetail | null;
@@ -73,7 +80,7 @@ export type MenuItemDetail = {
 };
 
 // Where an item sits on a menu, for linking to it in the item editor
-export type Placement = { menuItemId: string; menuId: string; menuName: string; sectionId: string; sectionName: string };
+export type Placement = { menuItemId: string; active: boolean; menuId: string; menuName: string; sectionId: string; sectionName: string };
 
 // An item on its own, from the library, with the menu sections it's on
 export type LibraryItemDetail = ItemDetail & { placementCount: number; placements: Placement[] };
@@ -190,6 +197,8 @@ export const api = {
   menuItem: (menuItemId: string) => request<MenuItemDetail>('GET', `/menu-items/${encodeURIComponent(menuItemId)}`),
   saveMenuItem: (menuItemId: string, item: ItemInput, pours: PourInput[]) =>
     request<void>('PUT', `/menu-items/${encodeURIComponent(menuItemId)}`, { item, pours }),
+  setMenuItemActive: (menuItemId: string, active: boolean) =>
+    request<{ menuItemId: string; active: boolean }>('PUT', `/menu-items/${encodeURIComponent(menuItemId)}/active`, { active }),
   removeMenuItem: (menuItemId: string) => request<void>('DELETE', `/menu-items/${encodeURIComponent(menuItemId)}`),
 
   items: () => request<LibraryItem[]>('GET', '/items'),

@@ -5,6 +5,8 @@
   "scripts": {
     "build": "yarn copy-files",
     "start": "tsx server.ts",
+    "generate": "prisma generate",
+    "postinstall": "prisma generate",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:docker": "docker compose -f docker-compose.test.yml build && docker compose -f docker-compose.test.yml run --rm server-tests && docker compose -f docker-compose.test.yml run --rm client-tests",

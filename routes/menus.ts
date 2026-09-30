@@ -2,16 +2,29 @@ import { Request, Response } from 'express';
 import Routes from './common';
 import {v4 as uuidv4} from 'uuid';
 import { Item } from '../models/items';
-import { DisplayItem, DisplaySubMenu, Menu, SubMenu } from '../models/menus';
+import { DisplayItem, DisplaySubMenu, Menu, MenuItem, SubMenu } from '../models/menus';
 import { Brewery } from '../models/breweries';
 import pdfkit from 'pdfkit';
 import fs from 'fs';
 import { DataProvider } from '../storage/providers';
 
+// Sorts sections and items by their configured order, with unordered ones last. The data
+// providers don't guarantee any order (Prisma returns rows however Postgres likes), so every
+// view sorts for itself.
+function byOrder(a: { order: number | null }, b: { order: number | null }): number {
+  if (a.order === null && b.order === null) return 0;
+  if (a.order === null) return 1;
+  if (b.order === null) return -1;
+  return a.order - b.order;
+}
+
 
 // The public, read-only menu formats (no login): the raw menu as JSON, the nested JSON the Wix
 // widget polls (?format=widget), the printable HTML menu (?format=print) and the menu board PDF
 // (?format=digital). All editing goes through the admin JSON API in api.ts.
+//
+// Inactive menu items (see MenuItem.active) are left out of all of these, and a section with no
+// active items is skipped entirely.
 export class MenusRoutes extends Routes {
   registerRoutes(): void {
     const initMenuBoardPage = (doc: pdfkit, logoBase64: string, docWidth: number, docHeight: number, backgroundColor: string, imageWidth: number, imageHeight: number) => {
@@ -33,25 +46,7 @@ export class MenusRoutes extends Routes {
     const generateMenuBoardPdf = (res: Response, dataProvider: DataProvider, mainMenu: Menu) => {
       return new Promise(async (resolve, reject) => {
         // Get all the sub-menus for this menu
-        const allSubMenus = (await this.dataProvider.getSubMenusForMenu(mainMenu.id!!)).sort((a, b) => {
-          if(a.order === null && b.order === null) {
-            return 0
-          } else {
-            if (a.order === null) {
-              return 1
-            }
-            if (b.order === null) {
-              return -1
-            }
-            if (a.order < b.order) {
-              return -1
-            }
-            if (b.order < a.order) {
-              return 1
-            }
-            return 0
-          }
-        }); 
+        const allSubMenus = (await this.dataProvider.getSubMenusForMenu(mainMenu.id!!)).sort(byOrder);
 
         // Set response headers
         res.setHeader('Content-type', 'application/pdf');
@@ -88,8 +83,8 @@ export class MenusRoutes extends Routes {
         const endOfPageSafetyBuffer = itemLogoDimensions + (2 * standardBuffer);
         // Render the submenus
         for (const submenu of allSubMenus) {
-          const menuItemsForSubmenu = await dataProvider.getMenuItemsForSubMenu(submenu.id!!)
-          // No items, just skip this one
+          const menuItemsForSubmenu = (await dataProvider.getMenuItemsForSubMenu(submenu.id!!)).filter(MenuItem.isActive).sort(byOrder)
+          // No (active) items, just skip this one
           if (menuItemsForSubmenu.length <= 0) {
             continue
           }
@@ -207,33 +202,11 @@ export class MenusRoutes extends Routes {
         // options), suitable for a lightweight external display like the Wix "currently on tap"
         // embed. This mirrors the same data the print/digital views build, just as JSON instead
         // of a rendered document.
-        const allSubMenus = (await this.dataProvider.getSubMenusForMenu(result.id!)).sort((a, b) => {
-          if (a.order === null && b.order === null) {
-            return 0;
-          }
-          if (a.order === null) {
-            return 1;
-          }
-          if (b.order === null) {
-            return -1;
-          }
-          return a.order - b.order;
-        });
+        const allSubMenus = (await this.dataProvider.getSubMenusForMenu(result.id!)).sort(byOrder);
 
         const sections = [];
         for (const subMenu of allSubMenus) {
-          const menuItemsForSubmenu = (await this.dataProvider.getMenuItemsForSubMenu(subMenu.id!)).sort((a, b) => {
-            if (a.order === null && b.order === null) {
-              return 0;
-            }
-            if (a.order === null) {
-              return 1;
-            }
-            if (b.order === null) {
-              return -1;
-            }
-            return a.order - b.order;
-          });
+          const menuItemsForSubmenu = (await this.dataProvider.getMenuItemsForSubMenu(subMenu.id!)).filter(MenuItem.isActive).sort(byOrder);
           if (menuItemsForSubmenu.length <= 0) {
             continue;
           }
@@ -290,7 +263,7 @@ export class MenusRoutes extends Routes {
       }
       if (req.query.format === "print") {
         // Get all the sub-menus for this menu
-        const allSubMenus = await this.dataProvider.getSubMenusForMenu(result.id!);
+        const allSubMenus = (await this.dataProvider.getSubMenusForMenu(result.id!)).sort(byOrder);
 
         // Initialize a map we can add things to
         const subMenuToItemMap: Map<string, Array<DisplayItem>> = new Map();
@@ -302,7 +275,8 @@ export class MenusRoutes extends Routes {
 
         // Create DisplayItems for each MenuItem and add it to the appropriate map
         // Also gathers all container display info for submenus during the loop
-        const allItemsForMenu = await this.dataProvider.getMenuItemsForMenu(result.id!);
+        // Sorted up front so each section's list below ends up in its configured order
+        const allItemsForMenu = (await this.dataProvider.getMenuItemsForMenu(result.id!)).filter(MenuItem.isActive).sort(byOrder);
         for (const menuItem of allItemsForMenu) {
           const item = (await this.dataProvider.getItem(menuItem.itemId!))!;
 
@@ -344,6 +318,10 @@ export class MenusRoutes extends Routes {
         // For each submenu, gather all the price options
         const displaySubMenus: Array<DisplaySubMenu> = [];
         allSubMenus.forEach((menu: SubMenu) => {
+          // Like the widget and menu board, leave out sections with nothing (active) on them
+          if (subMenuToItemMap.get(menu.id!)!.length === 0) {
+            return;
+          }
           const displayNameToOrder = subMenuToContainerDisplayNameToOrder.get(menu.id!)!;
           const displayNameAndOrderObjects: Array<{ displayName: string, order: number }> = []
           displayNameToOrder.forEach((order, displayName) => {

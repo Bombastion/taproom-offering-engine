@@ -134,6 +134,7 @@ function LibraryItemForm({ existing, breweries }: { existing: LibraryItemDetail 
                   <div className="lib-name">{placement.sectionName}</div>
                   <div className="card-meta">{placement.menuName}</div>
                 </div>
+                {!placement.active && <span className="inactive-pill">Inactive</span>}
                 <span className="card-chevron"><ChevronRight /></span>
               </Link>
             ))}

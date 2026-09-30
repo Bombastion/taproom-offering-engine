@@ -57,6 +57,7 @@ export function SectionPage() {
   };
 
   const itemCount = section.data?.items.length ?? 0;
+  const inactiveCount = section.data?.items.filter((entry) => !entry.active).length ?? 0;
 
   return (
     <Screen
@@ -83,7 +84,7 @@ export function SectionPage() {
             <PageHeader
               eyebrow={`Section · ${section.data.menu.displayName}`}
               title={section.data.displayName}
-              sub={itemCount ? `${plural(itemCount, 'item')} · tap one to edit` : undefined}
+              sub={itemCount ? `${plural(itemCount, 'item')}${inactiveCount ? ` · ${inactiveCount} inactive` : ''} · tap one to edit` : undefined}
             />
 
             <div className="chip-row">
@@ -116,7 +117,11 @@ export function SectionPage() {
                   <div className="card-main">
                     <div className="card-title-row spread">
                       <span className="card-title">{title}</span>
-                      {item?.abv !== null && item?.abv !== undefined && <span className="abv">{item.abv}% ABV</span>}
+                      {!entry.active ? (
+                        <span className="inactive-pill">Inactive</span>
+                      ) : (
+                        item?.abv !== null && item?.abv !== undefined && <span className="abv">{item.abv}% ABV</span>
+                      )}
                     </div>
                     {meta && <div className="card-meta">{meta}</div>}
                     {!reordering && (
@@ -132,12 +137,16 @@ export function SectionPage() {
                   </div>
                 );
                 return reordering ? (
-                  <div key={entry.menuItemId} className="card card-static">
+                  <div key={entry.menuItemId} className={`card card-static${entry.active ? '' : ' card-inactive'}`}>
                     {body}
                     <MoveButtons label={title} index={index} count={itemCount} onMove={move} />
                   </div>
                 ) : (
-                  <Link key={entry.menuItemId} to={`${basePath}/items/${entry.menuItemId}`} className="card card-top">
+                  <Link
+                    key={entry.menuItemId}
+                    to={`${basePath}/items/${entry.menuItemId}`}
+                    className={`card card-top${entry.active ? '' : ' card-inactive'}`}
+                  >
                     {body}
                   </Link>
                 );

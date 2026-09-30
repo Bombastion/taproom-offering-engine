@@ -81,7 +81,10 @@ export abstract class DataProvider {
     abstract getMenuItemsForItem(itemId: string): Promise<Array<MenuItem>>
     // Deletes a menu item. Returns true if it was removed, and false if it didn't exist.
     abstract removeMenuItem(id: string): Promise<boolean>
+    // Leaves `active` alone; use setMenuItemActive for that
     abstract updateMenuItem(id: string, item: MenuItem): Promise<MenuItem>
+    // Marks a menu item active or inactive, leaving everything else (order, prices) as it was
+    abstract setMenuItemActive(id: string, active: boolean): Promise<MenuItem>
 }
 
 export class PrismaDataProvider extends DataProvider {
@@ -471,6 +474,7 @@ export class PrismaDataProvider extends DataProvider {
                 subMenuId: item.subMenuId!!,
                 itemLogo: item.itemLogo,
                 order: item.order,
+                active: item.active ?? true,
             }
         })
     }
@@ -541,6 +545,21 @@ export class PrismaDataProvider extends DataProvider {
                 subMenuId: item.subMenuId? item.subMenuId : original.subMenuId!!,
                 itemLogo: item.itemLogo? item.itemLogo : original.itemLogo,
                 order: item.order? item.order : original.order,
+            }
+        });
+    }
+
+    async setMenuItemActive(id: string, active: boolean): Promise<MenuItem> {
+        const original = await this.getMenuItem(id);
+        if (!original) {
+            throw new DataProviderError(`Menu Item with ID ${id} does not exist`, 404);
+        }
+        return await this.prismaClient.menuItem.update({
+            where: {
+                id: id
+            },
+            data: {
+                active: active,
             }
         });
     }
@@ -912,7 +931,9 @@ export class LocalDataProvider extends DataProvider {
 
     async addMenuItem(item: MenuItem): Promise<MenuItem> {
         this.validateMenuItem(item);
-        return this.addGeneric(item, this.MENU_ITEMS_KEY);
+        // Normalized to a MenuItem so every entry has the same fields (updateGeneric relies on it)
+        const toAdd = new MenuItem(item.id, item.menuId, item.itemId, item.subMenuId, item.itemLogo ?? null, item.order ?? null, item.active ?? true);
+        return this.addGeneric(toAdd, this.MENU_ITEMS_KEY);
     }
 
     async getMenuItem(id: string): Promise<MenuItem | null> {
@@ -961,6 +982,18 @@ export class LocalDataProvider extends DataProvider {
 
     async updateMenuItem(id: string, item: MenuItem): Promise<MenuItem> {
         this.validateMenuItem(item);
-        return this.updateGeneric(id, this.MENU_ITEMS_KEY, item, MenuItem, ["id"]);
+        // `active` is left alone (updateGeneric can't set a field to false; see setMenuItemActive)
+        return this.updateGeneric(id, this.MENU_ITEMS_KEY, { ...item, active: null }, MenuItem, ["id"]);
+    }
+
+    async setMenuItemActive(id: string, active: boolean): Promise<MenuItem> {
+        const original: MenuItem | null = this.getGeneric(id, this.MENU_ITEMS_KEY);
+        if (original === null) {
+            throw new DataProviderError(`${id} not found`, 404);
+        }
+        // Setting an existing key keeps its place in the map, so getMenuItemsForItem stays oldest first
+        const updated = new MenuItem(original.id, original.menuId, original.itemId, original.subMenuId, original.itemLogo, original.order, active);
+        this._cache.get(this.MENU_ITEMS_KEY)!.set(id, updated);
+        return updated;
     }
 }

@@ -5,6 +5,10 @@ import { library, section } from '../fixtures';
 
 const base = '/menus/m1/sections/s1';
 
+function sectionOrder() {
+  return [...document.querySelectorAll('.card-title')].map((el) => el.textContent);
+}
+
 describe('SectionPage', () => {
   it("lists the section's items with their pours and prices", async () => {
     mockApi({ 'GET /api/sections/s1': json(section) });
@@ -20,6 +24,20 @@ describe('SectionPage', () => {
     expect(pils).not.toHaveTextContent('ABV');
     expect(screen.getByText('2 items · tap one to edit')).toBeInTheDocument();
     expect(screen.getByRole('navigation', { name: 'Breadcrumb' })).toHaveTextContent('MenusCurrently On TapDrafts');
+  });
+
+  it('marks inactive items, keeping them in their spot', async () => {
+    const withInactive = { ...section, items: [{ ...section.items[0], active: false }, section.items[1]] };
+    mockApi({ 'GET /api/sections/s1': json(withInactive) });
+    renderApp(base);
+    const hazy = await screen.findByRole('link', { name: /Hazy Sequence/ });
+    expect(hazy).toHaveTextContent('Inactive');
+    expect(hazy).toHaveClass('card-inactive');
+    // Prices are still there for when it comes back
+    expect(hazy).toHaveTextContent('Full Pour $8.50');
+    expect(screen.getByRole('link', { name: /Pils/ })).not.toHaveTextContent('Inactive');
+    expect(sectionOrder()).toEqual(['Hazy Sequence', 'Pils']);
+    expect(screen.getByText('2 items · 1 inactive · tap one to edit')).toBeInTheDocument();
   });
 
   it('shows an empty state', async () => {
