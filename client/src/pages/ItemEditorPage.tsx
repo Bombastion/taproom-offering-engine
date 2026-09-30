@@ -93,6 +93,9 @@ function ItemForm({ menuId, sectionId, sectionName, existing, containers, brewer
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState(false);
+  // Saved straight away, separately from the rest of the form
+  const [active, setActive] = useState(existing?.active ?? true);
+  const [savingActive, setSavingActive] = useState(false);
   const priceInputs = useRef<Record<string, HTMLInputElement | null>>({});
   const ids = useId();
 
@@ -132,6 +135,28 @@ function ItemForm({ menuId, sectionId, sectionName, existing, containers, brewer
       queryClient.invalidateQueries({ queryKey: ['item'] }),
     ]);
 
+  const toggleActive = async (next: boolean) => {
+    if (!existing || savingActive) return;
+    const name = existing.item?.displayName ?? 'Item';
+    setActive(next);
+    setSavingActive(true);
+    try {
+      await api.setMenuItemActive(existing.menuItemId, next);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['section', sectionId] }),
+        queryClient.invalidateQueries({ queryKey: ['menu', menuId] }),
+        queryClient.invalidateQueries({ queryKey: ['menuItem', existing.menuItemId] }),
+        queryClient.invalidateQueries({ queryKey: ['item'] }),
+      ]);
+      toast(next ? `${name} is back on the menu` : `${name} marked inactive`);
+    } catch (e) {
+      setActive(!next);
+      toast(`Couldn't update: ${errorMessage(e)}`, 'error');
+    } finally {
+      setSavingActive(false);
+    }
+  };
+
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (saving) return;
@@ -163,6 +188,31 @@ function ItemForm({ menuId, sectionId, sectionName, existing, containers, brewer
           This beer also appears in {plural(existing.otherPlacementCount, 'other place')}. Name, brewery, style, ABV and
           description changes show up there too; prices below are just for {sectionName}.
         </p>
+      )}
+
+      {existing && (
+        <div className={`active-panel${active ? '' : ' active-panel-off'}`}>
+          <div className="active-text">
+            <span className="active-title">{active ? 'Showing on the menu' : 'Inactive'}</span>
+            <span className="muted-sm" id={fieldId('active-detail')}>
+              {active
+                ? 'Turn off to hide it from the print view, menu board and website without losing its spot or prices.'
+                : `Hidden from the published menus. It keeps its spot in ${sectionName} and its prices for when you turn it back on.`}
+            </span>
+          </div>
+          <label className="switch">
+            <input
+              type="checkbox"
+              role="switch"
+              aria-describedby={fieldId('active-detail')}
+              aria-label="Show on published menus"
+              checked={active}
+              disabled={savingActive}
+              onChange={(e) => toggleActive(e.target.checked)}
+            />
+            <span className="switch-track" aria-hidden="true" />
+          </label>
+        </div>
       )}
 
       <form id="item-form" className="stack" onSubmit={submit} noValidate>

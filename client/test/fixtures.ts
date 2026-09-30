@@ -14,9 +14,9 @@ export const menu: MenuDetail = {
   hasLogo: true,
   logo: 'data:image/png;base64,abc',
   sections: [
-    { id: 's1', displayName: 'Drafts', internalName: 'on-tap-drafts', order: 1, itemCount: 2, itemNames: ['Hazy Sequence', 'Pils'] },
-    { id: 's2', displayName: 'Guest Taps', internalName: 'on-tap-guest', order: 2, itemCount: 1, itemNames: ['Guest Sour'] },
-    { id: 's3', displayName: 'Empty', internalName: 'on-tap-empty', order: 3, itemCount: 0, itemNames: [] },
+    { id: 's1', displayName: 'Drafts', internalName: 'on-tap-drafts', order: 1, itemCount: 2, inactiveCount: 0, itemNames: ['Hazy Sequence', 'Pils'] },
+    { id: 's2', displayName: 'Guest Taps', internalName: 'on-tap-guest', order: 2, itemCount: 1, inactiveCount: 0, itemNames: ['Guest Sour'] },
+    { id: 's3', displayName: 'Empty', internalName: 'on-tap-empty', order: 3, itemCount: 0, inactiveCount: 0, itemNames: [] },
   ],
 };
 
@@ -51,6 +51,7 @@ export const section: SectionDetail = {
     {
       menuItemId: 'mi1',
       order: 1,
+      active: true,
       item: hazy,
       pours: [
         { containerId: 'c1', displayName: 'Taster', order: 1, price: 3 },
@@ -60,6 +61,7 @@ export const section: SectionDetail = {
     {
       menuItemId: 'mi2',
       order: 2,
+      active: true,
       item: { ...hazy, id: 'i2', displayName: 'Pils', internalName: 'pils', style: 'Pilsner', abv: null, description: null },
       pours: [],
     },
@@ -68,6 +70,7 @@ export const section: SectionDetail = {
 
 export const menuItem: MenuItemDetail = {
   menuItemId: 'mi1',
+  active: true,
   section: { id: 's1', displayName: 'Drafts' },
   menu: { id: 'm1', displayName: 'Currently On Tap' },
   item: hazy,
@@ -85,16 +88,16 @@ export const libraryItem: LibraryItemDetail = {
   ...hazy,
   placementCount: 2,
   placements: [
-    { menuItemId: 'mi1', menuId: 'm1', menuName: 'Currently On Tap', sectionId: 's1', sectionName: 'Drafts' },
-    { menuItemId: 'mi7', menuId: 'm2', menuName: 'Patio', sectionId: 's9', sectionName: 'Cans' },
+    { menuItemId: 'mi1', active: true, menuId: 'm1', menuName: 'Currently On Tap', sectionId: 's1', sectionName: 'Drafts' },
+    { menuItemId: 'mi7', active: true, menuId: 'm2', menuName: 'Patio', sectionId: 's9', sectionName: 'Cans' },
   ],
 };
 
 export const unplacedItem: LibraryItemDetail = { ...libraryItem, id: 'i4', displayName: 'Pretzel', placementCount: 0, placements: [] };
 
 export const fullPourUses: ContainerUse[] = [
-  { menuItemId: 'mi1', menuId: 'm1', menuName: 'Currently On Tap', sectionId: 's1', sectionName: 'Drafts', itemName: 'Hazy Sequence', price: 8.5 },
-  { menuItemId: 'mi7', menuId: 'm2', menuName: 'Patio', sectionId: 's9', sectionName: 'Cans', itemName: 'Hazy Sequence', price: 9 },
+  { menuItemId: 'mi1', active: true, menuId: 'm1', menuName: 'Currently On Tap', sectionId: 's1', sectionName: 'Drafts', itemName: 'Hazy Sequence', price: 8.5 },
+  { menuItemId: 'mi7', active: true, menuId: 'm2', menuName: 'Patio', sectionId: 's9', sectionName: 'Cans', itemName: 'Hazy Sequence', price: 9 },
 ];
 
 export const brewery: BreweryDetail = {

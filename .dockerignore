@@ -6,3 +6,5 @@ dist
 client
 .git
 .env
+# Generated inside the image by npm install; a local copy could be stale
+generated

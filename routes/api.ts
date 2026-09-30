@@ -184,8 +184,14 @@ export class ApiRoutes extends Routes {
       const sectionResults = [];
       for (const section of sections) {
         const menuItems = (await this.dataProvider.getMenuItemsForSubMenu(section.id!)).sort(byOrder);
+        // Names of what's showing on the published menu; inactive items are only counted
         const names: string[] = [];
+        let inactiveCount = 0;
         for (const menuItem of menuItems) {
+          if (!MenuItem.isActive(menuItem)) {
+            inactiveCount++;
+            continue;
+          }
           if (!items.has(menuItem.itemId!)) {
             items.set(menuItem.itemId!, await this.dataProvider.getItem(menuItem.itemId!));
           }
@@ -198,6 +204,7 @@ export class ApiRoutes extends Routes {
           internalName: section.internalName,
           order: section.order,
           itemCount: menuItems.length,
+          inactiveCount,
           itemNames: names,
         });
       }
@@ -309,6 +316,7 @@ export class ApiRoutes extends Routes {
       const menu = await this.dataProvider.getMenu(menuItem.menuId!);
       return {
         menuItemId: menuItem.id,
+        active: MenuItem.isActive(menuItem),
         menuId: menu?.id ?? menuItem.menuId,
         menuName: menu?.displayName ?? 'Menu',
         sectionId: section?.id ?? menuItem.subMenuId,
@@ -327,6 +335,7 @@ export class ApiRoutes extends Routes {
         entries.push({
           menuItemId: menuItem.id,
           order: menuItem.order,
+          active: MenuItem.isActive(menuItem),
           item: await describeItem(await this.dataProvider.getItem(menuItem.itemId!)),
           pours: await describePours(menuItem.id!),
         });
@@ -448,6 +457,7 @@ export class ApiRoutes extends Routes {
       const placements = await this.dataProvider.getMenuItemsForItem(menuItem.itemId!);
       res.json({
         menuItemId: menuItem.id,
+        active: MenuItem.isActive(menuItem),
         section: { id: section.id, displayName: section.displayName },
         menu: { id: menu.id, displayName: menu.displayName },
         item: await describeItem(await this.dataProvider.getItem(menuItem.itemId!)),
@@ -472,6 +482,20 @@ export class ApiRoutes extends Routes {
       }
       if (pours !== null) await replacePours(menuItem.id!, pours);
       res.sendStatus(204);
+    }));
+
+    /*
+    Marks a placement active or inactive: { active: boolean }. An inactive item stays on its
+    section, keeping its place in the order and its prices, but is left off the published menu
+    views (print, menu board PDF and widget) until it's marked active again.
+    */
+    this.router.put('/menu-items/:menuItemId/active', handle(async (req, res) => {
+      const active = req.body?.active;
+      if (typeof active !== 'boolean') throw badRequest('active must be true or false');
+      const menuItem = await this.dataProvider.getMenuItem(req.params.menuItemId as string);
+      if (!menuItem) throw notFound('Menu item');
+      const updated = await this.dataProvider.setMenuItemActive(menuItem.id!, active);
+      res.json({ menuItemId: updated.id, active: MenuItem.isActive(updated) });
     }));
 
     // Takes an item off a section (the item itself stays in the library)

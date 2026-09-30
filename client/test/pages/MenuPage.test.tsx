@@ -23,6 +23,19 @@ describe('MenuPage', () => {
     expect(screen.getByRole('navigation', { name: 'Breadcrumb' })).toHaveTextContent('Menus');
   });
 
+  it('counts inactive items on a section, naming only the active ones', async () => {
+    const sections = [
+      { ...menu.sections[0], inactiveCount: 1, itemNames: ['Pils'] },
+      { ...menu.sections[1], inactiveCount: 1, itemNames: [] },
+      menu.sections[2],
+    ];
+    mockApi({ 'GET /api/menus/m1': json({ ...menu, sections }) });
+    renderApp('/menus/m1');
+    expect(await screen.findByRole('link', { name: /Drafts/ })).toHaveTextContent('Pils · 1 inactive');
+    expect(screen.getByRole('link', { name: /Guest Taps/ })).toHaveTextContent('1 inactive');
+    expect(screen.getByRole('link', { name: /Guest Taps/ })).not.toHaveTextContent('Empty');
+  });
+
   it('only offers the menu board PDF when there is a logo to put on it', async () => {
     mockApi({ 'GET /api/menus/m1': json({ ...menu, hasLogo: false, logo: null }) });
     renderApp('/menus/m1');

@@ -1,3 +1,5 @@
 dist
 node_modules
 .env
+# The Prisma client, generated from prisma/schema.prisma on every npm install
+generated

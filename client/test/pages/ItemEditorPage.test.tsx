@@ -30,6 +30,8 @@ describe('ItemEditorPage: new item', () => {
     expect(screen.getByLabelText('Price for Full Pour (Pint glass)')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Add item' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Remove from/ })).not.toBeInTheDocument();
+    // New items start active; there's nothing to switch yet
+    expect(screen.queryByRole('switch')).not.toBeInTheDocument();
   });
 
   it('highlights missing and invalid fields instead of saving', async () => {
@@ -114,6 +116,55 @@ describe('ItemEditorPage: existing item', () => {
       pours: [{ containerId: 'c1', price: 3 }],
     });
     expect(await screen.findByText('Saved Hazy Sequence v2')).toBeInTheDocument();
+  });
+
+  it('shows an active item as on the menu', async () => {
+    editorApi();
+    renderApp(`${base}/items/mi1`);
+    expect(await screen.findByRole('switch', { name: 'Show on published menus' })).toBeChecked();
+    expect(screen.getByText('Showing on the menu')).toBeInTheDocument();
+  });
+
+  it('marks an item inactive straight away, without saving the rest of the form', async () => {
+    const server = editorApi({ 'PUT /api/menu-items/mi1/active': json({ menuItemId: 'mi1', active: false }) });
+    const { user, location } = renderApp(`${base}/items/mi1`);
+    // An unsaved edit to the form stays unsaved (and in place)
+    const name = await screen.findByLabelText('Display name');
+    await user.type(name, '!');
+    await user.click(screen.getByRole('switch', { name: 'Show on published menus' }));
+
+    await waitFor(() => expect(server.calls('PUT', '/api/menu-items/mi1/active')).toHaveLength(1));
+    expect(server.calls('PUT', '/api/menu-items/mi1/active')[0].body).toEqual({ active: false });
+    expect(server.calls('PUT', '/api/menu-items/mi1')).toHaveLength(0);
+    expect(await screen.findByText('Hazy Sequence marked inactive')).toBeInTheDocument();
+    expect(screen.getByRole('switch', { name: 'Show on published menus' })).not.toBeChecked();
+    expect(screen.getByText('Inactive')).toBeInTheDocument();
+    expect(screen.getByLabelText('Display name')).toHaveValue('Hazy Sequence!');
+    expect(location().pathname).toBe(`${base}/items/mi1`);
+  });
+
+  it('turns an inactive item back on', async () => {
+    const server = editorApi({
+      'GET /api/menu-items/mi1': json({ ...menuItem, active: false }),
+      'PUT /api/menu-items/mi1/active': json({ menuItemId: 'mi1', active: true }),
+    });
+    const { user } = renderApp(`${base}/items/mi1`);
+    const toggle = await screen.findByRole('switch', { name: 'Show on published menus' });
+    expect(toggle).not.toBeChecked();
+    expect(screen.getByText(/keeps its spot in Drafts and its prices/)).toBeInTheDocument();
+    await user.click(toggle);
+    await waitFor(() => expect(server.calls('PUT', '/api/menu-items/mi1/active')[0]?.body).toEqual({ active: true }));
+    expect(await screen.findByText('Hazy Sequence is back on the menu')).toBeInTheDocument();
+    expect(toggle).toBeChecked();
+  });
+
+  it('flips the switch back and says so when it cannot be saved', async () => {
+    editorApi({ 'PUT /api/menu-items/mi1/active': status(500) });
+    const { user } = renderApp(`${base}/items/mi1`);
+    const toggle = await screen.findByRole('switch', { name: 'Show on published menus' });
+    await user.click(toggle);
+    expect(await screen.findByText(/Couldn't update/)).toBeInTheDocument();
+    expect(toggle).toBeChecked();
   });
 
   it('removes the item from the section after confirming', async () => {

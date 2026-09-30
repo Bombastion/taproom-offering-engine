@@ -300,7 +300,7 @@ describe('menu items', () => {
     await expectProviderError(provider.addMenuItem(menuItem), 404, /Sub Menu with ID s1/);
     prisma.subMenu.findUnique.mockResolvedValue({ id: 's1' });
     await provider.addMenuItem(menuItem);
-    expect(prisma.menuItem.create).toHaveBeenCalledWith({ data: { menuId: 'm1', itemId: 'i1', subMenuId: 's1', itemLogo: null, order: 1 } });
+    expect(prisma.menuItem.create).toHaveBeenCalledWith({ data: { menuId: 'm1', itemId: 'i1', subMenuId: 's1', itemLogo: null, order: 1, active: true } });
   });
 
   it('update keeps the original for empty fields', async () => {
@@ -314,6 +314,24 @@ describe('menu items', () => {
 
   it('update 404s for an unknown menu item', async () => {
     await expectProviderError(provider.updateMenuItem('nope', new MenuItem(null, null, null, null, null, 1)), 404);
+  });
+
+  it('creates menu items inactive only when asked to', async () => {
+    prisma.menu.findUnique.mockResolvedValue({ id: 'm1' });
+    prisma.item.findUnique.mockResolvedValue({ id: 'i1' });
+    prisma.subMenu.findUnique.mockResolvedValue({ id: 's1' });
+    await provider.addMenuItem(new MenuItem(null, 'm1', 'i1', 's1', null, 1, false));
+    expect(prisma.menuItem.create).toHaveBeenCalledWith({ data: expect.objectContaining({ active: false }) });
+  });
+
+  it('sets a menu item active or inactive without touching anything else', async () => {
+    prisma.menuItem.findUnique.mockResolvedValue({ id: 'mi1', menuId: 'm1', itemId: 'i1', subMenuId: 's1', itemLogo: null, order: 4, active: true });
+    await provider.setMenuItemActive('mi1', false);
+    expect(prisma.menuItem.update).toHaveBeenCalledWith({ where: { id: 'mi1' }, data: { active: false } });
+  });
+
+  it('setting active 404s for an unknown menu item', async () => {
+    await expectProviderError(provider.setMenuItemActive('nope', true), 404);
   });
 
   it('queries placements by menu, sub-menu and item', async () => {

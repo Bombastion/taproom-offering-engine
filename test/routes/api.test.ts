@@ -77,9 +77,9 @@ describe('menus', () => {
       hasLogo: true,
       logo: `data:image/png;base64,${TINY_PNG}`,
       sections: [
-        { id: data.sections.drafts.id, displayName: 'Drafts', internalName: 'on-tap-drafts', order: 1, itemCount: 2, itemNames: ['Hazy Sequence', 'Pils'] },
-        { id: data.sections.guestTaps.id, displayName: 'Guest Taps', internalName: 'on-tap-guest', order: 2, itemCount: 1, itemNames: ['Guest Sour'] },
-        { id: data.sections.empty.id, displayName: 'Empty', internalName: 'on-tap-empty', order: 3, itemCount: 0, itemNames: [] },
+        { id: data.sections.drafts.id, displayName: 'Drafts', internalName: 'on-tap-drafts', order: 1, itemCount: 2, inactiveCount: 0, itemNames: ['Hazy Sequence', 'Pils'] },
+        { id: data.sections.guestTaps.id, displayName: 'Guest Taps', internalName: 'on-tap-guest', order: 2, itemCount: 1, inactiveCount: 0, itemNames: ['Guest Sour'] },
+        { id: data.sections.empty.id, displayName: 'Empty', internalName: 'on-tap-empty', order: 3, itemCount: 0, inactiveCount: 0, itemNames: [] },
       ],
     });
   });
@@ -232,6 +232,7 @@ describe('sections', () => {
         {
           menuItemId: data.menuItems.hazyOnDrafts.id,
           order: 1,
+          active: true,
           item: {
             id: data.items.hazy.id,
             displayName: 'Hazy Sequence',
@@ -485,6 +486,70 @@ describe('menu items', () => {
   });
 });
 
+describe('active / inactive menu items', () => {
+  const setActive = (menuItemId: string | null, active: unknown) =>
+    request(app).put(`/api/menu-items/${menuItemId}/active`).send({ active });
+
+  it('starts new placements active', async () => {
+    const res = await request(app).post(`/api/sections/${data.sections.empty.id}/items`).send({ itemId: data.items.pretzel.id });
+    expect((await provider.getMenuItem(res.body.menuItemId))?.active).toBe(true);
+    const section = await request(app).get(`/api/sections/${data.sections.drafts.id}`);
+    expect(section.body.items.map((e: { active: boolean }) => e.active)).toEqual([true, true]);
+  });
+
+  it('deactivates a placement, keeping its place in the section and its prices', async () => {
+    const res = await setActive(data.menuItems.hazyOnDrafts.id, false);
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ menuItemId: data.menuItems.hazyOnDrafts.id, active: false });
+
+    const section = await request(app).get(`/api/sections/${data.sections.drafts.id}`);
+    expect(section.body.items.map((e: { item: { displayName: string }; active: boolean; pours: unknown[] }) => [e.item.displayName, e.active, e.pours.length]))
+      .toEqual([['Hazy Sequence', false, 2], ['Pils', true, 1]]);
+    const menuItem = await request(app).get(`/api/menu-items/${data.menuItems.hazyOnDrafts.id}`);
+    expect(menuItem.body.active).toBe(false);
+  });
+
+  it('reactivates a placement right where it was, with its prices', async () => {
+    await setActive(data.menuItems.hazyOnDrafts.id, false);
+    const res = await setActive(data.menuItems.hazyOnDrafts.id, true);
+    expect(res.body.active).toBe(true);
+    const menuItem = await provider.getMenuItem(data.menuItems.hazyOnDrafts.id!);
+    expect(menuItem).toMatchObject({ active: true, order: 1, subMenuId: data.sections.drafts.id });
+    expect(await provider.getSaleContainersForMenuItem(data.menuItems.hazyOnDrafts.id!)).toHaveLength(2);
+  });
+
+  it('keeps an item inactive through edits and reordering', async () => {
+    await setActive(data.menuItems.hazyOnDrafts.id, false);
+    await request(app).put(`/api/menu-items/${data.menuItems.hazyOnDrafts.id}`).send({ item: { displayName: 'Hazy' }, pours: [] });
+    await request(app)
+      .put(`/api/sections/${data.sections.drafts.id}/items/order`)
+      .send({ menuItemIds: [data.menuItems.pilsOnDrafts.id, data.menuItems.hazyOnDrafts.id] });
+    expect(await provider.getMenuItem(data.menuItems.hazyOnDrafts.id!)).toMatchObject({ active: false, order: 2 });
+  });
+
+  it('counts inactive items separately on the menu, leaving them out of the item names', async () => {
+    await setActive(data.menuItems.hazyOnDrafts.id, false);
+    const res = await request(app).get(`/api/menus/${data.menu.id}`);
+    expect(res.body.sections[0]).toMatchObject({ itemCount: 2, inactiveCount: 1, itemNames: ['Pils'] });
+  });
+
+  it('shows whether each placement of a library item is active', async () => {
+    await setActive(data.menuItems.hazyOnDrafts.id, false);
+    const res = await request(app).get(`/api/items/${data.items.hazy.id}`);
+    expect(res.body.placements).toEqual([expect.objectContaining({ menuItemId: data.menuItems.hazyOnDrafts.id, active: false })]);
+  });
+
+  it.each([[undefined], ['false'], [0], [null]])('rejects active: %j', async (active) => {
+    const res = await setActive(data.menuItems.hazyOnDrafts.id, active);
+    expect(res.status).toBe(400);
+    expect(res.text).toBe('active must be true or false');
+  });
+
+  it('404s for an unknown placement', async () => {
+    expect((await setActive('nope', false)).status).toBe(404);
+  });
+});
+
 describe('library', () => {
   it('lists items alphabetically with brewery names', async () => {
     const res = await request(app).get('/api/items');
@@ -543,7 +608,7 @@ describe('library items', () => {
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ id: data.items.hazy.id, displayName: 'Hazy Sequence', breweryName: 'Zymos Brewing', placementCount: 1 });
     expect(res.body.placements).toEqual([
-      { menuItemId: data.menuItems.hazyOnDrafts.id, menuId: data.menu.id, menuName: 'Currently On Tap', sectionId: data.sections.drafts.id, sectionName: 'Drafts' },
+      { menuItemId: data.menuItems.hazyOnDrafts.id, active: true, menuId: data.menu.id, menuName: 'Currently On Tap', sectionId: data.sections.drafts.id, sectionName: 'Drafts' },
     ]);
     const pretzel = (await request(app).get(`/api/items/${data.items.pretzel.id}`)).body;
     expect(pretzel.placementCount).toBe(0);
@@ -615,8 +680,8 @@ describe('pour sizes', () => {
     const res = await request(app).get(`/api/containers/${data.containers.fullPour.id}/uses`);
     expect(res.status).toBe(200);
     expect(res.body).toEqual([
-      { menuItemId: data.menuItems.hazyOnDrafts.id, menuId: data.menu.id, menuName: 'Currently On Tap', sectionId: data.sections.drafts.id, sectionName: 'Drafts', itemName: 'Hazy Sequence', price: 8 },
-      { menuItemId: data.menuItems.pilsOnDrafts.id, menuId: data.menu.id, menuName: 'Currently On Tap', sectionId: data.sections.drafts.id, sectionName: 'Drafts', itemName: 'Pils', price: 6.5 },
+      { menuItemId: data.menuItems.hazyOnDrafts.id, active: true, menuId: data.menu.id, menuName: 'Currently On Tap', sectionId: data.sections.drafts.id, sectionName: 'Drafts', itemName: 'Hazy Sequence', price: 8 },
+      { menuItemId: data.menuItems.pilsOnDrafts.id, active: true, menuId: data.menu.id, menuName: 'Currently On Tap', sectionId: data.sections.drafts.id, sectionName: 'Drafts', itemName: 'Pils', price: 6.5 },
     ]);
     expect((await request(app).get('/api/containers/nope/uses')).status).toBe(404);
   });

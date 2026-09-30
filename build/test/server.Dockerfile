@@ -5,8 +5,9 @@ FROM node:23-alpine
 WORKDIR /taproom-offering-engine
 
 # Dependencies first, so they're cached between runs that only change code. The Prisma schema
-# comes along because @prisma/client's install step looks for it.
-COPY package.json package-lock.json ./
+# and config come along because installing also generates the Prisma client (into generated/,
+# which isn't committed).
+COPY package.json package-lock.json prisma.config.ts ./
 COPY prisma ./prisma
 RUN npm ci --no-audit --no-fund
 

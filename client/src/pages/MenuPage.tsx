@@ -110,7 +110,11 @@ export function MenuPage() {
                         <span className="count-pill">{section.itemCount}</span>
                       </div>
                       <div className="card-meta truncate">
-                        {section.itemNames.length ? section.itemNames.join(', ') : 'Empty — tap to add items'}
+                        {section.itemCount === 0
+                          ? 'Empty — tap to add items'
+                          : [section.itemNames.join(', '), section.inactiveCount ? `${section.inactiveCount} inactive` : '']
+                              .filter(Boolean)
+                              .join(' · ')}
                       </div>
                     </div>
                     <span className="card-chevron"><ChevronRight /></span>

@@ -130,6 +130,30 @@ describe('adding and reading', () => {
     await provider.updateMenuItem('z', new MenuItem(null, null, null, null, null, 5));
     expect((await provider.getMenuItemsForItem('i1')).map((m) => m.id)).toEqual(['z', 'a']);
   });
+
+  it('starts menu items active, and toggles them without moving them or changing anything else', async () => {
+    const provider = memoryProvider();
+    await provider.addMenuItem(new MenuItem('z', 'm1', 'i1', 's1', 'logo', 3));
+    await provider.addMenuItem(new MenuItem('a', 'm1', 'i1', 's2', null, 1));
+    expect((await provider.getMenuItem('z'))?.active).toBe(true);
+
+    await provider.setMenuItemActive('z', false);
+    expect(await provider.getMenuItem('z')).toEqual(new MenuItem('z', 'm1', 'i1', 's1', 'logo', 3, false));
+    expect((await provider.getMenuItemsForItem('i1')).map((m) => m.id)).toEqual(['z', 'a']);
+
+    // Other updates leave it inactive
+    await provider.updateMenuItem('z', new MenuItem(null, null, null, null, null, 5));
+    expect(await provider.getMenuItem('z')).toMatchObject({ order: 5, active: false });
+
+    await provider.setMenuItemActive('z', true);
+    expect(await provider.getMenuItem('z')).toMatchObject({ order: 5, active: true });
+    await expect(provider.setMenuItemActive('nope', true)).rejects.toMatchObject({ statusCode: 404 });
+  });
+
+  it('reads active from JSON, treating a missing value as active', () => {
+    expect(MenuItem.fromJsonEntry({ id: 'a', menuId: 'm', itemId: 'i', subMenuId: 's', order: 1 }).active).toBe(true);
+    expect(MenuItem.fromJsonEntry({ id: 'a', menuId: 'm', itemId: 'i', subMenuId: 's', order: 1, active: false }).active).toBe(false);
+  });
 });
 
 describe('updating', () => {

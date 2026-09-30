@@ -71,4 +71,7 @@ model MenuItem {
   order Int?
   // When the item was placed here, so "most recent placement" has a real answer
   createdAt DateTime @default(now())
+  // Inactive items stay on the section (keeping their place and prices) but are left off the
+  // published menu views
+  active Boolean @default(true)
 }

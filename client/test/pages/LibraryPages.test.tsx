@@ -96,7 +96,16 @@ describe('LibraryItemPage', () => {
     expect(await screen.findByRole('link', { name: /Drafts/ })).toHaveAttribute('href', '/menus/m1/sections/s1/items/mi1');
     expect(screen.getByRole('link', { name: /Cans/ })).toHaveAttribute('href', '/menus/m2/sections/s9/items/mi7');
     expect(screen.getByText('To delete this item, take it off these sections first.')).toBeInTheDocument();
+    expect(screen.queryByText('Inactive')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Delete item' })).not.toBeInTheDocument();
+  });
+
+  it('marks the sections where it is inactive', async () => {
+    const placements = [{ ...libraryItem.placements[0], active: false }, libraryItem.placements[1]];
+    mockApi({ 'GET /api/breweries': json(breweries), 'GET /api/items/i1': json({ ...libraryItem, placements }) });
+    renderApp('/items/i1');
+    expect(await screen.findByRole('link', { name: /Drafts/ })).toHaveTextContent('Inactive');
+    expect(screen.getByRole('link', { name: /Cans/ })).not.toHaveTextContent('Inactive');
   });
 
   it('deletes an item that is on no menu', async () => {

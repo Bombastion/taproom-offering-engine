@@ -58,18 +58,29 @@ export class MenuItem {
     subMenuId: string | null;
     itemLogo: string | null;
     order: number | null;
+    // Inactive items keep their place and prices on the section, but are left off the published
+    // menu views. Null means "not given": new menu items start active, and updates leave it alone
+    // (use DataProvider.setMenuItemActive to change it).
+    active?: boolean | null;
 
-    constructor(id: string | null, menuId: string | null, itemId: string | null, subMenuId: string | null, itemLogo: string | null, order: number | null) {
+    constructor(id: string | null, menuId: string | null, itemId: string | null, subMenuId: string | null, itemLogo: string | null, order: number | null, active: boolean | null = null) {
         this.id = id;
         this.menuId = menuId;
         this.itemId = itemId;
         this.subMenuId = subMenuId;
         this.itemLogo = itemLogo;
         this.order = order;
+        this.active = active;
     }
 
     static fromJsonEntry(entry: any): MenuItem {
-        return new MenuItem(entry.id, entry.menuId, entry.itemId, entry.subMenuId, entry.itemLogo, entry.order);
+        return new MenuItem(entry.id, entry.menuId, entry.itemId, entry.subMenuId, entry.itemLogo, entry.order, entry.active ?? true);
+    }
+
+    // Whether this item shows up on the published menu views. Anything not explicitly marked
+    // inactive counts as active.
+    static isActive(menuItem: { active?: boolean | null }): boolean {
+        return menuItem.active !== false;
     }
 }
 
