@@ -20,6 +20,9 @@ export abstract class DataProvider {
     abstract getBrewery(id: string): Promise<Brewery | null>;
     abstract getBreweries(): Promise<Array<Brewery>>;
     abstract updateBrewery(breweryId: string, brewery: Brewery): Promise<Brewery>;
+    // Like updateBrewery, but sets every field exactly as given (so the location or logo can be
+    // cleared) instead of only overwriting truthy ones.
+    abstract replaceBrewery(breweryId: string, brewery: Brewery): Promise<Brewery>;
 
     abstract addContainer(container: ItemContainer): Promise<ItemContainer>;
     abstract getContainer(id: string): Promise<ItemContainer | null>;
@@ -36,22 +39,32 @@ export abstract class DataProvider {
     abstract getItem(id: string): Promise<Item | null>;
     abstract getItems(): Promise<Array<Item>>;
     abstract updateItem(itemId: string, item: Item): Promise<Item>;
+    // Unlike updateItem (which only overwrites truthy fields), replaces every field except the ID
+    // with exactly what's given, so fields can be cleared and set to falsy values like an ABV of 0.
+    abstract replaceItem(itemId: string, item: Item): Promise<Item>;
 
     abstract addMenu(menu: Menu): Promise<Menu>;
     abstract getMenu(id: string): Promise<Menu | null>;
     abstract getMenus(): Promise<Array<Menu>>;
     abstract updateMenu(id: string, menu: Menu): Promise<Menu>;
+    // Like updateMenu, but sets every field exactly as given (so the logo can be removed)
+    abstract replaceMenu(id: string, menu: Menu): Promise<Menu>;
     
     abstract addSubMenu(menu: SubMenu): Promise<SubMenu>;
     abstract getSubMenu(id: string): Promise<SubMenu | null>;
     // Gets all sub-menus for a menu, ordered by "order"
     abstract getSubMenusForMenu(menuId: string): Promise<Array<SubMenu>>;
     abstract updateSubMenu(id: string, subMenu: SubMenu): Promise<SubMenu>;
+    // Deletes a sub-menu along with its menu items and their sale containers.
+    // Returns true if the sub-menu was removed, and false if it didn't exist.
+    abstract removeSubMenu(id: string): Promise<boolean>;
     
     abstract addMenuItem(item: MenuItem): Promise<MenuItem>
     abstract getMenuItem(id: string): Promise<MenuItem | null>
     abstract getMenuItemsForMenu(menuId: string): Promise<Array<MenuItem>>
     abstract getMenuItemsForSubMenu(subMenuId: string): Promise<Array<MenuItem>>
+    // Every placement of a given item across all menus
+    abstract getMenuItemsForItem(itemId: string): Promise<Array<MenuItem>>
     abstract removeMenuItem(id: string): Promise<boolean>
     abstract updateMenuItem(id: string, item: MenuItem): Promise<MenuItem>
 }
@@ -103,6 +116,26 @@ export class PrismaDataProvider extends DataProvider {
         })
 
         return updateResult; 
+    }
+
+    async replaceBrewery(breweryId: string, brewery: Brewery): Promise<Brewery> {
+        const original = await this.getBrewery(breweryId);
+        if (!original) {
+            throw new DataProviderError(`Brewery with ID ${breweryId} does not exist`, 404);
+        }
+        if (!brewery.name) {
+            throw new DataProviderError(`Breweries require a name`, 422);
+        }
+        return await this.prismaClient.brewery.update({
+            where: {
+                id: breweryId
+            },
+            data: {
+                name: brewery.name,
+                location: brewery.location,
+                defaultLogo: brewery.defaultLogo,
+            }
+        });
     }
 
     async addContainer(container: ItemContainer): Promise<ItemContainer> {
@@ -254,6 +287,32 @@ export class PrismaDataProvider extends DataProvider {
         });
     }
 
+    async replaceItem(itemId: string, item: Item): Promise<Item> {
+        await this.validateItem(item);
+
+        const original = await this.getItem(itemId);
+        if (!original) {
+            throw new DataProviderError(`Item with ID ${itemId} does not exist`, 404);
+        }
+        if (!item.internalName || !item.displayName) {
+            throw new DataProviderError(`Items require both an internal name and a display name`, 422);
+        }
+        return await this.prismaClient.item.update({
+            where: {
+                id: itemId
+            },
+            data: {
+                internalName: item.internalName,
+                displayName: item.displayName,
+                breweryId: item.breweryId,
+                style: item.style,
+                abv: item.abv,
+                description: item.description,
+                category: item.category,
+            }
+        });
+    }
+
     async addMenu(menu: Menu): Promise<Menu> {
         return await this.prismaClient.menu.create({
             data: {
@@ -293,6 +352,26 @@ export class PrismaDataProvider extends DataProvider {
         });
     }
     
+    async replaceMenu(id: string, menu: Menu): Promise<Menu> {
+        const original = await this.getMenu(id);
+        if (!original) {
+            throw new DataProviderError(`Menu with ID ${id} does not exist`, 404);
+        }
+        if (!menu.internalName || !menu.displayName) {
+            throw new DataProviderError(`Menus require both an internal name and a display name`, 422);
+        }
+        return await this.prismaClient.menu.update({
+            where: {
+                id: id
+            },
+            data: {
+                internalName: menu.internalName,
+                displayName: menu.displayName,
+                logo: menu.logo,
+            }
+        });
+    }
+
     async validateSubMenu(menu: SubMenu) {
         if (menu.menuId && !(await this.getMenu(menu.menuId))) {
             throw new DataProviderError(`Menu with ID ${menu.menuId} does not exist when modifying sub menu`, 404);
@@ -348,6 +427,21 @@ export class PrismaDataProvider extends DataProvider {
         });
     }
     
+    async removeSubMenu(id: string): Promise<boolean> {
+        const original = await this.getSubMenu(id);
+        if (!original) {
+            return false;
+        }
+        await this.prismaClient.$transaction(async (tx) => {
+            const menuItems = await tx.menuItem.findMany({ where: { subMenuId: id } });
+            const menuItemIds = menuItems.map((menuItem) => menuItem.id);
+            await tx.saleContainer.deleteMany({ where: { menuItemId: { in: menuItemIds } } });
+            await tx.menuItem.deleteMany({ where: { subMenuId: id } });
+            await tx.subMenu.delete({ where: { id: id } });
+        });
+        return true;
+    }
+
     async validateMenuItem(item: MenuItem) {
         if (item.menuId && !(await this.getMenu(item.menuId))) {
             throw new DataProviderError(`Menu with ID ${item.menuId} does not exist when modifying menu item`, 404);
@@ -394,6 +488,14 @@ export class PrismaDataProvider extends DataProvider {
         return await this.prismaClient.menuItem.findMany({
             where: {
                 subMenuId: subMenuId,
+            }
+        });
+    }
+
+    async getMenuItemsForItem(itemId: string): Promise<Array<MenuItem>> {
+        return await this.prismaClient.menuItem.findMany({
+            where: {
+                itemId: itemId,
             }
         });
     }
@@ -600,6 +702,15 @@ export class LocalDataProvider extends DataProvider {
         return this.updateGeneric(breweryId, this.BREWERIES_KEY, brewery, Brewery, ['id']);
     }
 
+    async replaceBrewery(breweryId: string, brewery: Brewery): Promise<Brewery> {
+        if (!this.idExists(breweryId, this.BREWERIES_KEY)) {
+            throw new DataProviderError(`${breweryId} not found`, 404);
+        }
+        const replacement = new Brewery(breweryId, brewery.name, brewery.defaultLogo, brewery.location);
+        this._cache.get(this.BREWERIES_KEY)!.set(breweryId, replacement);
+        return replacement;
+    }
+
     async addContainer(container: ItemContainer): Promise<ItemContainer> {
         return this.addGeneric(container, this.CONTAINERS_KEY);
     }
@@ -674,6 +785,16 @@ export class LocalDataProvider extends DataProvider {
         return this.updateGeneric(itemId, this.ITEMS_KEY, item, Item, ['id']);
     }
 
+    async replaceItem(itemId: string, item: Item): Promise<Item> {
+        this.validateItem(item);
+        if (!this.idExists(itemId, this.ITEMS_KEY)) {
+            throw new DataProviderError(`${itemId} not found`, 404);
+        }
+        const replacement = new Item(itemId, item.internalName, item.displayName, item.breweryId, item.style, item.abv, item.description, item.category);
+        this._cache.get(this.ITEMS_KEY)!.set(itemId, replacement);
+        return replacement;
+    }
+
     async addMenu(menu: Menu): Promise<Menu> {
         return this.addGeneric(menu, this.MENUS_KEY);
     }
@@ -688,6 +809,15 @@ export class LocalDataProvider extends DataProvider {
 
     async updateMenu(id: string, menu: Menu): Promise<Menu> {
         return this.updateGeneric(id, this.MENUS_KEY, menu, Menu, ['id']);
+    }
+
+    async replaceMenu(id: string, menu: Menu): Promise<Menu> {
+        if (!this.idExists(id, this.MENUS_KEY)) {
+            throw new DataProviderError(`${id} not found`, 404);
+        }
+        const replacement = new Menu(id, menu.internalName, menu.displayName, menu.logo);
+        this._cache.get(this.MENUS_KEY)!.set(id, replacement);
+        return replacement;
     }
 
     validateSubMenu(item: SubMenu) {
@@ -721,6 +851,21 @@ export class LocalDataProvider extends DataProvider {
     async updateSubMenu(id: string, subMenu: SubMenu): Promise<SubMenu> {
         this.validateSubMenu(subMenu);
         return this.updateGeneric(id, this.SUBMENUS_KEY, subMenu, SubMenu, ['id']);
+    }
+
+    async removeSubMenu(id: string): Promise<boolean> {
+        if (!this.idExists(id, this.SUBMENUS_KEY)) {
+            return false;
+        }
+        const menuItems = await this.getMenuItemsForSubMenu(id);
+        for (const menuItem of menuItems) {
+            const saleContainers = await this.getSaleContainersForMenuItem(menuItem.id!);
+            for (const saleContainer of saleContainers) {
+                this.removeGeneric(saleContainer.id!, this.SALE_CONTAINERS_KEY);
+            }
+            this.removeGeneric(menuItem.id!, this.MENU_ITEMS_KEY);
+        }
+        return this.removeGeneric(id, this.SUBMENUS_KEY);
     }
 
     validateMenuItem(item: MenuItem) {
@@ -767,6 +912,16 @@ export class LocalDataProvider extends DataProvider {
         });
 
         return results; 
+    }
+
+    async getMenuItemsForItem(itemId: string): Promise<Array<MenuItem>> {
+        const results: Array<MenuItem> = [];
+        this._cache.get(this.MENU_ITEMS_KEY)!.forEach((value: MenuItem) => {
+            if (value.itemId === itemId) {
+                results.push(value);
+            }
+        });
+        return results;
     }
 
     async removeMenuItem(id: string): Promise<boolean> {

@@ -5,8 +5,9 @@ import { ItemsRoutes } from './routes/items';
 import { LocalDataProvider, PrismaDataProvider } from './storage/providers';
 import { BreweriesRoutes } from './routes/breweries';
 import { MenuItemsRoutes, MenusRoutes, SubMenusRoutes } from './routes/menus';
+import { ApiRoutes } from './routes/api';
 import { prisma } from './prisma/client';
-import { adminAuth } from './middleware/auth';
+import { adminAuth, isApiPath } from './middleware/auth';
 import helmet from 'helmet';
 import { generalLimiter, adminLimiter, expensiveFormatLimiter } from './middleware/rateLimits';
 
@@ -51,6 +52,12 @@ app.use(adminAuth);
 // menu data from this server's domain). Menu data served here is public/read-only,
 // so an open CORS policy is fine.
 app.use((req: Request, res: Response, next: NextFunction) => {
+  // The admin JSON API is only ever called same-origin by the admin client, so it gets no CORS
+  // headers at all.
+  if (isApiPath(req)) {
+    next();
+    return;
+  }
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Content-Type');
@@ -84,6 +91,12 @@ app.use('/items', new ItemsRoutes(dataProvider).router);
 app.use('/menu-items', new MenuItemsRoutes(dataProvider).router);
 app.use('/menus', new MenusRoutes(dataProvider).router);
 app.use('/submenus', new SubMenusRoutes(dataProvider).router);
+// JSON API for the admin client app (/client). Always behind the admin login, and never cached,
+// since it serves the editing surface rather than public menu data.
+app.use('/api', (_req: Request, res: Response, next: NextFunction) => {
+  res.set('Cache-Control', 'no-store');
+  next();
+}, new ApiRoutes(dataProvider).router);
 
 // Last-resort error handler: anything that reaches here escaped a route's own try/catch (or
 // was an unhandled rejection inside an async handler, which Express 5 forwards here

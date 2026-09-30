@@ -35,7 +35,17 @@ function safeStringEqual(a: string, b: string): boolean {
 // this same "/manage" suffix convention for their HTML editor routes). Everything else — the
 // public menu JSON/print/digital formats, and plain GETs by id — stays open, since the public
 // site and the Wix widget depend on those being reachable without a login.
+//
+// The one exception is the JSON API under /api used by the admin client app (see /client): it
+// exists only for editing, so every request to it needs the login, reads included.
+export function isApiPath(req: Request): boolean {
+  return req.path === '/api' || req.path.startsWith('/api/');
+}
+
 export function requiresAuth(req: Request): boolean {
+  if (isApiPath(req)) {
+    return true;
+  }
   if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') {
     return req.path.endsWith('/manage');
   }
@@ -68,6 +78,10 @@ export function adminAuth(req: Request, res: Response, next: NextFunction): void
     }
   }
 
-  res.set('WWW-Authenticate', 'Basic realm="Taproom Admin", charset="UTF-8"');
+  // The admin client app shows its own sign-in screen, so API 401s leave out the challenge
+  // header that would otherwise make the browser pop up its native login dialog.
+  if (!isApiPath(req)) {
+    res.set('WWW-Authenticate', 'Basic realm="Taproom Admin", charset="UTF-8"');
+  }
   res.status(401).send('Authentication required.');
 }
