@@ -85,6 +85,8 @@ export abstract class DataProvider {
     abstract updateMenuItem(id: string, item: MenuItem): Promise<MenuItem>
     // Marks a menu item active or inactive, leaving everything else (order, prices) as it was
     abstract setMenuItemActive(id: string, active: boolean): Promise<MenuItem>
+    // Sets (or, with null, clears) a menu item's own logo, which updateMenuItem can't do
+    abstract setMenuItemLogo(id: string, itemLogo: string | null): Promise<MenuItem>
 }
 
 export class PrismaDataProvider extends DataProvider {
@@ -563,6 +565,21 @@ export class PrismaDataProvider extends DataProvider {
             }
         });
     }
+
+    async setMenuItemLogo(id: string, itemLogo: string | null): Promise<MenuItem> {
+        const original = await this.getMenuItem(id);
+        if (!original) {
+            throw new DataProviderError(`Menu Item with ID ${id} does not exist`, 404);
+        }
+        return await this.prismaClient.menuItem.update({
+            where: {
+                id: id
+            },
+            data: {
+                itemLogo: itemLogo,
+            }
+        });
+    }
 }
 
 export class LocalDataProvider extends DataProvider {
@@ -993,6 +1010,17 @@ export class LocalDataProvider extends DataProvider {
         }
         // Setting an existing key keeps its place in the map, so getMenuItemsForItem stays oldest first
         const updated = new MenuItem(original.id, original.menuId, original.itemId, original.subMenuId, original.itemLogo, original.order, active);
+        this._cache.get(this.MENU_ITEMS_KEY)!.set(id, updated);
+        return updated;
+    }
+
+    async setMenuItemLogo(id: string, itemLogo: string | null): Promise<MenuItem> {
+        const original: MenuItem | null = this.getGeneric(id, this.MENU_ITEMS_KEY);
+        if (original === null) {
+            throw new DataProviderError(`${id} not found`, 404);
+        }
+        // updateGeneric can't clear a field, so rebuild the entry (keeping its place in the map)
+        const updated = new MenuItem(original.id, original.menuId, original.itemId, original.subMenuId, itemLogo, original.order, original.active ?? true);
         this._cache.get(this.MENU_ITEMS_KEY)!.set(id, updated);
         return updated;
     }

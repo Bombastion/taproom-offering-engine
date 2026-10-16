@@ -455,9 +455,17 @@ export class ApiRoutes extends Routes {
       if (!menuItem) throw notFound('Menu item');
       const { section, menu } = await loadSection(menuItem.subMenuId!);
       const placements = await this.dataProvider.getMenuItemsForItem(menuItem.itemId!);
+      const itemRecord = await this.dataProvider.getItem(menuItem.itemId!);
+      // What the widget shows for this item when it has no image of its own, in the same order
+      // as the widget format in routes/menus.ts (the PDF skips the brewery step)
+      const brewery = itemRecord?.breweryId ? await this.dataProvider.getBrewery(itemRecord.breweryId) : null;
+      const logoFallback = brewery?.defaultLogo ? 'brewery' : menu.logo ? 'menu' : 'none';
       res.json({
         menuItemId: menuItem.id,
         active: MenuItem.isActive(menuItem),
+        // This item's own image (a data: URL), or null
+        logo: logoDataUrl(menuItem.itemLogo),
+        logoFallback,
         section: { id: section.id, displayName: section.displayName },
         menu: { id: menu.id, displayName: menu.displayName },
         item: await describeItem(await this.dataProvider.getItem(menuItem.itemId!)),
@@ -496,6 +504,26 @@ export class ApiRoutes extends Routes {
       if (!menuItem) throw notFound('Menu item');
       const updated = await this.dataProvider.setMenuItemActive(menuItem.id!, active);
       res.json({ menuItemId: updated.id, active: MenuItem.isActive(updated) });
+    }));
+
+    /*
+    Sets or replaces this item's own image: { logo: base64 }. The website widget and menu board
+    PDF show it for the item. Without one, the widget falls back to the brewery's logo, then the
+    menu's, and the PDF to the menu's.
+    */
+    this.router.put('/menu-items/:menuItemId/logo', handle(async (req, res) => {
+      const menuItem = await this.dataProvider.getMenuItem(req.params.menuItemId as string);
+      if (!menuItem) throw notFound('Menu item');
+      const logo = parseLogo(req.body);
+      await this.dataProvider.setMenuItemLogo(menuItem.id!, logo);
+      res.json({ logo: logoDataUrl(logo) });
+    }));
+
+    this.router.delete('/menu-items/:menuItemId/logo', handle(async (req, res) => {
+      const menuItem = await this.dataProvider.getMenuItem(req.params.menuItemId as string);
+      if (!menuItem) throw notFound('Menu item');
+      await this.dataProvider.setMenuItemLogo(menuItem.id!, null);
+      res.sendStatus(204);
     }));
 
     // Takes an item off a section (the item itself stays in the library)

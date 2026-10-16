@@ -153,7 +153,7 @@ Menu IDs are visible in the admin app's URLs (`/admin/menus/<menuId>`).
 | URL | Returns |
 | --- | ------- |
 | `/menus/<menuId>` or `?format=json` | The menu as JSON |
-| `/menus/<menuId>?format=widget` | Nested JSON (sections, items, pour sizes and prices) for the Wix widget |
+| `/menus/<menuId>?format=widget` | Nested JSON (sections and items, with no pour sizes or prices) for the Wix widget |
 | `/menus/<menuId>?format=print` | Printable HTML menu |
 | `/menus/<menuId>?format=digital` | PDF menu board |
 

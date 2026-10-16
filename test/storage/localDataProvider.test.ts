@@ -150,6 +150,19 @@ describe('adding and reading', () => {
     await expect(provider.setMenuItemActive('nope', true)).rejects.toMatchObject({ statusCode: 404 });
   });
 
+  it('sets and clears a menu item logo without touching anything else', async () => {
+    const provider = memoryProvider();
+    await provider.addMenuItem(new MenuItem('z', 'm1', 'i1', 's1', null, 3));
+    await provider.setMenuItemActive('z', false);
+
+    await provider.setMenuItemLogo('z', 'abc');
+    expect(await provider.getMenuItem('z')).toEqual(new MenuItem('z', 'm1', 'i1', 's1', 'abc', 3, false));
+
+    await provider.setMenuItemLogo('z', null);
+    expect(await provider.getMenuItem('z')).toEqual(new MenuItem('z', 'm1', 'i1', 's1', null, 3, false));
+    await expect(provider.setMenuItemLogo('nope', 'abc')).rejects.toMatchObject({ statusCode: 404 });
+  });
+
   it('reads active from JSON, treating a missing value as active', () => {
     expect(MenuItem.fromJsonEntry({ id: 'a', menuId: 'm', itemId: 'i', subMenuId: 's', order: 1 }).active).toBe(true);
     expect(MenuItem.fromJsonEntry({ id: 'a', menuId: 'm', itemId: 'i', subMenuId: 's', order: 1, active: false }).active).toBe(false);

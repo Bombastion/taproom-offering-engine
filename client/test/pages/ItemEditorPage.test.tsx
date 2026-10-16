@@ -32,6 +32,8 @@ describe('ItemEditorPage: new item', () => {
     expect(screen.queryByRole('button', { name: /Remove from/ })).not.toBeInTheDocument();
     // New items start active; there's nothing to switch yet
     expect(screen.queryByRole('switch')).not.toBeInTheDocument();
+    // The item image needs a saved placement to attach to
+    expect(screen.queryByRole('region', { name: 'Item image' })).not.toBeInTheDocument();
   });
 
   it('highlights missing and invalid fields instead of saving', async () => {
@@ -116,6 +118,47 @@ describe('ItemEditorPage: existing item', () => {
       pours: [{ containerId: 'c1', price: 3 }],
     });
     expect(await screen.findByText('Saved Hazy Sequence v2')).toBeInTheDocument();
+  });
+
+  it('says what the widget and menu board show when the item has no image of its own', async () => {
+    editorApi();
+    renderApp(`${base}/items/mi1`);
+    const panel = await screen.findByRole('region', { name: 'Item image' });
+    expect(within(panel).getByText("No image of its own; the widget shows the brewery's logo and the menu board the menu's")).toBeInTheDocument();
+    expect(within(panel).getByRole('button', { name: 'Upload' })).toBeInTheDocument();
+    expect(within(panel).queryByRole('button', { name: 'Remove' })).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ['menu', "the widget and menu board show the menu's logo"],
+    ['none', 'no brewery or menu logo to fall back on'],
+  ] as const)('explains the %s fallback', async (logoFallback, text) => {
+    editorApi({ 'GET /api/menu-items/mi1': json({ ...menuItem, logoFallback }) });
+    renderApp(`${base}/items/mi1`);
+    expect(await within(await screen.findByRole('region', { name: 'Item image' })).findByText(new RegExp(text))).toBeInTheDocument();
+  });
+
+  it("shows the item's image and removes it straight away after confirming", async () => {
+    const server = editorApi({
+      'GET /api/menu-items/mi1': json({ ...menuItem, logo: 'data:image/png;base64,abc' }),
+      'DELETE /api/menu-items/mi1/logo': status(204),
+    });
+    const { user, location } = renderApp(`${base}/items/mi1`);
+    const panel = await screen.findByRole('region', { name: 'Item image' });
+    expect(within(panel).getByRole('img', { name: 'Item image' })).toHaveAttribute('src', 'data:image/png;base64,abc');
+    expect(within(panel).getByText(/website widget and on the menu board/)).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText('Display name'), '!');
+    await user.click(within(panel).getByRole('button', { name: 'Remove' }));
+    expect(screen.getByRole('dialog', { name: 'Remove logo?' })).toHaveTextContent("The website widget goes back to the brewery's logo, and the menu board to the menu's.");
+    await user.click(screen.getByRole('button', { name: 'Remove logo' }));
+
+    expect(await screen.findByText('Item image removed')).toBeInTheDocument();
+    expect(server.calls('DELETE', '/api/menu-items/mi1/logo')).toHaveLength(1);
+    // The rest of the form is neither saved nor left
+    expect(server.calls('PUT', '/api/menu-items/mi1')).toHaveLength(0);
+    expect(screen.getByLabelText('Display name')).toHaveValue('Hazy Sequence!');
+    expect(location().pathname).toBe(`${base}/items/mi1`);
   });
 
   it('shows an active item as on the menu', async () => {

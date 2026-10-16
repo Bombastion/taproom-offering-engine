@@ -486,6 +486,63 @@ describe('menu items', () => {
   });
 });
 
+describe('item images', () => {
+  const put = (menuItemId: string | null, body: unknown) =>
+    request(app).put(`/api/menu-items/${menuItemId}/logo`).send(body as object);
+
+  it('has no image of its own to start with, reporting what it falls back to', async () => {
+    // Hazy Sequence is Zymos's (no logo), so it falls back to the menu's; Guest Sour to its brewery's
+    const hazy = await request(app).get(`/api/menu-items/${data.menuItems.hazyOnDrafts.id}`);
+    expect(hazy.body).toMatchObject({ logo: null, logoFallback: 'menu' });
+    const sour = await request(app).get(`/api/menu-items/${data.menuItems.sourOnGuest.id}`);
+    expect(sour.body).toMatchObject({ logo: null, logoFallback: 'brewery' });
+    await provider.replaceMenu(data.menu.id!, { ...data.menu, logo: null });
+    const none = await request(app).get(`/api/menu-items/${data.menuItems.hazyOnDrafts.id}`);
+    expect(none.body.logoFallback).toBe('none');
+  });
+
+  it('sets an image and reads it back', async () => {
+    const res = await put(data.menuItems.hazyOnDrafts.id, { logo: TINY_PNG });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ logo: `data:image/png;base64,${TINY_PNG}` });
+    expect((await provider.getMenuItem(data.menuItems.hazyOnDrafts.id!))?.itemLogo).toBe(TINY_PNG);
+    const detail = await request(app).get(`/api/menu-items/${data.menuItems.hazyOnDrafts.id}`);
+    expect(detail.body.logo).toBe(`data:image/png;base64,${TINY_PNG}`);
+  });
+
+  it('only changes that placement', async () => {
+    await put(data.menuItems.hazyOnDrafts.id, { logo: TINY_PNG });
+    expect((await provider.getMenuItem(data.menuItems.pilsOnDrafts.id!))?.itemLogo ?? null).toBeNull();
+  });
+
+  it('keeps the image through edits, reordering and the active switch', async () => {
+    await put(data.menuItems.hazyOnDrafts.id, { logo: TINY_PNG });
+    await request(app).put(`/api/menu-items/${data.menuItems.hazyOnDrafts.id}/active`).send({ active: false });
+    await request(app).put(`/api/sections/${data.sections.drafts.id}/items/order`).send({ menuItemIds: [data.menuItems.pilsOnDrafts.id, data.menuItems.hazyOnDrafts.id] });
+    expect(await provider.getMenuItem(data.menuItems.hazyOnDrafts.id!)).toMatchObject({ itemLogo: TINY_PNG, active: false, order: 2 });
+  });
+
+  it('removes the image', async () => {
+    await put(data.menuItems.hazyOnDrafts.id, { logo: TINY_PNG });
+    const res = await request(app).delete(`/api/menu-items/${data.menuItems.hazyOnDrafts.id}/logo`);
+    expect(res.status).toBe(204);
+    expect((await provider.getMenuItem(data.menuItems.hazyOnDrafts.id!))?.itemLogo).toBeNull();
+  });
+
+  it('accepts JPEGs and rejects other files', async () => {
+    expect((await put(data.menuItems.hazyOnDrafts.id, { logo: JPEG_HEADER })).body.logo).toBe(`data:image/jpeg;base64,${JPEG_HEADER}`);
+    const res = await put(data.menuItems.hazyOnDrafts.id, { logo: GIF_HEADER });
+    expect(res.status).toBe(400);
+    expect(res.text).toBe('Logos must be PNG or JPEG images');
+    expect((await put(data.menuItems.hazyOnDrafts.id, {})).status).toBe(400);
+  });
+
+  it('404s for an unknown menu item', async () => {
+    expect((await put('nope', { logo: TINY_PNG })).status).toBe(404);
+    expect((await request(app).delete('/api/menu-items/nope/logo')).status).toBe(404);
+  });
+});
+
 describe('active / inactive menu items', () => {
   const setActive = (menuItemId: string | null, active: unknown) =>
     request(app).put(`/api/menu-items/${menuItemId}/active`).send({ active });

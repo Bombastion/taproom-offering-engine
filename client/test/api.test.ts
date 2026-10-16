@@ -47,6 +47,8 @@ describe('requests', () => {
     ['addExistingItem', () => api.addExistingItem('s1', 'i1'), 'POST /api/sections/s1/items', { itemId: 'i1' }],
     ['updateBrewery', () => api.updateBrewery('b1', 'Zymos', null), 'PATCH /api/breweries/b1', { name: 'Zymos', location: null }],
     ['setMenuLogo', () => api.setMenuLogo('m1', 'abc'), 'PUT /api/menus/m1/logo', { logo: 'abc' }],
+    ['setMenuItemLogo', () => api.setMenuItemLogo('mi1', 'abc'), 'PUT /api/menu-items/mi1/logo', { logo: 'abc' }],
+    ['removeMenuItemLogo', () => api.removeMenuItemLogo('mi1'), 'DELETE /api/menu-items/mi1/logo', undefined],
   ])('%s calls the right endpoint', async (_name, call, route, body) => {
     const server = mockApi({ [route]: status(204) });
     await call();

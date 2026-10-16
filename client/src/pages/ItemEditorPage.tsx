@@ -1,9 +1,10 @@
 import { FormEvent, useId, useRef, useState } from 'react';
 import { useParams } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { api, Brewery, Container, errorMessage, MenuItemDetail, PourInput, plural } from '../api';
+import { api, Brewery, Container, errorMessage, MenuItemDetail, PourInput, plural, LogoFallback } from '../api';
 import { PageHeader, Screen, useGoBack } from '../components/Screen';
 import { TrashIcon } from '../components/Icons';
+import { LogoEditor } from '../components/LogoEditor';
 import { FieldErrors, initialItemFields, ItemFields, parseNumber, SaveBar, validateItemFields } from '../components/ItemFields';
 import { Loading, LoadError } from '../components/QueryState';
 import { ConfirmSheet } from '../components/Sheet';
@@ -66,6 +67,18 @@ export function ItemEditorPage() {
     </Screen>
   );
 }
+
+// What the menus show for an item that has no image of its own
+const FALLBACK_HINT: Record<LogoFallback, string> = {
+  brewery: "No image of its own; the widget shows the brewery's logo and the menu board the menu's",
+  menu: "No image of its own; the widget and menu board show the menu's logo",
+  none: 'No image of its own, and no brewery or menu logo to fall back on',
+};
+const FALLBACK_AFTER_REMOVE: Record<LogoFallback, string> = {
+  brewery: "The website widget goes back to the brewery's logo, and the menu board to the menu's.",
+  menu: "The website widget and menu board go back to the menu's logo.",
+  none: 'The website widget and menu board will show no image for this item.',
+};
 
 type PourRow = { containerId: string; label: string; detail: string | null; on: boolean; price: string };
 
@@ -213,6 +226,26 @@ function ItemForm({ menuId, sectionId, sectionName, existing, containers, brewer
             <span className="switch-track" aria-hidden="true" />
           </label>
         </div>
+      )}
+
+      {existing && (
+        <LogoEditor
+          label="Item image"
+          logo={existing.logo}
+          hint="Shown for this item in the website widget and on the menu board PDF."
+          emptyHint={FALLBACK_HINT[existing.logoFallback]}
+          removeWarning={FALLBACK_AFTER_REMOVE[existing.logoFallback]}
+          onUpload={async (logo) => {
+            await api.setMenuItemLogo(existing.menuItemId, logo);
+            await queryClient.invalidateQueries({ queryKey: ['menuItem', existing.menuItemId] });
+            toast('Item image updated');
+          }}
+          onRemove={async () => {
+            await api.removeMenuItemLogo(existing.menuItemId);
+            await queryClient.invalidateQueries({ queryKey: ['menuItem', existing.menuItemId] });
+            toast('Item image removed');
+          }}
+        />
       )}
 
       <form id="item-form" className="stack" onSubmit={submit} noValidate>
