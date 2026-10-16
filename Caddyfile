@@ -2,6 +2,13 @@
 # DOMAIN is a real domain pointed at this machine's public IP and ports 80+443 are forwarded
 # through the router.
 {
+	# The ports Caddy listens on (and redirects between). Defaults are the standard 80/443; set
+	# HTTP_PORT / HTTPS_PORT in .env when something else on the host already uses them. Note that
+	# Let's Encrypt only validates on 80/443, so a real domain on other ports needs those
+	# forwarded to these (or a DNS challenge); see the README.
+	http_port {$HTTP_PORT:80}
+	https_port {$HTTPS_PORT:443}
+
 	# Browsers don't send a server name (SNI) when you browse to a bare IP address, e.g.
 	# https://192.168.1.20 from another device on the local network. Caddy would then look for a
 	# certificate matching the IP the connection arrived on, which inside Docker is the
