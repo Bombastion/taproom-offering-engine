@@ -1,0 +1,176 @@
+# Taproom Offering Engine
+
+A small server and mobile-friendly admin app for managing a taproom's menus (sections, items,
+pour sizes and prices) and publishing them in a few public formats:
+
+- **JSON**, for anything that wants the raw menu
+- **Widget JSON**, a nested menu that the Wix "Currently On Tap" embed polls
+- **Print**, a printable HTML menu
+- **Digital**, a PDF menu board
+
+| Piece | Where | What it is |
+| ----- | ----- | ---------- |
+| Server | repo root (`server.ts`, `app.ts`, `routes/`) | Express 5 + TypeScript (run with `tsx`), storing data in Postgres through Prisma |
+| Admin client | `client/` | React + Vite app, served at `/admin/` (see [client/README.md](client/README.md)) |
+| Wix widget | `wix-widget/currently-on-tap.html` | Embeddable "currently on tap" display |
+| Reverse proxy | `Caddyfile` | HTTPS and routing in front of the server and admin client |
+
+## Prerequisites
+
+- **Docker** with Docker Compose. This is the normal way to run everything.
+- For running without Docker: **Node.js 22 or newer** (the Docker image uses Node 23) and a
+  **PostgreSQL** database. Postgres 18 is what Docker uses.
+
+## Configuration
+
+Copy the example environment file and edit it. `.env` is gitignored; Docker Compose reads it
+automatically.
+
+```sh
+cp .env.example .env
+```
+
+| Variable | Required | Description |
+| -------- | -------- | ----------- |
+| `TOE_ADMIN_PASSWORD` | **Yes** | The shared admin password. Docker Compose refuses to start without it, and without it the server answers every admin request with `503` (it fails closed). Use something long and random. |
+| `TOE_ADMIN_USERNAME` | No | Admin username. Defaults to `admin`. |
+| `DOMAIN` | No | The domain Caddy serves, e.g. `menu.zymosbrewing.com`. Defaults to `localhost`. A real domain gets a Let's Encrypt certificate automatically; `localhost` uses Caddy's own local certificate authority, so browsers show a certificate warning. Accepts a comma-separated list. |
+| `INTERNAL_DOMAIN` | No | A name that only resolves on your own network, e.g. `zymos.brew` from a DNS entry on your router. Caddy serves it with a certificate from its local CA. Keep it out of `DOMAIN`; see below. |
+| `DEFAULT_SNI` | No | Only for testing from other devices on your network by IP address. See below. |
+| `DATABASE_URL` | Only without Docker | Postgres connection string, e.g. `postgres://postgres:postgres@localhost:5432/postgres`. Docker Compose sets this itself. |
+| `TOE_SERVER_PORT` | No | Port the server listens on. Defaults to `3000`. |
+| `TOE_TRUST_PROXY` | No | Set to `true` only when exactly one reverse proxy (Caddy) sits in front of the server. Docker Compose sets it. Never set it without a proxy: clients could spoof their IP and get around the rate limits. |
+
+## Running with Docker (recommended)
+
+```sh
+docker compose up --build
+```
+
+This starts four services:
+
+- `db`: Postgres, with its data in the `pg_data` volume
+- `taproom-offering-engine`: the server. It applies database migrations on startup, then starts.
+- `admin-client`: the built admin app, served by nginx
+- `caddy`: the only thing exposed to the network, on ports 80 and 443
+
+Then open:
+
+- **https://localhost/admin/** for the admin app. Sign in with `TOE_ADMIN_USERNAME` and
+  `TOE_ADMIN_PASSWORD`. Your browser will warn about the certificate when `DOMAIN` is `localhost`;
+  that is expected.
+- `http://127.0.0.1:3000` for the server directly. It is bound to loopback only.
+
+The database starts empty. Create your breweries, pour sizes, items and menus in the admin app.
+
+### Testing from a phone or another computer
+
+1. Find this machine's LAN IP (say `192.168.1.20`).
+2. In `.env`, set `DOMAIN=localhost, 192.168.1.20` and `DEFAULT_SNI=192.168.1.20`.
+3. Restart with `docker compose up --build` and browse to `https://192.168.1.20/admin/`.
+
+### Using an internal DNS name
+
+If you give the machine a name on your own network (a DNS entry on your router, such as
+`zymos.brew`), put it in `INTERNAL_DOMAIN`, **not** `DOMAIN`:
+
+```sh
+INTERNAL_DOMAIN=zymos.brew
+```
+
+Let's Encrypt only issues certificates for real public domains, so a name like this in `DOMAIN`
+fails with `cannot issue for "zymos.brew": domain name does not end with a valid public suffix`.
+Names in `INTERNAL_DOMAIN` get a certificate from Caddy's own local certificate authority instead.
+
+Browsers will still warn until they trust that authority. To remove the warning, copy its root
+certificate off the server and install it on each device that needs it:
+
+```sh
+docker compose cp caddy:/data/caddy/pki/authorities/local/root.crt ./caddy-root.crt
+```
+
+Then add it to the device's trusted root certificates (on macOS, open it in Keychain Access and set
+it to "Always Trust"). Phones need it installed and trusted in their certificate settings too.
+
+### Going live
+
+1. Point your domain's DNS at this machine's public IP and set `DOMAIN` to it.
+2. Forward only ports **80 and 443** through your router. Port 80 is needed for the Let's Encrypt
+   challenge even though everything redirects to HTTPS. Do not forward port 3000.
+3. Keep the `caddy_data` volume between deployments. Losing it means re-issuing certificates, which
+   Let's Encrypt rate-limits.
+4. Change the Postgres password in `docker-compose.yml` (it defaults to `postgres`) if the database
+   could ever be reached from outside the compose network.
+
+## Running without Docker
+
+For development on the server. You need a running Postgres and a `DATABASE_URL` in `.env`.
+
+```sh
+npm install                  # also generates the Prisma client into generated/
+npx prisma migrate deploy    # creates the tables
+npm run copy-files           # copies public/ to dist/ (the server renders views from dist/public/views)
+npm start                    # http://localhost:3000
+```
+
+Re-run `npm run copy-files` after changing anything in `public/`, and `npm run generate` after
+changing `prisma/schema.prisma`. To create a new migration during development, use
+`npx prisma migrate dev --name <what-changed>`.
+
+To work on the admin app with hot reload, run the server as above, then in another terminal:
+
+```sh
+cd client
+npm install
+npm run dev                  # http://localhost:5173/admin/
+```
+
+The dev server proxies `/api` to `localhost:3000`. See [client/README.md](client/README.md).
+
+## Public menu URLs
+
+Menu IDs are visible in the admin app's URLs (`/admin/menus/<menuId>`).
+
+| URL | Returns |
+| --- | ------- |
+| `/menus/<menuId>` or `?format=json` | The menu as JSON |
+| `/menus/<menuId>?format=widget` | Nested JSON (sections, items, pour sizes and prices) for the Wix widget |
+| `/menus/<menuId>?format=print` | Printable HTML menu |
+| `/menus/<menuId>?format=digital` | PDF menu board |
+
+These are public and need no login. The PDF format is rate limited (10 requests per minute per IP).
+The admin API under `/api` always requires the admin login.
+
+## Wix "Currently On Tap" widget
+
+`wix-widget/currently-on-tap.html` is pasted into a Wix HTML embed. Before using it, edit the
+`CONFIG` block near the bottom of that file:
+
+- `API_BASE_URL`: your server's public URL (it ships pointing at `http://localhost:3000`)
+- `MENU_ID`: the ID of the menu to display (the shipped value is a dev menu ID)
+- `REFRESH_INTERVAL_MS`: how often the widget refetches (default 15 minutes)
+
+## Tests
+
+```sh
+npm test                 # server tests
+cd client && npm test    # admin client tests
+npm run test:docker      # both, in Docker
+```
+
+None of the tests need a database. See [TESTING.md](TESTING.md) for more.
+
+## Project layout
+
+```
+server.ts, app.ts       Entry point and Express app (middleware, routes)
+routes/                 menus.ts (public formats), api.ts (admin JSON API)
+middleware/             Admin auth and rate limits
+storage/providers.ts    Data layer: Prisma/Postgres, plus an in-memory provider used by tests
+prisma/                 Schema and migrations
+public/                 Print menu template, CSS and fonts
+data/                   Sample JSON data loaded by the in-memory provider (tests only)
+client/                 Admin app
+wix-widget/             Wix embed
+build/, docker-compose*.yml, Caddyfile   Container and proxy setup
+```
