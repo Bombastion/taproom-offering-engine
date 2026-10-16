@@ -26,7 +26,9 @@ html
                     table(class='containerPrices')
                       tr
                         each containerName in containers
-                          td(class='containerPriceCell') #{item.containerDisplayNameToPrice.get(containerName)}
+                          //- The $ is part of the cell text so an item without this size leaves the cell blank
+                          - var price = item.containerDisplayNameToPrice.get(containerName)
+                          td(class='containerPriceCell')= (price !== undefined && price !== null && String(price).trim() !== '') ? '$' + price : ''
                 tr
                   td #{item.description}
     
