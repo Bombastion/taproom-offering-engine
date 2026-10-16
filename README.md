@@ -36,6 +36,7 @@ cp .env.example .env
 | `TOE_ADMIN_USERNAME` | No | Admin username. Defaults to `admin`. |
 | `DOMAIN` | No | The domain Caddy serves, e.g. `menu.zymosbrewing.com`. Defaults to `localhost`. A real domain gets a Let's Encrypt certificate automatically; `localhost` uses Caddy's own local certificate authority, so browsers show a certificate warning. Accepts a comma-separated list. |
 | `INTERNAL_DOMAIN` | No | A name that only resolves on your own network, e.g. `zymos.brew` from a DNS entry on your router. Caddy serves it with a certificate from its local CA. Keep it out of `DOMAIN`; see below. |
+| `HTTP_PORT`, `HTTPS_PORT` | No | Host ports Caddy listens on. Default `80` and `443`. Change them if something else on the machine already uses those (see below). |
 | `DEFAULT_SNI` | No | Only for testing from other devices on your network by IP address. See below. |
 | `DATABASE_URL` | Only without Docker | Postgres connection string, e.g. `postgres://postgres:postgres@localhost:5432/postgres`. Docker Compose sets this itself. |
 | `TOE_SERVER_PORT` | No | Port the server listens on. Defaults to `3000`. |
@@ -91,6 +92,24 @@ docker compose cp caddy:/data/caddy/pki/authorities/local/root.crt ./caddy-root.
 
 Then add it to the device's trusted root certificates (on macOS, open it in Keychain Access and set
 it to "Always Trust"). Phones need it installed and trusted in their certificate settings too.
+
+### When port 80 or 443 is already in use
+
+If `docker compose up` fails with "port is already allocated" or "address already in use", find
+what holds the port (`sudo ss -ltnp | grep ':80 '`), then either stop it or move Caddy in `.env`:
+
+```sh
+HTTP_PORT=8080
+HTTPS_PORT=8443
+```
+
+The admin app is then at `https://<domain>:8443/admin/`. Caddy uses these same numbers inside the
+container, so its HTTP-to-HTTPS redirects stay correct.
+
+For a public domain this has a catch: Let's Encrypt validates only on the standard ports 80 and 443,
+so certificates won't issue unless the outside world's 80/443 reach Caddy's ports. If another web
+server owns 80/443 on the machine, the cleaner setup is to let it proxy your domain to Caddy (or
+straight to the server on `127.0.0.1:3000`) and terminate TLS there.
 
 ### Going live
 
