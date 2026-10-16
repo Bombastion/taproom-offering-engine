@@ -71,6 +71,8 @@ export const section: SectionDetail = {
 export const menuItem: MenuItemDetail = {
   menuItemId: 'mi1',
   active: true,
+  logo: null,
+  logoFallback: 'brewery',
   section: { id: 's1', displayName: 'Drafts' },
   menu: { id: 'm1', displayName: 'Currently On Tap' },
   item: hazy,

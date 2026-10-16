@@ -105,6 +105,15 @@ describe('?format=widget', () => {
     expect(guest.items[0].logo).toBe(`data:image/png;base64,${TINY_PNG}`); // Guest Sour: brewery logo
   });
 
+  it("shows an item's own image set through the editor, and falls back once it's removed", async () => {
+    await provider.setMenuItemLogo(data.menuItems.sourOnGuest.id!, 'aXRlbS1sb2dv');
+    let res = await request(app).get(`/menus/${data.menu.id}?format=widget`);
+    expect(res.body.sections[1].items[0].logo).toBe('data:image/png;base64,aXRlbS1sb2dv');
+    await provider.setMenuItemLogo(data.menuItems.sourOnGuest.id!, null);
+    res = await request(app).get(`/menus/${data.menu.id}?format=widget`);
+    expect(res.body.sections[1].items[0].logo).toBe(`data:image/png;base64,${TINY_PNG}`); // brewery logo
+  });
+
   it('handles items with no brewery', async () => {
     await provider.addMenuItem({ id: null, menuId: data.menu.id, itemId: data.items.pretzel.id, subMenuId: data.sections.empty.id, itemLogo: null, order: 1 });
     const res = await request(app).get(`/menus/${data.menu.id}?format=widget`);

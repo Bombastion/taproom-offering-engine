@@ -330,6 +330,18 @@ describe('menu items', () => {
     expect(prisma.menuItem.update).toHaveBeenCalledWith({ where: { id: 'mi1' }, data: { active: false } });
   });
 
+  it('sets or clears a menu item logo without touching anything else', async () => {
+    prisma.menuItem.findUnique.mockResolvedValue({ id: 'mi1', menuId: 'm1', itemId: 'i1', subMenuId: 's1', itemLogo: null, order: 4, active: true });
+    await provider.setMenuItemLogo('mi1', 'abc');
+    expect(prisma.menuItem.update).toHaveBeenLastCalledWith({ where: { id: 'mi1' }, data: { itemLogo: 'abc' } });
+    await provider.setMenuItemLogo('mi1', null);
+    expect(prisma.menuItem.update).toHaveBeenLastCalledWith({ where: { id: 'mi1' }, data: { itemLogo: null } });
+  });
+
+  it('setting the logo 404s for an unknown menu item', async () => {
+    await expectProviderError(provider.setMenuItemLogo('nope', 'abc'), 404);
+  });
+
   it('setting active 404s for an unknown menu item', async () => {
     await expectProviderError(provider.setMenuItemActive('nope', true), 404);
   });

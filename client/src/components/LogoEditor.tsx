@@ -50,13 +50,15 @@ type LogoEditorProps = {
   label: string;
   logo: string | null;
   hint?: string;
+  // Shown instead of "No logo yet" when there's no image
+  emptyHint?: string;
   removeWarning?: string;
   onUpload: (base64Png: string) => Promise<unknown>;
   onRemove: () => Promise<unknown>;
 };
 
 // Shows the current logo with Upload/Replace and Remove actions. Changes save immediately.
-export function LogoEditor({ label, logo, hint, removeWarning, onUpload, onRemove }: LogoEditorProps) {
+export function LogoEditor({ label, logo, hint, emptyHint, removeWarning, onUpload, onRemove }: LogoEditorProps) {
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -88,7 +90,7 @@ export function LogoEditor({ label, logo, hint, removeWarning, onUpload, onRemov
       </div>
       <div className="logo-side">
         <div className="logo-title">{label}</div>
-        <div className="muted-sm">{busy ? 'Uploading…' : logo ? hint : 'No logo yet'}</div>
+        <div className="muted-sm">{busy ? 'Uploading…' : logo ? hint : emptyHint ?? 'No logo yet'}</div>
         <div className="logo-actions">
           <button type="button" className="chip chip-accent" onClick={() => input.current?.click()} disabled={busy}>
             <UploadIcon />{logo ? 'Replace' : 'Upload'}

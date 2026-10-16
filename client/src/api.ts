@@ -69,9 +69,15 @@ export type SectionDetail = {
   items: SectionEntry[];
 };
 
+// Where the website widget gets this item's image when it has none of its own
+export type LogoFallback = 'brewery' | 'menu' | 'none';
+
 export type MenuItemDetail = {
   menuItemId: string;
   active: boolean;
+  // This item's own image (a data: URL), or null
+  logo: string | null;
+  logoFallback: LogoFallback;
   section: { id: string; displayName: string };
   menu: { id: string; displayName: string };
   item: ItemDetail | null;
@@ -211,6 +217,10 @@ export const api = {
   brewery: (breweryId: string) => request<BreweryDetail>('GET', `/breweries/${encodeURIComponent(breweryId)}`),
   updateBrewery: (breweryId: string, name: string, location: string | null) =>
     request<BreweryDetail>('PATCH', `/breweries/${encodeURIComponent(breweryId)}`, { name, location }),
+  setMenuItemLogo: (menuItemId: string, logo: string) =>
+    request<{ logo: string }>('PUT', `/menu-items/${encodeURIComponent(menuItemId)}/logo`, { logo }),
+  removeMenuItemLogo: (menuItemId: string) =>
+    request<void>('DELETE', `/menu-items/${encodeURIComponent(menuItemId)}/logo`),
   setBreweryLogo: (breweryId: string, logo: string) =>
     request<{ logo: string }>('PUT', `/breweries/${encodeURIComponent(breweryId)}/logo`, { logo }),
   removeBreweryLogo: (breweryId: string) => request<void>('DELETE', `/breweries/${encodeURIComponent(breweryId)}/logo`),
