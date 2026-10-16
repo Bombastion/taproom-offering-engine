@@ -184,9 +184,14 @@ describe('?format=print', () => {
       expect(html).toContain(text);
     }
     // Prices always show cents
-    expect(html).toContain('>8.00<');
-    expect(html).toContain('>6.50<');
-    expect(html).toContain('>12.00<');
+    expect(html).toContain('>$8.00<');
+    expect(html).toContain('>$6.50<');
+    expect(html).toContain('>$12.00<');
+    // A size an item doesn't come in leaves its cell empty, with no stray $
+    const hazy = html.slice(html.indexOf('Hazy Sequence'), html.indexOf('Pils'));
+    expect(hazy).toMatch(/containerPriceCell">\$3\.00<\/td>/);
+    expect(html).toContain('<td class="containerPriceCell"></td>');
+    expect(html.match(/\$/g)).toHaveLength(4);
     // Pour-size columns follow the containers' order within a section
     const drafts = html.slice(html.indexOf('Drafts'), html.indexOf('Guest Taps'));
     expect(drafts.indexOf('Taster')).toBeGreaterThan(-1);
