@@ -11,7 +11,8 @@
 	default_sni {$DEFAULT_SNI:localhost}
 }
 
-{$DOMAIN} {
+# The routing shared by every site below.
+(app) {
 	# The admin client app (client/ in this repo) lives at /admin/. It calls the server's JSON
 	# API at /api on this same origin, which falls through to the server below.
 	handle /admin* {
@@ -22,4 +23,21 @@
 	handle {
 		reverse_proxy taproom-offering-engine:3000
 	}
+}
+
+# Public site: a real domain gets a Let's Encrypt certificate. "localhost" and bare IP addresses
+# automatically get a certificate from Caddy's own local CA instead.
+{$DOMAIN} {
+	import app
+}
+
+# Internal-only names (e.g. a DNS entry on your router such as zymos.brew). Let's Encrypt can't
+# issue for names that don't end in a real public suffix, and Caddy only falls back to its local CA
+# on its own for localhost/IPs, so these must be asked for explicitly. Keep them out of DOMAIN:
+# DOMAIN is served with Let's Encrypt, and listing an internal name there makes issuance fail with
+# "domain name does not end with a valid public suffix".
+# The placeholder default just keeps this block valid when INTERNAL_DOMAIN is unset.
+{$INTERNAL_DOMAIN:unused.invalid} {
+	tls internal
+	import app
 }
