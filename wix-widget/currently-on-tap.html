@@ -199,38 +199,6 @@
     margin: 0 0 10px;
   }
 
-  /* ---------- Pours / prices ---------- */
-
-  .cot-pours {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
-
-  .cot-pour-row {
-    display: flex;
-    align-items: baseline;
-    font-size: 13px;
-  }
-
-  .cot-pour-label {
-    font-weight: 600;
-    white-space: nowrap;
-  }
-
-  .cot-pour-leader {
-    flex: 1 1 auto;
-    margin: 0 6px;
-    border-bottom: 1px dotted var(--cot-text-faint);
-    transform: translateY(-3px);
-  }
-
-  .cot-pour-price {
-    font-weight: 600;
-    white-space: nowrap;
-    color: var(--cot-accent);
-  }
-
   /* ---------- States ---------- */
 
   .cot-state {
@@ -339,12 +307,6 @@
     });
   }
 
-  function formatPrice(price) {
-    var n = Number(price);
-    if (isNaN(n)) return escapeHtml(price);
-    return "$" + n.toFixed(2);
-  }
-
   function formatUpdatedTime(isoString) {
     try {
       var d = new Date(isoString);
@@ -370,16 +332,6 @@
     if (item.breweryLocation) metaParts.push(escapeHtml(item.breweryLocation));
     var metaHtml = metaParts.join('<span class="cot-sep">&bull;</span>');
 
-    var poursHtml = (item.pours || []).map(function (pour) {
-      return (
-        '<div class="cot-pour-row">' +
-          '<span class="cot-pour-label">' + escapeHtml(pour.label) + "</span>" +
-          '<span class="cot-pour-leader"></span>' +
-          '<span class="cot-pour-price">' + formatPrice(pour.price) + "</span>" +
-        "</div>"
-      );
-    }).join("");
-
     return (
       '<div class="cot-item">' +
         '<div class="cot-item-logo">' + logoHtml + "</div>" +
@@ -389,7 +341,6 @@
           "</h4>" +
           (metaHtml ? '<div class="cot-item-meta">' + metaHtml + "</div>" : "") +
           (item.description ? '<p class="cot-item-desc">' + escapeHtml(item.description) + "</p>" : "") +
-          (poursHtml ? '<div class="cot-pours">' + poursHtml + "</div>" : "") +
         "</div>" +
       "</div>"
     );

@@ -198,8 +198,8 @@ export class MenusRoutes extends Routes {
         return
       } 
       if (req.query.format === "widget") {
-        // Returns a nested JSON representation of this menu (sections -> items -> pour/price
-        // options), suitable for a lightweight external display like the Wix "currently on tap"
+        // Returns a nested JSON representation of this menu (sections -> items, with no pour
+        // sizes or prices), suitable for a lightweight external display like the Wix "currently on tap"
         // embed. This mirrors the same data the print/digital views build, just as JSON instead
         // of a rendered document.
         const allSubMenus = (await this.dataProvider.getSubMenusForMenu(result.id!)).sort(byOrder);
@@ -220,18 +220,6 @@ export class MenusRoutes extends Routes {
               brewery = await this.dataProvider.getBrewery(itemDetails.breweryId);
             }
 
-            const allSaleContainersForItem = await this.dataProvider.getSaleContainersForMenuItem(menuItem.id!);
-            const pours = [];
-            for (const saleContainer of allSaleContainersForItem) {
-              const containerInfo = await this.dataProvider.getContainer(saleContainer.containerId);
-              pours.push({
-                label: containerInfo?.displayName ?? "Pour",
-                price: saleContainer.price,
-                order: containerInfo?.order ?? 999,
-              });
-            }
-            pours.sort((a, b) => a.order - b.order);
-
             const logoSource = menuItem.itemLogo ?? brewery?.defaultLogo ?? result.logo ?? null;
 
             items.push({
@@ -242,7 +230,6 @@ export class MenusRoutes extends Routes {
               abv: itemDetails?.abv ?? null,
               description: itemDetails?.description ?? null,
               logo: logoSource ? `data:image/png;base64,${logoSource}` : null,
-              pours: pours.map(({ label, price }) => ({ label, price })),
             });
           }
 

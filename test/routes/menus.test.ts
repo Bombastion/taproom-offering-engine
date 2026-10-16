@@ -47,7 +47,7 @@ describe('GET /menus/:menuId', () => {
 });
 
 describe('?format=widget', () => {
-  it('nests sections, items and pours, skipping empty sections', async () => {
+  it('nests sections and items, skipping empty sections', async () => {
     const res = await request(app).get(`/menus/${data.menu.id}?format=widget`);
     expect(res.status).toBe(200);
     expect(res.body).toEqual({
@@ -68,14 +68,13 @@ describe('?format=widget', () => {
               description: 'Juicy',
               // No item or brewery logo, so the menu's logo is used
               logo: `data:image/png;base64,${TINY_PNG}`,
-              pours: [{ label: 'Taster', price: 3 }, { label: 'Full Pour', price: 8 }],
             },
-            expect.objectContaining({ displayName: 'Pils', pours: [{ label: 'Full Pour', price: 6.5 }] }),
+            expect.objectContaining({ displayName: 'Pils' }),
           ],
         },
         {
           displayName: 'Guest Taps',
-          items: [expect.objectContaining({ displayName: 'Guest Sour', breweryName: 'Guest Co', breweryLocation: null, pours: [{ label: 'Crowler', price: 12 }] })],
+          items: [expect.objectContaining({ displayName: 'Guest Sour', breweryName: 'Guest Co', breweryLocation: null })],
         },
       ],
     });
@@ -114,11 +113,16 @@ describe('?format=widget', () => {
     expect(res.body.sections[1].items[0].logo).toBe(`data:image/png;base64,${TINY_PNG}`); // brewery logo
   });
 
+  it('leaves pour sizes and prices out entirely', async () => {
+    const res = await request(app).get(`/menus/${data.menu.id}?format=widget`);
+    expect(JSON.stringify(res.body)).not.toMatch(/pours|price/i);
+  });
+
   it('handles items with no brewery', async () => {
     await provider.addMenuItem({ id: null, menuId: data.menu.id, itemId: data.items.pretzel.id, subMenuId: data.sections.empty.id, itemLogo: null, order: 1 });
     const res = await request(app).get(`/menus/${data.menu.id}?format=widget`);
     const snacks = res.body.sections.find((s: { displayName: string }) => s.displayName === 'Empty');
-    expect(snacks.items[0]).toMatchObject({ displayName: 'Pretzel', breweryName: null, breweryLocation: null, style: null, abv: null, pours: [] });
+    expect(snacks.items[0]).toMatchObject({ displayName: 'Pretzel', breweryName: null, breweryLocation: null, style: null, abv: null });
   });
 });
 
@@ -143,7 +147,7 @@ describe('inactive items', () => {
     await provider.setMenuItemActive(data.menuItems.hazyOnDrafts.id!, true);
     const res = await request(app).get(`/menus/${data.menu.id}?format=widget`);
     const drafts = res.body.sections.find((s: { displayName: string }) => s.displayName === 'Drafts');
-    expect(drafts.items.map((i: { displayName: string; pours: unknown[] }) => [i.displayName, i.pours.length])).toEqual([['Hazy Sequence', 2], ['Pils', 1]]);
+    expect(drafts.items.map((i: { displayName: string }) => i.displayName)).toEqual(['Hazy Sequence', 'Pils']);
   });
 
   it('leaves inactive items, and sections with nothing active, out of the print view', async () => {
