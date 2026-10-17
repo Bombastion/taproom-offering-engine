@@ -175,6 +175,16 @@ describe('?format=print', () => {
     expect(html.indexOf('Pils')).toBeLessThan(html.indexOf('Hazy Sequence'));
   });
 
+  it('sizes the printable menu to fit two letter-size pages', async () => {
+    const html = (await request(app).get(`/menus/${data.menu.id}?format=print`)).text;
+    // Items are individual table bodies so a row and its description are never split by a page break
+    expect(html).toContain('class="itemGroup"');
+    // The inline script scales the root font size to fit; the stylesheet is what sets up the page
+    expect(html).toContain('MAX_PAGES = 2');
+    const css = fs.readFileSync(path.join(repoRoot, 'public/css/print.css'), 'utf8');
+    expect(css).toMatch(/@page\s*\{[^}]*size:\s*letter/);
+  });
+
   it('renders the printable menu with each section, its pour-size columns and prices', async () => {
     const res = await request(app).get(`/menus/${data.menu.id}?format=print`);
     expect(res.status).toBe(200);

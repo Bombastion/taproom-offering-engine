@@ -2,33 +2,113 @@
 
 html
   body
-    div
-      img(class='menuLogo' src='data:image;base64, ' + menuLogo)
-    each subMenu in allDisplaySubMenus
-      div(class='subMenuDiv')
-        h3(class='header subMenuHeader') #{subMenu.menu.displayName}
-        - var items = subMenuToItemMap.get(subMenu.menu.id)
-        - var containers = subMenu.containerOptions
-        div()
-          table(class='itemTable')
-            tbody
-              tr 
-                td(class='descriptionCell')
-                td(class='containerNameCell')
-                  table(class='containerNameSubTable')
-                    tr 
-                      each containerName in containers
-                        th(class='containerName') #{containerName}
-              each item in items
-                tr 
-                  td(class='descriptionCell') #{item.breweryName} &bull; <b>#{item.displayName}</b> &bull; #{item.style} &bull; #{item.abv}% ABV
-                  td
-                    table(class='containerPrices')
+    div#menuRoot
+      div(class='menuLogoUnit')
+        img(class='menuLogo' src='data:image;base64, ' + menuLogo)
+      each subMenu in allDisplaySubMenus
+        div(class='subMenuDiv')
+          h3(class='header subMenuHeader') #{subMenu.menu.displayName}
+          - var items = subMenuToItemMap.get(subMenu.menu.id)
+          - var containers = subMenu.containerOptions
+          div()
+            table(class='itemTable')
+              //- One tbody per item so a row and its description can be kept together across a page break
+              tbody
+                tr
+                  td(class='descriptionCell')
+                  td(class='containerNameCell')
+                    table(class='containerNameSubTable')
                       tr
                         each containerName in containers
-                          //- The $ is part of the cell text so an item without this size leaves the cell blank
-                          - var price = item.containerDisplayNameToPrice.get(containerName)
-                          td(class='containerPriceCell')= (price !== undefined && price !== null && String(price).trim() !== '') ? '$' + price : ''
-                tr
-                  td #{item.description}
-    
+                          th(class='containerName') #{containerName}
+              each item in items
+                tbody(class='itemGroup')
+                  tr
+                    td(class='descriptionCell') #{item.breweryName} &bull; <b>#{item.displayName}</b> &bull; #{item.style} &bull; #{item.abv}% ABV
+                    td
+                      table(class='containerPrices')
+                        tr
+                          each containerName in containers
+                            //- The $ is part of the cell text so an item without this size leaves the cell blank
+                            - var price = item.containerDisplayNameToPrice.get(containerName)
+                            td(class='containerPriceCell')= (price !== undefined && price !== null && String(price).trim() !== '') ? '$' + price : ''
+                  tr
+                    td #{item.description}
+    script.
+      // Fit the whole menu on two letter-size pages by scaling every font (all sizes in the
+      // stylesheet are rem-based) to the largest root size that still fits, never above the
+      // normal size. Page breaks are simulated the way the browser will make them: an item
+      // (and a section heading with its first item) is never split across pages.
+      (function () {
+        var MAX_PAGES = 2;
+        var PAGE_HEIGHT = 10 * 96 - 6; // 11in page - 2 x 0.5in margins, in CSS px, minus rounding slack
+        var MIN_SIZE = 3;              // px, last-resort floor so the two-page limit always holds
+        var MAX_SIZE = 16;             // px, the normal size used for short menus
+
+        function units(root) {
+          var rects = [];
+          var top = root.getBoundingClientRect().top;
+          function add(first, last) {
+            var a = first.getBoundingClientRect();
+            var b = last.getBoundingClientRect();
+            rects.push({ top: a.top - top, bottom: b.bottom - top });
+          }
+          var logo = root.querySelector('.menuLogoUnit');
+          if (logo) add(logo, logo);
+          root.querySelectorAll('.subMenuDiv').forEach(function (section) {
+            var heading = section.querySelector('.subMenuHeader');
+            var groups = section.querySelectorAll('.itemGroup');
+            if (groups.length === 0) { add(heading, heading); return; }
+            add(heading, groups[0]);
+            for (var i = 1; i < groups.length; i++) add(groups[i], groups[i]);
+          });
+          return rects;
+        }
+
+        // Height of the whole menu once page breaks have pushed units onto the next page
+        function paginatedHeight(root) {
+          var shift = 0;
+          var end = 0;
+          units(root).forEach(function (u) {
+            var top = u.top + shift;
+            var bottom = u.bottom + shift;
+            if (bottom - top < PAGE_HEIGHT) {
+              var page = Math.floor(top / PAGE_HEIGHT);
+              if (Math.floor((bottom - 0.01) / PAGE_HEIGHT) > page) {
+                var push = (page + 1) * PAGE_HEIGHT - top;
+                shift += push;
+                bottom += push;
+              }
+            }
+            end = bottom;
+          });
+          return end;
+        }
+
+        function fit() {
+          var root = document.getElementById('menuRoot');
+          var html = document.documentElement;
+          function fitsAt(size) {
+            html.style.fontSize = size + 'px';
+            return paginatedHeight(root) <= MAX_PAGES * PAGE_HEIGHT;
+          }
+          if (fitsAt(MAX_SIZE)) return;
+          var lo = MIN_SIZE;
+          var hi = MAX_SIZE;
+          for (var i = 0; i < 14; i++) {
+            var mid = (lo + hi) / 2;
+            if (fitsAt(mid)) { lo = mid; } else { hi = mid; }
+          }
+          if (!fitsAt(lo)) {
+            console.warn('Menu does not fit on ' + MAX_PAGES + ' pages even at ' + MIN_SIZE + 'px');
+            html.style.fontSize = MIN_SIZE + 'px';
+          }
+        }
+
+        function run() { fit(); }
+        window.addEventListener('beforeprint', run);
+        window.addEventListener('load', run);
+        // Text widths change when the web font arrives, so fit again once it has loaded
+        if (document.fonts && document.fonts.ready) document.fonts.ready.then(run);
+        run();
+      })();
