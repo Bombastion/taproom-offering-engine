@@ -1,27 +1,20 @@
 import { describe, expect, it, vi } from 'vitest';
 import { api, ApiError, errorMessage, formatPrice, plural } from '../src/api';
-import { getCredentials, signIn } from '../src/auth';
+import { getSession, setSignedIn } from '../src/auth';
 import { ADMIN, json, mockApi, status } from './utils';
 
 describe('requests', () => {
-  it('sends the stored login as Basic auth and asks for JSON', async () => {
-    signIn(ADMIN, false);
+  it('asks for JSON and lets the browser send the session cookie, with no credentials of its own', async () => {
     const server = mockApi({ 'GET /api/menus': json([]) });
     await api.menus();
     const [request] = server.requests;
-    expect(request.headers.authorization).toBe(`Basic ${btoa('admin:hunter2')}`);
+    expect(request.headers.authorization).toBeUndefined();
     expect(request.headers.accept).toBe('application/json');
     expect(request.headers['content-type']).toBeUndefined();
-  });
-
-  it('sends no Authorization header when signed out', async () => {
-    const server = mockApi({ 'GET /api/menus': json([]) });
-    await api.menus();
-    expect(server.requests[0].headers.authorization).toBeUndefined();
+    expect(server.fetch.mock.calls[0][1]).toMatchObject({ credentials: 'same-origin' });
   });
 
   it('sends bodies as JSON', async () => {
-    signIn(ADMIN, false);
     const server = mockApi({ 'POST /api/menus': json({ id: 'm1', displayName: 'Patio' }, 201) });
     const menu = await api.createMenu('Patio');
     expect(menu).toEqual({ id: 'm1', displayName: 'Patio' });
@@ -58,24 +51,51 @@ describe('requests', () => {
 });
 
 describe('errors', () => {
-  it('signs out when stored credentials stop working', async () => {
-    signIn(ADMIN, true);
+  it('signs out when the session stops working', async () => {
+    setSignedIn(ADMIN);
     mockApi({ 'GET /api/menus': status(401, 'Authentication required.') });
     const error = await api.menus().catch((e) => e);
     expect(error).toBeInstanceOf(ApiError);
     expect(error.status).toBe(401);
     expect(error.message).toBe('Please sign in again.');
-    expect(getCredentials()).toBeNull();
-    expect(localStorage.length).toBe(0);
+    expect(getSession()).toEqual({ status: 'signedOut' });
   });
 
-  it("doesn't sign out when checking a new login fails", async () => {
-    signIn(ADMIN, false);
-    const server = mockApi({ 'GET /api/session': status(401) });
-    await expect(api.checkCredentials({ username: 'admin', password: 'wrong' })).rejects.toMatchObject({ status: 401 });
-    expect(getCredentials()).toEqual(ADMIN);
-    // The credentials being checked are the ones sent
-    expect(server.requests[0].headers.authorization).toBe(`Basic ${btoa('admin:wrong')}`);
+  it("doesn't sign out when a sign-in attempt is refused", async () => {
+    setSignedIn(ADMIN);
+    mockApi({ 'POST /api/auth/login': status(401, 'Incorrect email or password.') });
+    await expect(api.login('admin@example.com', 'wrong', false)).rejects.toMatchObject({ status: 401 });
+    expect(getSession().status).toBe('signedIn');
+  });
+
+  it('reads the code and message from errors the server explains as JSON', async () => {
+    mockApi({ 'POST /api/auth/login': json({ code: 'pending', message: 'Your account is waiting for an admin to approve it.' }, 403) });
+    const error = await api.login('new@example.com', 'pw', false).catch((e) => e);
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error).toMatchObject({ status: 403, code: 'pending', message: 'Your account is waiting for an admin to approve it.' });
+  });
+
+  it('has no code on plain-text errors', async () => {
+    mockApi({ 'GET /api/menus': status(404, 'Menu not found') });
+    const error = await api.menus().catch((e) => e);
+    expect(error.code).toBeUndefined();
+  });
+
+  it('copes with a JSON content type and a body that is not JSON', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('oops {', { status: 400, headers: { 'Content-Type': 'application/json' } })));
+    await expect(api.menus()).rejects.toMatchObject({ status: 400, message: 'oops {' });
+  });
+
+  it('calls the sign-in, sign-out and who-am-I routes', async () => {
+    const server = mockApi({
+      'POST /api/auth/login': json({ user: ADMIN }),
+      'POST /api/auth/logout': status(204),
+      'GET /api/auth/me': json({ user: ADMIN }),
+    });
+    await expect(api.login('admin@example.com', 'pw', true)).resolves.toEqual({ user: ADMIN });
+    await expect(api.logout()).resolves.toBeUndefined();
+    await expect(api.me()).resolves.toEqual({ user: ADMIN });
+    expect(server.requests[0].body).toEqual({ email: 'admin@example.com', password: 'pw', remember: true });
   });
 
   it.each([

@@ -1,8 +1,9 @@
 import { Navigate, Outlet, RouteObject, useLocation } from 'react-router';
 import { QueryClient } from '@tanstack/react-query';
-import { useCredentials } from './auth';
+import { retrySession, useSession } from './session';
 import { ApiError } from './api';
 import { LoginPage } from './pages/LoginPage';
+import { Loading, LoadError } from './components/QueryState';
 import { HomePage } from './pages/HomePage';
 import { MenuPage } from './pages/MenuPage';
 import { SectionPage } from './pages/SectionPage';
@@ -33,11 +34,13 @@ export function createQueryClient(): QueryClient {
   });
 }
 
-// Every screen except sign-in needs the admin login
+// Every screen except sign-in needs a signed-in user
 export function RequireSignIn() {
-  const credentials = useCredentials();
+  const session = useSession();
   const location = useLocation();
-  if (!credentials) return <Navigate to="/login" replace state={{ from: location }} />;
+  if (session.status === 'loading') return <Loading />;
+  if (session.status === 'error') return <LoadError error={session.error} onRetry={retrySession} />;
+  if (session.status === 'signedOut') return <Navigate to="/login" replace state={{ from: location }} />;
   return <Outlet />;
 }
 

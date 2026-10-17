@@ -20,14 +20,6 @@ beforeEach(async () => {
   app = appWith('/api', new ApiRoutes(provider).router);
 });
 
-describe('GET /api/session', () => {
-  it('answers ok', async () => {
-    const res = await request(app).get('/api/session');
-    expect(res.status).toBe(200);
-    expect(res.body).toEqual({ ok: true });
-  });
-});
-
 describe('menus', () => {
   it('lists menus alphabetically with section and item counts', async () => {
     await provider.addMenu({ id: null, internalName: 'a', displayName: 'Anniversary', logo: null });

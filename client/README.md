@@ -2,8 +2,9 @@
 
 A mobile-first web app for managing menus, sections (sub-menus) and items. It's a React +
 TypeScript app built with Vite, and it talks to the server's JSON API under `/api`
-(`routes/api.ts`), signing in with the server's admin username/password (`TOE_ADMIN_USERNAME` /
-`TOE_ADMIN_PASSWORD`).
+(`routes/api.ts`, `routes/auth.ts`). People sign in with an email and password; the server keeps
+the session in an httpOnly cookie, so the app never stores a password or token. The first admin
+is created from `TOE_ADMIN_EMAIL` / `TOE_ADMIN_PASSWORD` (see the main README).
 
 The app is served at `/admin/` on the same domain as the server, so no CORS setup is needed.
 

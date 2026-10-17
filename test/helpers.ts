@@ -4,6 +4,9 @@ import { Brewery } from '../models/breweries';
 import { ItemContainer, SaleContainer } from '../models/containers';
 import { Item } from '../models/items';
 import { Menu, MenuItem, SubMenu } from '../models/menus';
+import { NewUser, User } from '../models/users';
+import { hashPassword } from '../auth/passwords';
+import { newSessionToken, SESSION_COOKIE } from '../auth/sessions';
 
 // A real 1x1 PNG, small enough to inline but valid enough for pdfkit to draw.
 export const TINY_PNG =
@@ -17,8 +20,36 @@ export function memoryProvider(): LocalDataProvider {
   return new LocalDataProvider('/nonexistent/taproom-test-data');
 }
 
-export function basicAuth(username: string, password: string): string {
-  return `Basic ${Buffer.from(`${username}:${password}`, 'utf8').toString('base64')}`;
+// A deliberately cheap scrypt cost, so tests that need a user with a password don't each spend
+// a tenth of a second hashing it. (Hashes carry their own cost, so verifying them is fast too.)
+export const FAST_COST = { logN: 4, r: 8, p: 1 };
+
+// Adds a user to the provider: by default an active admin who signs in with "pw-for-tests".
+export async function addUser(
+  provider: LocalDataProvider,
+  overrides: Omit<NewUser, 'passwordHash'> & { password?: string | null } = { email: 'admin@example.com' },
+): Promise<User> {
+  const { password = 'pw-for-tests', ...rest } = overrides;
+  return provider.createUser({
+    role: 'ADMIN',
+    status: 'ACTIVE',
+    ...rest,
+    email: rest.email ?? 'admin@example.com',
+    passwordHash: password === null ? null : await hashPassword(password, FAST_COST),
+  });
+}
+
+// Gives a user a live session and returns the Cookie header value to send as them
+export async function sessionCookieFor(provider: LocalDataProvider, user: User, { expiresInMs = 60 * 60 * 1000 } = {}): Promise<string> {
+  const { token, id } = newSessionToken();
+  const now = new Date();
+  await provider.createSession({ id, userId: user.id, createdAt: now, expiresAt: new Date(now.getTime() + expiresInMs) });
+  return `${SESSION_COOKIE}=${token}`;
+}
+
+// Adds an active admin and returns the Cookie header for being signed in as them
+export async function signedInAs(provider: LocalDataProvider, overrides?: Parameters<typeof addUser>[1]): Promise<string> {
+  return sessionCookieFor(provider, await addUser(provider, overrides));
 }
 
 // A bare Express app with JSON parsing and a single router mounted, for testing a router

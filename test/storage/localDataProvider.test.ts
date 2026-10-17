@@ -286,3 +286,84 @@ describe('removing', () => {
     expect(await provider.removeItem('i1')).toBe(false);
   });
 });
+
+describe('users and sessions', () => {
+  it('creates users with defaults, lowercasing the email', async () => {
+    const provider = memoryProvider();
+    const user = await provider.createUser({ email: '  Brewer@Example.COM ' });
+    expect(user).toMatchObject({
+      email: 'brewer@example.com',
+      displayName: null,
+      passwordHash: null,
+      role: 'USER',
+      status: 'PENDING',
+      approvedAt: null,
+      approvedById: null,
+    });
+    expect(user.id).toMatch(UUID);
+    expect(user.createdAt).toBeInstanceOf(Date);
+  });
+
+  it('keeps the fields it is given', async () => {
+    const user = await memoryProvider().createUser({ email: 'a@b.co', displayName: 'A', passwordHash: 'h', role: 'ADMIN', status: 'ACTIVE' });
+    expect(user).toMatchObject({ displayName: 'A', passwordHash: 'h', role: 'ADMIN', status: 'ACTIVE' });
+  });
+
+  it('refuses a second account with the same email, in any case', async () => {
+    const provider = memoryProvider();
+    await provider.createUser({ email: 'a@b.co' });
+    const error = await provider.createUser({ email: 'A@B.CO' }).catch((e: unknown) => e);
+    expect((error as DataProviderError).statusCode).toBe(409);
+    expect(await provider.countUsers()).toBe(1);
+  });
+
+  it('finds users by id and by email, ignoring case', async () => {
+    const provider = memoryProvider();
+    const user = await provider.createUser({ email: 'a@b.co' });
+    expect(await provider.getUser(user.id)).toEqual(user);
+    expect(await provider.getUserByEmail(' A@b.Co')).toEqual(user);
+    expect(await provider.getUser('nope')).toBeNull();
+    expect(await provider.getUserByEmail('nope@b.co')).toBeNull();
+  });
+
+  it('hands out copies, so callers cannot change stored users', async () => {
+    const provider = memoryProvider();
+    const user = await provider.createUser({ email: 'a@b.co', role: 'USER' });
+    user.role = 'ADMIN';
+    (await provider.getUser(user.id))!.status = 'ACTIVE';
+    expect(await provider.getUser(user.id)).toMatchObject({ role: 'USER', status: 'PENDING' });
+  });
+
+  it('counts users', async () => {
+    const provider = memoryProvider();
+    expect(await provider.countUsers()).toBe(0);
+    await provider.createUser({ email: 'a@b.co' });
+    await provider.createUser({ email: 'c@d.co' });
+    expect(await provider.countUsers()).toBe(2);
+  });
+
+  it('stores, finds and deletes sessions', async () => {
+    const provider = memoryProvider();
+    const session = { id: 'hash', userId: 'u1', createdAt: new Date(), expiresAt: new Date(Date.now() + 1000) };
+    await provider.createSession(session);
+    expect(await provider.getSession('hash')).toEqual(session);
+    expect(await provider.getSession('other')).toBeNull();
+    await provider.deleteSession('hash');
+    expect(await provider.getSession('hash')).toBeNull();
+    await provider.deleteSession('hash');
+  });
+
+  it('removes only the expired sessions', async () => {
+    const provider = memoryProvider();
+    const now = new Date('2026-10-16T12:00:00Z');
+    const make = (id: string, expiresAt: Date) => provider.createSession({ id, userId: 'u1', createdAt: now, expiresAt });
+    await make('old', new Date('2026-10-16T11:59:59Z'));
+    await make('older', new Date('2026-01-01T00:00:00Z'));
+    await make('live', new Date('2026-10-16T12:00:01Z'));
+    expect(await provider.deleteExpiredSessions(now)).toBe(2);
+    expect(await provider.getSession('old')).toBeNull();
+    expect(await provider.getSession('older')).toBeNull();
+    expect(await provider.getSession('live')).not.toBeNull();
+    expect(await provider.deleteExpiredSessions(now)).toBe(0);
+  });
+});

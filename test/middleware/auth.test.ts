@@ -1,8 +1,10 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import express, { Request } from 'express';
 import request from 'supertest';
-import { adminAuth, isApiPath, requiresAuth } from '../../middleware/auth';
-import { basicAuth } from '../helpers';
+import { isApiPath, requireSession, requiresAuth, sameOriginWrites, sessionMiddleware } from '../../middleware/auth';
+import { LocalDataProvider } from '../../storage/providers';
+import { addUser, memoryProvider, sessionCookieFor } from '../helpers';
+import { SESSION_COOKIE, sessionIdForToken } from '../../auth/sessions';
 
 function fakeRequest(method: string, path: string): Request {
   return { method, path } as Request;
@@ -30,6 +32,13 @@ describe('requiresAuth', () => {
     }
   });
 
+  it('leaves signing in and out open, but not the rest of /api/auth', () => {
+    expect(requiresAuth(fakeRequest('POST', '/api/auth/login'))).toBe(false);
+    expect(requiresAuth(fakeRequest('POST', '/api/auth/logout'))).toBe(false);
+    expect(requiresAuth(fakeRequest('GET', '/api/auth/me'))).toBe(true);
+    expect(requiresAuth(fakeRequest('POST', '/api/auth/login/extra'))).toBe(true);
+  });
+
   it('leaves public reads open', () => {
     expect(requiresAuth(fakeRequest('GET', '/'))).toBe(false);
     expect(requiresAuth(fakeRequest('GET', '/menus/abc'))).toBe(false);
@@ -44,98 +53,141 @@ describe('requiresAuth', () => {
   });
 });
 
-describe('adminAuth', () => {
+describe('sessionMiddleware and requireSession', () => {
+  let provider: LocalDataProvider;
+  let app: express.Express;
+
+  beforeEach(() => {
+    provider = memoryProvider();
+    app = express();
+    app.use(sessionMiddleware(provider));
+    app.use(requireSession);
+    app.all('/{*rest}', (req, res) => {
+      res.json({ reached: true, user: req.user ?? null });
+    });
+  });
+
+  it('lets public reads through without a session', async () => {
+    const res = await request(app).get('/menus/abc');
+    expect(res.status).toBe(200);
+    expect(res.body.user).toBeNull();
+  });
+
+  it('lets signing in and out through without a session', async () => {
+    expect((await request(app).post('/api/auth/login')).status).toBe(200);
+    expect((await request(app).post('/api/auth/logout')).status).toBe(200);
+  });
+
+  it('rejects /api requests with no session, with no browser login challenge', async () => {
+    const res = await request(app).get('/api/menus');
+    expect(res.status).toBe(401);
+    expect(res.text).toBe('Authentication required.');
+    expect(res.headers['www-authenticate']).toBeUndefined();
+  });
+
+  it('rejects writes outside /api with no session', async () => {
+    for (const send of [() => request(app).post('/menus'), () => request(app).delete('/menus/abc')]) {
+      expect((await send()).status).toBe(401);
+    }
+  });
+
+  it('accepts a live session and puts the user on the request, without secrets', async () => {
+    const user = await addUser(provider, { email: 'Brewer@Example.com' });
+    const cookie = await sessionCookieFor(provider, user);
+    const res = await request(app).get('/api/menus').set('Cookie', cookie);
+    expect(res.status).toBe(200);
+    expect(res.body.user).toEqual({ id: user.id, email: 'brewer@example.com', displayName: null, role: 'ADMIN' });
+  });
+
+  it('finds the session cookie among other cookies', async () => {
+    const cookie = await sessionCookieFor(provider, await addUser(provider));
+    const res = await request(app).get('/api/menus').set('Cookie', `theme=dark; ${cookie}; other=1`);
+    expect(res.status).toBe(200);
+  });
+
+  it('rejects a token that was never issued', async () => {
+    const res = await request(app).get('/api/menus').set('Cookie', `${SESSION_COOKIE}=not-a-real-token`);
+    expect(res.status).toBe(401);
+  });
+
+  it('rejects the stored session id used as if it were the token', async () => {
+    // The database holds only the hash, so the hash itself must not sign anyone in
+    const cookie = await sessionCookieFor(provider, await addUser(provider));
+    const token = cookie.slice(SESSION_COOKIE.length + 1);
+    const res = await request(app).get('/api/menus').set('Cookie', `${SESSION_COOKIE}=${sessionIdForToken(token)}`);
+    expect(res.status).toBe(401);
+  });
+
+  it('rejects an expired session and deletes it', async () => {
+    const user = await addUser(provider);
+    const cookie = await sessionCookieFor(provider, user, { expiresInMs: -1000 });
+    const token = cookie.slice(SESSION_COOKIE.length + 1);
+    const res = await request(app).get('/api/menus').set('Cookie', cookie);
+    expect(res.status).toBe(401);
+    expect(await provider.getSession(sessionIdForToken(token))).toBeNull();
+  });
+
+  it.each(['PENDING', 'DISABLED'] as const)('rejects a session whose user is %s', async (status) => {
+    const user = await addUser(provider, { email: `${status}@example.com`, status });
+    const cookie = await sessionCookieFor(provider, user);
+    const res = await request(app).get('/api/menus').set('Cookie', cookie);
+    expect(res.status).toBe(401);
+  });
+
+  it('rejects a session whose user no longer exists', async () => {
+    const cookie = await sessionCookieFor(provider, { id: 'ghost' } as never);
+    const res = await request(app).get('/api/menus').set('Cookie', cookie);
+    expect(res.status).toBe(401);
+  });
+
+  it('ignores a malformed cookie header', async () => {
+    const res = await request(app).get('/api/menus').set('Cookie', `;;=;${SESSION_COOKIE}=%E0%A4%A`);
+    expect(res.status).toBe(401);
+  });
+});
+
+describe('sameOriginWrites', () => {
   const app = express();
-  app.use(adminAuth);
+  app.use(sameOriginWrites);
   app.all('/{*rest}', (_req, res) => {
     res.send('reached');
   });
+  const HOST = 'taproom.example';
 
-  beforeEach(() => {
-    vi.stubEnv('TOE_ADMIN_USERNAME', 'admin');
-    vi.stubEnv('TOE_ADMIN_PASSWORD', 's3cret');
-  });
-
-  it('lets public reads through without credentials', async () => {
-    const res = await request(app).get('/menus/abc');
-    expect(res.status).toBe(200);
-    expect(res.text).toBe('reached');
-  });
-
-  it('fails closed with 503 when no admin password is configured', async () => {
-    vi.stubEnv('TOE_ADMIN_PASSWORD', '');
-    const res = await request(app).post('/menus').set('Authorization', basicAuth('admin', ''));
-    expect(res.status).toBe(503);
-    expect(res.text).toMatch(/TOE_ADMIN_PASSWORD/);
-  });
-
-  it('still lets public reads through when no password is configured', async () => {
-    vi.stubEnv('TOE_ADMIN_PASSWORD', '');
-    const res = await request(app).get('/menus/abc');
+  it('never blocks reads', async () => {
+    const res = await request(app).get('/api/menus').set('Host', HOST).set('Origin', 'https://evil.example').set('Sec-Fetch-Site', 'cross-site');
     expect(res.status).toBe(200);
   });
 
-  it('accepts the right credentials', async () => {
-    const res = await request(app).post('/menus').set('Authorization', basicAuth('admin', 's3cret'));
-    expect(res.status).toBe(200);
-    expect(res.text).toBe('reached');
-  });
-
-  it('defaults the username to "admin" when TOE_ADMIN_USERNAME is unset', async () => {
-    vi.stubEnv('TOE_ADMIN_USERNAME', '');
-    const res = await request(app).get('/api/menus').set('Authorization', basicAuth('admin', 's3cret'));
+  it('allows writes from the same origin', async () => {
+    const res = await request(app).post('/api/menus').set('Host', HOST).set('Origin', `https://${HOST}`).set('Sec-Fetch-Site', 'same-origin');
     expect(res.status).toBe(200);
   });
 
-  it('uses a custom username when one is set', async () => {
-    vi.stubEnv('TOE_ADMIN_USERNAME', 'taproom');
-    expect((await request(app).get('/api/menus').set('Authorization', basicAuth('taproom', 's3cret'))).status).toBe(200);
-    expect((await request(app).get('/api/menus').set('Authorization', basicAuth('admin', 's3cret'))).status).toBe(401);
+  it('allows writes with no Origin header, like scripts and curl', async () => {
+    expect((await request(app).post('/api/menus').set('Host', HOST)).status).toBe(200);
   });
 
-  it('reads the password at request time rather than at import time', async () => {
-    vi.stubEnv('TOE_ADMIN_PASSWORD', 'changed');
-    expect((await request(app).post('/x').set('Authorization', basicAuth('admin', 's3cret'))).status).toBe(401);
-    expect((await request(app).post('/x').set('Authorization', basicAuth('admin', 'changed'))).status).toBe(200);
+  it('allows a same-origin write on a non-standard port', async () => {
+    const res = await request(app).put('/api/menus/1').set('Host', `${HOST}:8443`).set('Origin', `https://${HOST}:8443`);
+    expect(res.status).toBe(200);
   });
 
   it.each([
-    ['wrong password', basicAuth('admin', 'nope')],
-    ['wrong username', basicAuth('root', 's3cret')],
-    ['password prefix', basicAuth('admin', 's3cre')],
-    ['password with extra characters', basicAuth('admin', 's3cret!')],
-    // Both sides are zero-padded to the same length before the constant-time compare, so this
-    // only fails because the real lengths are checked too
-    ['password with trailing NUL bytes', basicAuth('admin', 's3cret\u0000\u0000')],
-    ['no separator', `Basic ${Buffer.from('admins3cret').toString('base64')}`],
-    ['non-basic scheme', 'Bearer s3cret'],
-    ['empty header', ''],
-  ])('rejects %s', async (_label, header) => {
-    const res = await request(app).post('/menus').set('Authorization', header);
-    expect(res.status).toBe(401);
-    expect(res.text).toBe('Authentication required.');
+    ['another site', 'https://evil.example'],
+    ['a sibling subdomain', `https://other.${HOST}`],
+    ['the same host on another port', `https://${HOST}:8443`],
+    ['an opaque origin', 'null'],
+    ['garbage', 'not a url'],
+  ])('refuses writes from %s', async (_label, origin) => {
+    for (const method of ['post', 'put', 'patch', 'delete'] as const) {
+      const res = await request(app)[method]('/api/menus').set('Host', HOST).set('Origin', origin);
+      expect(res.status).toBe(403);
+    }
   });
 
-  it('rejects requests with no Authorization header', async () => {
-    const res = await request(app).delete('/menus/abc');
-    expect(res.status).toBe(401);
-  });
-
-  it('handles passwords containing colons and non-ASCII characters', async () => {
-    vi.stubEnv('TOE_ADMIN_PASSWORD', 'pa:ss:wörd🍺');
-    const res = await request(app).post('/menus').set('Authorization', basicAuth('admin', 'pa:ss:wörd🍺'));
-    expect(res.status).toBe(200);
-  });
-
-  it('sends a Basic challenge outside /api', async () => {
-    const res = await request(app).post('/menus');
-    expect(res.status).toBe(401);
-    expect(res.headers['www-authenticate']).toBe('Basic realm="Taproom Admin", charset="UTF-8"');
-  });
-
-  it('leaves out the challenge header for /api so the admin client can show its own sign-in', async () => {
-    const res = await request(app).get('/api/menus');
-    expect(res.status).toBe(401);
-    expect(res.headers['www-authenticate']).toBeUndefined();
+  it('refuses writes the browser marks as cross-site, even without an Origin', async () => {
+    const res = await request(app).post('/api/menus').set('Host', HOST).set('Sec-Fetch-Site', 'cross-site');
+    expect(res.status).toBe(403);
   });
 });

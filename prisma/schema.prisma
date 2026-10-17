@@ -75,3 +75,41 @@ model MenuItem {
   // published menu views
   active Boolean @default(true)
 }
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum UserStatus {
+  PENDING
+  ACTIVE
+  DISABLED
+}
+
+model User {
+  id  String  @id @default(uuid())
+  // Lowercased and trimmed; this is what people sign in with
+  email String @unique
+  displayName String?
+  // "scrypt$..." (see auth/passwords.ts). Null means the account can't sign in.
+  passwordHash String?
+  role UserRole @default(USER)
+  status UserStatus @default(PENDING)
+  createdAt DateTime @default(now())
+  approvedAt DateTime?
+  approvedById String?
+  sessions Session[]
+}
+
+model Session {
+  // sha256 of the token in the browser's cookie, so a database leak doesn't expose live sessions
+  id  String  @id
+  userId String
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}

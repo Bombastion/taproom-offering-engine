@@ -1,9 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import express from 'express';
 import request from 'supertest';
-import { adminAuth } from '../../middleware/auth';
-import { adminLimiter, expensiveFormatLimiter, generalLimiter } from '../../middleware/rateLimits';
-import { basicAuth } from '../helpers';
+import { expensiveFormatLimiter, generalLimiter, loginLimiter } from '../../middleware/rateLimits';
 
 // Each limiter keeps its counts in memory for the life of the module. Vitest gives every test
 // file a fresh module graph, and each test below uses its own client IP (via X-Forwarded-For
@@ -17,10 +15,13 @@ function nextIp(): string {
 function makeApp() {
   const app = express();
   app.set('trust proxy', 1);
+  app.use(express.json());
   app.use(generalLimiter);
   app.use(expensiveFormatLimiter);
-  app.use(adminLimiter);
-  app.use(adminAuth);
+  // Stands in for the real login route: the body picks the status code
+  app.post('/api/auth/login', loginLimiter, (req, res) => {
+    res.status(req.body?.status ?? 401).send('login');
+  });
   app.all('/{*rest}', (_req, res) => {
     res.send('ok');
   });
@@ -29,47 +30,50 @@ function makeApp() {
 
 describe('rate limits', () => {
   const app = makeApp();
+  const login = (ip: string, status: number) =>
+    request(app).post('/api/auth/login').set('X-Forwarded-For', ip).send({ status });
 
-  beforeEach(() => {
-    vi.stubEnv('TOE_ADMIN_PASSWORD', 's3cret');
-  });
-
-  describe('adminLimiter', () => {
-    it('blocks an address after 30 failed sign-ins, before checking credentials', async () => {
+  describe('loginLimiter', () => {
+    it('blocks an address after 30 failed sign-ins, before looking at the next one', async () => {
       const ip = nextIp();
       for (let i = 0; i < 30; i++) {
-        const res = await request(app).get('/api/menus').set('X-Forwarded-For', ip).set('Authorization', basicAuth('admin', 'wrong'));
-        expect(res.status).toBe(401);
+        expect((await login(ip, 401)).status).toBe(401);
       }
-      const blocked = await request(app).get('/api/menus').set('X-Forwarded-For', ip).set('Authorization', basicAuth('admin', 's3cret'));
+      const blocked = await login(ip, 200);
       expect(blocked.status).toBe(429);
       expect(blocked.text).toMatch(/Too many failed sign-in attempts/);
     });
 
-    it("doesn't count successful admin requests", async () => {
+    it("doesn't count successful sign-ins", async () => {
       const ip = nextIp();
       for (let i = 0; i < 40; i++) {
-        const res = await request(app).get('/api/menus').set('X-Forwarded-For', ip).set('Authorization', basicAuth('admin', 's3cret'));
-        expect(res.status).toBe(200);
+        expect((await login(ip, 200)).status).toBe(200);
       }
     });
 
-    it("doesn't apply to public reads", async () => {
+    it("doesn't count pending or disabled accounts, which only get that answer after a correct password", async () => {
       const ip = nextIp();
-      for (let i = 0; i < 30; i++) {
-        await request(app).get('/api/menus').set('X-Forwarded-For', ip);
+      for (let i = 0; i < 40; i++) {
+        expect((await login(ip, 403)).status).toBe(403);
       }
-      const publicRead = await request(app).get('/menus/abc').set('X-Forwarded-For', ip);
-      expect(publicRead.status).toBe(200);
     });
 
     it('tracks each address separately', async () => {
       const ip = nextIp();
       for (let i = 0; i < 30; i++) {
+        await login(ip, 401);
+      }
+      expect((await login(ip, 401)).status).toBe(429);
+      expect((await login(nextIp(), 401)).status).toBe(401);
+    });
+
+    it("applies only to signing in, so unauthenticated requests elsewhere don't use up the budget", async () => {
+      const ip = nextIp();
+      for (let i = 0; i < 40; i++) {
+        await request(app).get('/api/auth/me').set('X-Forwarded-For', ip);
         await request(app).post('/menus').set('X-Forwarded-For', ip);
       }
-      expect((await request(app).post('/menus').set('X-Forwarded-For', ip)).status).toBe(429);
-      expect((await request(app).post('/menus').set('X-Forwarded-For', nextIp())).status).toBe(401);
+      expect((await login(ip, 200)).status).toBe(200);
     });
   });
 

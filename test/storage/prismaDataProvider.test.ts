@@ -30,6 +30,8 @@ function fakePrisma() {
     menu: fakeModel(),
     subMenu: fakeModel(),
     menuItem: fakeModel(),
+    user: fakeModel(),
+    session: fakeModel(),
     $transaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn(client)),
   };
   return client;
@@ -367,5 +369,61 @@ describe('menu items', () => {
   it('reports false, rather than throwing, when removing a menu item that does not exist', async () => {
     prisma.menuItem.deleteMany.mockResolvedValue({ count: 0 });
     expect(await provider.removeMenuItem('nope')).toBe(false);
+  });
+});
+
+describe('users and sessions', () => {
+  it('creates a user with a normalized email and the defaults', async () => {
+    await provider.createUser({ email: '  Brewer@Example.COM ' });
+    expect(prisma.user.create).toHaveBeenCalledWith({
+      data: { email: 'brewer@example.com', displayName: null, passwordHash: null, role: 'USER', status: 'PENDING' },
+    });
+  });
+
+  it('passes along the role, status and password hash it is given', async () => {
+    await provider.createUser({ email: 'a@b.co', displayName: 'A', passwordHash: 'h', role: 'ADMIN', status: 'ACTIVE' });
+    expect(prisma.user.create).toHaveBeenCalledWith({
+      data: { email: 'a@b.co', displayName: 'A', passwordHash: 'h', role: 'ADMIN', status: 'ACTIVE' },
+    });
+  });
+
+  it('turns a duplicate email (Prisma P2002) into a 409', async () => {
+    prisma.user.create.mockRejectedValueOnce(Object.assign(new Error('Unique constraint failed'), { code: 'P2002' }));
+    await expectProviderError(provider.createUser({ email: 'a@b.co' }), 409, /already exists/);
+  });
+
+  it('lets other database errors through untouched', async () => {
+    const failure = new Error('connection lost');
+    prisma.user.create.mockRejectedValueOnce(failure);
+    await expect(provider.createUser({ email: 'a@b.co' })).rejects.toBe(failure);
+  });
+
+  it('looks users up by id, and by normalized email', async () => {
+    await provider.getUser('u1');
+    expect(prisma.user.findUnique).toHaveBeenCalledWith({ where: { id: 'u1' } });
+    await provider.getUserByEmail(' A@B.co ');
+    expect(prisma.user.findUnique).toHaveBeenCalledWith({ where: { email: 'a@b.co' } });
+  });
+
+  it('counts users', async () => {
+    prisma.user.count.mockResolvedValueOnce(3);
+    expect(await provider.countUsers()).toBe(3);
+  });
+
+  it('creates, finds and deletes sessions by id', async () => {
+    const expiresAt = new Date();
+    await provider.createSession({ id: 'hash', userId: 'u1', createdAt: new Date(), expiresAt });
+    expect(prisma.session.create).toHaveBeenCalledWith({ data: { id: 'hash', userId: 'u1', expiresAt } });
+    await provider.getSession('hash');
+    expect(prisma.session.findUnique).toHaveBeenCalledWith({ where: { id: 'hash' } });
+    await provider.deleteSession('hash');
+    expect(prisma.session.deleteMany).toHaveBeenCalledWith({ where: { id: 'hash' } });
+  });
+
+  it('deletes sessions that expired before now and reports how many', async () => {
+    const now = new Date();
+    prisma.session.deleteMany.mockResolvedValueOnce({ count: 4 });
+    expect(await provider.deleteExpiredSessions(now)).toBe(4);
+    expect(prisma.session.deleteMany).toHaveBeenCalledWith({ where: { expiresAt: { lt: now } } });
   });
 });

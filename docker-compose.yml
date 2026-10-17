@@ -12,7 +12,10 @@ services:
       - db
     build:
       dockerfile: ./build/app/Dockerfile
-    command: sh -c "npx prisma migrate dev --name init && npm run start"
+    # `migrate deploy` applies the committed migrations in prisma/migrations and nothing else.
+    # (`migrate dev` is a development tool: it can generate new migrations and offer to reset the
+    # database when it sees drift, neither of which belongs in a container holding real data.)
+    command: sh -c "npx prisma migrate deploy && npm run start"
     restart: always
     ports:
       # Bound to loopback only. The app is reached through the Caddy reverse proxy below, not
@@ -26,10 +29,13 @@ services:
       # trust its X-Forwarded-* headers for the real client IP. Don't set this if the app is
       # ever run without a proxy in front of it.
       - TOE_TRUST_PROXY=true
-      # Shared admin login for the admin client (/api).
+      # The first admin account, created on startup if there are no users yet (after that these
+      # are ignored; accounts live in the database). TOE_ADMIN_USERNAME is the old name for
+      # TOE_ADMIN_EMAIL and still works.
       # Set these in a local .env file (see .env.example) rather than editing this file —
       # docker compose reads .env automatically and it's gitignored.
-      - TOE_ADMIN_USERNAME=${TOE_ADMIN_USERNAME:-admin}
+      - TOE_ADMIN_EMAIL=${TOE_ADMIN_EMAIL:-}
+      - TOE_ADMIN_USERNAME=${TOE_ADMIN_USERNAME:-}
       - TOE_ADMIN_PASSWORD=${TOE_ADMIN_PASSWORD:?TOE_ADMIN_PASSWORD must be set before starting this service}
   admin-client:
     # The mobile-friendly admin app in client/: a React build served by nginx. Not published on

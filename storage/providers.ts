@@ -3,6 +3,7 @@ import { ItemContainer, SaleContainer } from '../models/containers';
 import { Item } from "../models/items";
 import { Brewery } from '../models/breweries';
 import { Menu, MenuItem, SubMenu } from '../models/menus';
+import { NewUser, normalizeEmail, Session, User } from '../models/users';
 import {v4 as uuidv4} from 'uuid';
 import { PrismaClient } from '../generated/prisma/client';
 
@@ -87,6 +88,22 @@ export abstract class DataProvider {
     abstract setMenuItemActive(id: string, active: boolean): Promise<MenuItem>
     // Sets (or, with null, clears) a menu item's own logo, which updateMenuItem can't do
     abstract setMenuItemLogo(id: string, itemLogo: string | null): Promise<MenuItem>
+
+    // ---- Users and sessions ----
+
+    // Creates a user, lowercasing the email. Refuses with a 409 if that email is taken.
+    abstract createUser(user: NewUser): Promise<User>;
+    abstract getUser(id: string): Promise<User | null>;
+    // Case-insensitive
+    abstract getUserByEmail(email: string): Promise<User | null>;
+    abstract countUsers(): Promise<number>;
+
+    abstract createSession(session: Session): Promise<Session>;
+    abstract getSession(id: string): Promise<Session | null>;
+    // Does nothing if the session is already gone
+    abstract deleteSession(id: string): Promise<void>;
+    // Clears out sessions that have run out. Returns how many were removed.
+    abstract deleteExpiredSessions(now: Date): Promise<number>;
 }
 
 export class PrismaDataProvider extends DataProvider {
@@ -580,6 +597,61 @@ export class PrismaDataProvider extends DataProvider {
             }
         });
     }
+
+    async createUser(user: NewUser): Promise<User> {
+        try {
+            return await this.prismaClient.user.create({
+                data: {
+                    email: normalizeEmail(user.email),
+                    displayName: user.displayName ?? null,
+                    passwordHash: user.passwordHash ?? null,
+                    role: user.role ?? 'USER',
+                    status: user.status ?? 'PENDING',
+                }
+            });
+        } catch (e: any) {
+            // Prisma's unique constraint violation
+            if (e?.code === 'P2002') {
+                throw new DataProviderError('An account with that email already exists', 409);
+            }
+            throw e;
+        }
+    }
+
+    async getUser(id: string): Promise<User | null> {
+        return await this.prismaClient.user.findUnique({ where: { id: id } });
+    }
+
+    async getUserByEmail(email: string): Promise<User | null> {
+        return await this.prismaClient.user.findUnique({ where: { email: normalizeEmail(email) } });
+    }
+
+    async countUsers(): Promise<number> {
+        return await this.prismaClient.user.count();
+    }
+
+    async createSession(session: Session): Promise<Session> {
+        return await this.prismaClient.session.create({
+            data: {
+                id: session.id,
+                userId: session.userId,
+                expiresAt: session.expiresAt,
+            }
+        });
+    }
+
+    async getSession(id: string): Promise<Session | null> {
+        return await this.prismaClient.session.findUnique({ where: { id: id } });
+    }
+
+    async deleteSession(id: string): Promise<void> {
+        await this.prismaClient.session.deleteMany({ where: { id: id } });
+    }
+
+    async deleteExpiredSessions(now: Date): Promise<number> {
+        const result = await this.prismaClient.session.deleteMany({ where: { expiresAt: { lt: now } } });
+        return result.count;
+    }
 }
 
 export class LocalDataProvider extends DataProvider {
@@ -590,6 +662,8 @@ export class LocalDataProvider extends DataProvider {
     MENU_ITEMS_KEY = "menuItems";
     MENUS_KEY = "menus";
     SUBMENUS_KEY = "submenus";
+    USERS_KEY = "users";
+    SESSIONS_KEY = "sessions";
 
     dataFolder: string;
     _cache: Map<string, Map<string, any>>;
@@ -605,6 +679,8 @@ export class LocalDataProvider extends DataProvider {
         this._cache.set(this.MENU_ITEMS_KEY, new Map);
         this._cache.set(this.MENUS_KEY, new Map);
         this._cache.set(this.SUBMENUS_KEY, new Map);
+        this._cache.set(this.USERS_KEY, new Map);
+        this._cache.set(this.SESSIONS_KEY, new Map);
         this.loadFromFile();
     }
 
@@ -1023,5 +1099,71 @@ export class LocalDataProvider extends DataProvider {
         const updated = new MenuItem(original.id, original.menuId, original.itemId, original.subMenuId, itemLogo, original.order, original.active ?? true);
         this._cache.get(this.MENU_ITEMS_KEY)!.set(id, updated);
         return updated;
+    }
+
+    async createUser(user: NewUser): Promise<User> {
+        const email = normalizeEmail(user.email);
+        if (await this.getUserByEmail(email)) {
+            throw new DataProviderError('An account with that email already exists', 409);
+        }
+        const created: User = {
+            id: uuidv4(),
+            email: email,
+            displayName: user.displayName ?? null,
+            passwordHash: user.passwordHash ?? null,
+            role: user.role ?? 'USER',
+            status: user.status ?? 'PENDING',
+            createdAt: new Date(),
+            approvedAt: null,
+            approvedById: null,
+        };
+        this._cache.get(this.USERS_KEY)!.set(created.id, created);
+        return { ...created };
+    }
+
+    async getUser(id: string): Promise<User | null> {
+        const user: User | undefined = this._cache.get(this.USERS_KEY)!.get(id);
+        return user ? { ...user } : null;
+    }
+
+    async getUserByEmail(email: string): Promise<User | null> {
+        const wanted = normalizeEmail(email);
+        for (const user of this._cache.get(this.USERS_KEY)!.values() as IterableIterator<User>) {
+            if (user.email === wanted) {
+                return { ...user };
+            }
+        }
+        return null;
+    }
+
+    async countUsers(): Promise<number> {
+        return this._cache.get(this.USERS_KEY)!.size;
+    }
+
+    async createSession(session: Session): Promise<Session> {
+        const created: Session = { id: session.id, userId: session.userId, createdAt: session.createdAt ?? new Date(), expiresAt: session.expiresAt };
+        this._cache.get(this.SESSIONS_KEY)!.set(created.id, created);
+        return { ...created };
+    }
+
+    async getSession(id: string): Promise<Session | null> {
+        const session: Session | undefined = this._cache.get(this.SESSIONS_KEY)!.get(id);
+        return session ? { ...session } : null;
+    }
+
+    async deleteSession(id: string): Promise<void> {
+        this._cache.get(this.SESSIONS_KEY)!.delete(id);
+    }
+
+    async deleteExpiredSessions(now: Date): Promise<number> {
+        const sessions = this._cache.get(this.SESSIONS_KEY)!;
+        let removed = 0;
+        for (const [id, session] of [...sessions.entries()] as [string, Session][]) {
+            if (session.expiresAt.getTime() < now.getTime()) {
+                sessions.delete(id);
+                removed++;
+            }
+        }
+        return removed;
     }
 }

@@ -32,8 +32,8 @@ cp .env.example .env
 
 | Variable | Required | Description |
 | -------- | -------- | ----------- |
-| `TOE_ADMIN_PASSWORD` | **Yes** | The shared admin password. Docker Compose refuses to start without it, and without it the server answers every admin request with `503` (it fails closed). Use something long and random. |
-| `TOE_ADMIN_USERNAME` | No | Admin username. Defaults to `admin`. |
+| `TOE_ADMIN_PASSWORD` | **Yes** | The password for the first admin account. Docker Compose refuses to start without it. Use something long and random. Only used while there are no users; see [Accounts](#accounts-and-signing-in). |
+| `TOE_ADMIN_EMAIL` | No | What the first admin signs in with. Defaults to `admin`; the older name `TOE_ADMIN_USERNAME` still works. |
 | `DOMAIN` | No | The domain Caddy serves, e.g. `menu.zymosbrewing.com`. Defaults to `localhost`. A real domain gets a Let's Encrypt certificate automatically; `localhost` uses Caddy's own local certificate authority, so browsers show a certificate warning. Accepts a comma-separated list. |
 | `INTERNAL_DOMAIN` | No | A name that only resolves on your own network, e.g. `zymos.brew` from a DNS entry on your router. Caddy serves it with a certificate from its local CA. Keep it out of `DOMAIN`; see below. |
 | `HTTP_PORT`, `HTTPS_PORT` | No | Host ports Caddy listens on. Default `80` and `443`. Change them if something else on the machine already uses those (see below). |
@@ -57,7 +57,7 @@ This starts four services:
 
 Then open:
 
-- **https://localhost/admin/** for the admin app. Sign in with `TOE_ADMIN_USERNAME` and
+- **https://localhost/admin/** for the admin app. Sign in with `TOE_ADMIN_EMAIL` and
   `TOE_ADMIN_PASSWORD`. Your browser will warn about the certificate when `DOMAIN` is `localhost`;
   that is expected.
 - `http://127.0.0.1:3000` for the server directly. It is bound to loopback only.
@@ -146,6 +146,24 @@ npm run dev                  # http://localhost:5173/admin/
 
 The dev server proxies `/api` to `localhost:3000`. See [client/README.md](client/README.md).
 
+## Accounts and signing in
+
+People sign in to the admin app with an email and password. The server stores a session for each
+sign-in and gives the browser an httpOnly cookie (`toe_session`); only a hash of the cookie's
+secret is stored, signing out ends the session on the server, and a disabled account loses access
+on its next request. A normal sign-in lasts a day (and ends when the browser closes); "Keep me
+signed in" lasts 30 days. Failed sign-ins are limited to 30 per 10 minutes per IP address.
+
+The first admin is created at startup, from `TOE_ADMIN_EMAIL` and `TOE_ADMIN_PASSWORD`, but only
+while there are no users at all. After that the accounts live in the database: changing
+`TOE_ADMIN_PASSWORD` later does **not** change an existing account's password.
+
+Upgrading from the shared-password version: your existing `.env` keeps working (`TOE_ADMIN_USERNAME`
+is read as the sign-in name, defaulting to `admin`), so sign in with that name and the same
+password. The container now runs `prisma migrate deploy` instead of `migrate dev`, so new
+migrations (this one adds the user and session tables) are applied automatically on start.
+Back up the `pg_data` volume before upgrading.
+
 ## Public menu URLs
 
 Menu IDs are visible in the admin app's URLs (`/admin/menus/<menuId>`).
@@ -158,7 +176,7 @@ Menu IDs are visible in the admin app's URLs (`/admin/menus/<menuId>`).
 | `/menus/<menuId>?format=digital` | PDF menu board |
 
 These are public and need no login. The PDF format is rate limited (10 requests per minute per IP).
-The admin API under `/api` always requires the admin login.
+The admin API under `/api` always requires a signed-in user.
 
 ## Wix "Currently On Tap" widget
 
@@ -183,8 +201,9 @@ None of the tests need a database. See [TESTING.md](TESTING.md) for more.
 
 ```
 server.ts, app.ts       Entry point and Express app (middleware, routes)
-routes/                 menus.ts (public formats), api.ts (admin JSON API)
-middleware/             Admin auth and rate limits
+routes/                 menus.ts (public formats), api.ts (admin JSON API), auth.ts (sign in/out)
+auth/                   Password hashing, sessions, and creating the first admin
+middleware/             Session check, same-origin check and rate limits
 storage/providers.ts    Data layer: Prisma/Postgres, plus an in-memory provider used by tests
 prisma/                 Schema and migrations
 public/                 Print menu template, CSS and fonts

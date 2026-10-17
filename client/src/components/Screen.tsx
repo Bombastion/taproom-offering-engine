@@ -1,6 +1,8 @@
 import { ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router';
-import { signOut } from '../auth';
+import { setSignedOut } from '../auth';
+import { api, errorMessage } from '../api';
+import { useToast } from './Toast';
 import { useQueryClient } from '@tanstack/react-query';
 import { BackIcon, BreweryIcon, ChevronRight, GlassIcon, HomeIcon, ListIcon, MoreIcon, MugIcon, PourIcon } from './Icons';
 
@@ -118,6 +120,7 @@ function MoreMenu() {
   const [open, setOpen] = useState(false);
   const wrapper = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
+  const toast = useToast();
 
   useEffect(() => {
     if (!open) return;
@@ -145,9 +148,18 @@ function MoreMenu() {
           <button
             type="button"
             className="more-item"
-            onClick={() => {
+            onClick={async () => {
+              setOpen(false);
+              try {
+                // Ends the session on the server too, rather than just forgetting it here
+                await api.logout();
+              } catch (e) {
+                toast(errorMessage(e), 'error');
+                return;
+              }
+              // Nothing from this session should linger for whoever signs in next
               queryClient.clear();
-              signOut();
+              setSignedOut();
             }}
           >
             Sign out
