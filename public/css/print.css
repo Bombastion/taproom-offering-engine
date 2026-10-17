@@ -22,7 +22,7 @@ html {
 }
 
 body {
-  width: 7.5in;
+  width: 7.9in; /* 0.3in side margins on letter paper */
   margin: 0 auto;
   padding: 0.5in 0 0; /* top margin of the first page; each later page gets its own from .pageStart */
 }
@@ -41,8 +41,8 @@ body {
   position: fixed;
   bottom: 0.3in;
   left: 50%;
-  width: 7.5in;
-  margin-left: -3.75in;
+  width: 7.9in;
+  margin-left: -3.95in;
   text-align: center;
   font-family: 'Roboto Variable', sans-serif;
   font-size: 10pt;
@@ -86,7 +86,7 @@ td, th {
 }
 
 .subMenuDiv{
-  width: 90%;
+  width: 96%;
   text-align: center;
   margin: 0 auto;
 }
@@ -120,7 +120,7 @@ td, th {
 }
 
 .descriptionCell {
-  width: 95%;
+  width: 70%; /* the rest of the row goes to the prices */
   margin-left: 0;
 }
 
