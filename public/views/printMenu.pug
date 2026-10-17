@@ -34,74 +34,129 @@ html
                             td(class='containerPriceCell')= (price !== undefined && price !== null && String(price).trim() !== '') ? '$' + price : ''
                   tr
                     td #{item.description}
+    //- Cloned onto the bottom of each page by the script below
+    template#pageFooterTemplate
+      div(class='pageFooter')
+        div(class='pageFooterRule')
+        div(class='pageFooterText') WiFi Name: Zymos Brewing / Password: @zymos_brew
     script.
       // Fit the whole menu on two letter-size pages by scaling every font (all sizes in the
       // stylesheet are rem-based) to the largest root size that still fits, never above the
-      // normal size. Page breaks are simulated the way the browser will make them: an item
-      // (and a section heading with its first item) is never split across pages.
+      // normal size. The page margin is 0 (so browsers have no room to print their URL/date
+      // headers and footers), which means the half-inch margins are built here instead: the
+      // body is padded at the top, and a spacer pushes whatever would run into the bottom
+      // margin onto the next page. Each page also gets the footer from the template above. An item (and a section heading with its first item) is
+      // never split across pages.
       (function () {
         var MAX_PAGES = 2;
-        var PAGE_HEIGHT = 10 * 96 - 6; // 11in page - 2 x 0.5in margins, in CSS px, minus rounding slack
+        var PAGE = 11 * 96;            // letter page height in CSS px
+        var TOP = 0.5 * 96;            // margin kept above the content on each page
+        var BOTTOM = 0.75 * 96;        // margin kept below it: room for the footer
+        var SLACK = 6;                 // px of rounding slack at the bottom of each page
         var MIN_SIZE = 3;              // px, last-resort floor so the two-page limit always holds
         var MAX_SIZE = 16;             // px, the normal size used for short menus
 
+        function clearSpacers(root) {
+          document.querySelectorAll('.pageFooter').forEach(function (el) { el.remove(); });
+          root.querySelectorAll('.pageSpacer').forEach(function (el) { el.remove(); });
+          root.querySelectorAll('.subMenuDiv').forEach(function (el) { el.style.marginTop = ''; });
+        }
+
+        // The pieces that must not be split: the logo, a section heading together with its
+        // first item, and each remaining item. Positions are measured from the page's top edge.
         function units(root) {
-          var rects = [];
-          var top = root.getBoundingClientRect().top;
-          function add(first, last) {
+          var found = [];
+          var origin = root.getBoundingClientRect().top - TOP;
+          function add(kind, el, first, last, section) {
             var a = first.getBoundingClientRect();
             var b = last.getBoundingClientRect();
-            rects.push({ top: a.top - top, bottom: b.bottom - top });
+            found.push({ kind: kind, el: el, section: section, top: a.top - origin, bottom: b.bottom - origin });
           }
           var logo = root.querySelector('.menuLogoUnit');
-          if (logo) add(logo, logo);
+          if (logo) add('logo', logo, logo, logo, null);
           root.querySelectorAll('.subMenuDiv').forEach(function (section) {
             var heading = section.querySelector('.subMenuHeader');
             var groups = section.querySelectorAll('.itemGroup');
-            if (groups.length === 0) { add(heading, heading); return; }
-            add(heading, groups[0]);
-            for (var i = 1; i < groups.length; i++) add(groups[i], groups[i]);
+            if (groups.length === 0) { add('lead', section, heading, heading, section); return; }
+            add('lead', section, heading, groups[0], section);
+            for (var i = 1; i < groups.length; i++) add('item', groups[i], groups[i], groups[i], section);
           });
-          return rects;
+          return found;
         }
 
-        // Height of the whole menu once page breaks have pushed units onto the next page
-        function paginatedHeight(root) {
+        // Where page breaks push things, and where the menu ends once they have
+        function paginate(root) {
           var shift = 0;
           var end = 0;
+          var pushes = [];
           units(root).forEach(function (u) {
             var top = u.top + shift;
             var bottom = u.bottom + shift;
-            if (bottom - top < PAGE_HEIGHT) {
-              var page = Math.floor(top / PAGE_HEIGHT);
-              if (Math.floor((bottom - 0.01) / PAGE_HEIGHT) > page) {
-                var push = (page + 1) * PAGE_HEIGHT - top;
-                shift += push;
-                bottom += push;
-              }
+            var page = Math.floor(top / PAGE);
+            var limit = page * PAGE + PAGE - BOTTOM - SLACK;
+            if (bottom - top < PAGE - TOP - BOTTOM && bottom > limit) {
+              var push = (page + 1) * PAGE + TOP - top;
+              pushes.push({ unit: u, push: push });
+              shift += push;
+              bottom += push;
             }
             end = bottom;
           });
-          return end;
+          return { end: end, pushes: pushes };
+        }
+
+        function fits(root) {
+          return paginate(root).end <= MAX_PAGES * PAGE - BOTTOM - SLACK;
+        }
+
+        // Turn the simulated pushes into real spacers so every browser breaks in the same places
+        function applySpacers(root) {
+          paginate(root).pushes.forEach(function (p) {
+            if (p.unit.kind === 'item') {
+              var spacer = document.createElement('tbody');
+              spacer.className = 'pageSpacer';
+              var cell = spacer.appendChild(document.createElement('tr')).appendChild(document.createElement('td'));
+              cell.colSpan = 2;
+              cell.style.height = p.push + 'px';
+              cell.style.padding = '0';
+              p.unit.el.parentNode.insertBefore(spacer, p.unit.el);
+            } else if (p.unit.kind === 'lead') {
+              p.unit.el.style.marginTop = p.push + 'px';
+            }
+          });
         }
 
         function fit() {
           var root = document.getElementById('menuRoot');
           var html = document.documentElement;
+          clearSpacers(root);
           function fitsAt(size) {
             html.style.fontSize = size + 'px';
-            return paginatedHeight(root) <= MAX_PAGES * PAGE_HEIGHT;
+            return fits(root);
           }
-          if (fitsAt(MAX_SIZE)) return;
-          var lo = MIN_SIZE;
-          var hi = MAX_SIZE;
-          for (var i = 0; i < 14; i++) {
-            var mid = (lo + hi) / 2;
-            if (fitsAt(mid)) { lo = mid; } else { hi = mid; }
+          if (!fitsAt(MAX_SIZE)) {
+            var lo = MIN_SIZE;
+            var hi = MAX_SIZE;
+            for (var i = 0; i < 14; i++) {
+              var mid = (lo + hi) / 2;
+              if (fitsAt(mid)) { lo = mid; } else { hi = mid; }
+            }
+            if (!fitsAt(lo)) {
+              console.warn('Menu does not fit on ' + MAX_PAGES + ' pages even at ' + MIN_SIZE + 'px');
+            }
           }
-          if (!fitsAt(lo)) {
-            console.warn('Menu does not fit on ' + MAX_PAGES + ' pages even at ' + MIN_SIZE + 'px');
-            html.style.fontSize = MIN_SIZE + 'px';
+          applySpacers(root);
+          addFooters(root);
+        }
+
+        // A footer at the bottom of every page the menu uses (not an extra, otherwise blank, page)
+        function addFooters(root) {
+          var template = document.getElementById('pageFooterTemplate');
+          var pages = Math.max(1, Math.ceil((paginate(root).end + BOTTOM) / PAGE - 0.001));
+          for (var i = 0; i < Math.min(pages, MAX_PAGES); i++) {
+            var footer = template.content.firstElementChild.cloneNode(true);
+            footer.style.top = ((i + 1) * PAGE - BOTTOM + 10) + 'px';
+            document.body.appendChild(footer);
           }
         }
 
