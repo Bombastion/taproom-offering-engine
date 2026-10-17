@@ -181,7 +181,7 @@ describe('?format=print', () => {
     expect(html).toContain('class="itemGroup"');
     // The inline script scales the root font size to fit; the stylesheet is what sets up the page
     expect(html).toContain('MAX_PAGES = 2');
-    // The WiFi footer that is cloned onto the bottom of each page
+    // The WiFi footer, a fixed element that browsers repeat on every printed page
     expect(html).toContain('WiFi Name: Zymos Brewing / Password: @zymos_brew');
     const css = fs.readFileSync(path.join(repoRoot, 'public/css/print.css'), 'utf8');
     expect(css).toMatch(/@page\s*\{[^}]*size:\s*letter[^}]*margin:\s*0;/);

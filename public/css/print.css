@@ -24,19 +24,36 @@ html {
 body {
   width: 7.5in;
   margin: 0 auto;
-  padding: 0.5in 0 0; /* top margin of the first page; later pages get theirs from spacers */
-  position: relative; /* the page footers are positioned against the top of the first page */
+  padding: 0.5in 0 0; /* top margin of the first page; each later page gets its own from .pageStart */
 }
 
-/* The footer at the bottom of each page. It has a fixed size rather than scaling with the menu. */
+/* Each page after the first starts here: a hard page break, then its own top margin */
+.pageStart {
+  break-before: page;
+  page-break-before: always;
+  padding-top: 0.5in;
+}
+
+/* The footer at the bottom of each page. position: fixed makes browsers repeat it on every
+   printed page, placed from the page's own bottom edge. It has a fixed size rather than
+   scaling with the menu, and sits inside the bottom margin that printMenu.pug keeps clear. */
 .pageFooter {
-  position: absolute;
-  left: 0;
-  width: 100%;
+  position: fixed;
+  bottom: 0.3in;
+  left: 50%;
+  width: 7.5in;
+  margin-left: -3.75in;
   text-align: center;
   font-family: 'Roboto Variable', sans-serif;
   font-size: 10pt;
   color: #3f3f3f;
+}
+
+@media screen {
+  .pageFooter {
+    position: static;
+    margin: 0.25in auto 0.5in;
+  }
 }
 
 .pageFooterRule {
