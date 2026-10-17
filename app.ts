@@ -3,9 +3,10 @@ import path from 'path';
 import { DataProvider } from './storage/providers';
 import { MenusRoutes } from './routes/menus';
 import { ApiRoutes } from './routes/api';
-import { adminAuth, isApiPath } from './middleware/auth';
+import { AuthRoutes } from './routes/auth';
+import { isApiPath, requireSession, sameOriginWrites, sessionMiddleware } from './middleware/auth';
 import helmet from 'helmet';
-import { generalLimiter, adminLimiter, expensiveFormatLimiter } from './middleware/rateLimits';
+import { generalLimiter, loginLimiter, expensiveFormatLimiter } from './middleware/rateLimits';
 
 // Builds the Express app (middleware, views and routes) around the given data provider, without
 // starting to listen. server.ts wires it to Postgres and starts it; the tests build it around an
@@ -36,12 +37,13 @@ export function createApp(dataProvider: DataProvider): Express {
   // used to tie up the server.
   app.use(expensiveFormatLimiter);
 
-  // Gate the admin JSON API (and, as a safety net, any write outside it) behind a shared admin
-  // password. The public menu formats the Wix widget and the public site use are left open. adminLimiter runs first so that repeated
-  // *failed* login attempts are throttled too, not just successful admin usage. See
-  // middleware/auth.ts for the exact rule and how to set the password.
-  app.use(adminLimiter);
-  app.use(adminAuth);
+  // Gate the admin JSON API (and, as a safety net, any write outside it) behind a signed-in user.
+  // The public menu formats the Wix widget and the public site use are left open. Browsers send
+  // the session cookie automatically, so writes that the browser says came from another site are
+  // refused first. See middleware/auth.ts for the exact rules and auth/ for how sessions work.
+  app.use(sameOriginWrites);
+  app.use(sessionMiddleware(dataProvider));
+  app.use(requireSession);
 
   // Allow cross-origin requests (e.g., the Wix "currently on tap" widget fetching
   // menu data from this server's domain). Menu data served here is public/read-only,
@@ -71,12 +73,16 @@ export function createApp(dataProvider: DataProvider): Express {
   // Register routers
   // Public menu formats (JSON, widget, print, PDF)
   app.use('/menus', new MenusRoutes(dataProvider).router);
-  // JSON API for the admin client app (/client). Always behind the admin login, and never cached,
-  // since it serves the editing surface rather than public menu data.
+  // JSON API for the admin client app (/client). Behind a login (except for signing in and out),
+  // and never cached, since it serves the editing surface rather than public menu data.
   app.use('/api', (_req: Request, res: Response, next: NextFunction) => {
     res.set('Cache-Control', 'no-store');
     next();
-  }, new ApiRoutes(dataProvider).router);
+  });
+  // Failed sign-ins are throttled per IP so passwords can't be guessed at speed
+  app.use('/api/auth/login', loginLimiter);
+  app.use('/api/auth', new AuthRoutes(dataProvider).router);
+  app.use('/api', new ApiRoutes(dataProvider).router);
 
   // Last-resort error handler: anything that reaches here escaped a route's own try/catch (or
   // was an unhandled rejection inside an async handler, which Express 5 forwards here

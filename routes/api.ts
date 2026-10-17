@@ -7,7 +7,7 @@ import { Brewery } from '../models/breweries';
 import { ItemContainer, SaleContainer } from '../models/containers';
 
 /*
-JSON API for the admin client app (see /client). Everything under /api requires the admin login
+JSON API for the admin client app (see /client). Everything under /api requires a signed-in user
 (see middleware/auth.ts), including GETs, since this is the editing surface rather than the
 public menu data.
 
@@ -142,12 +142,6 @@ export class ApiRoutes extends Routes {
         }
       };
     };
-
-    // Lets the client check a username/password before storing them. Reaching this handler at
-    // all means the admin auth middleware accepted the credentials.
-    this.router.get('/session', handle(async (_req, res) => {
-      res.json({ ok: true });
-    }));
 
     // ---- Menus ----
 

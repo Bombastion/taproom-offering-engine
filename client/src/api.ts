@@ -1,4 +1,4 @@
-import { basicAuthHeader, Credentials, getCredentials, signOut } from './auth';
+import { SessionUser, setSignedOut } from './auth';
 
 // ---- Shapes returned by the server's /api routes (routes/api.ts) ----
 
@@ -132,10 +132,14 @@ export type PourInput = { containerId: string; price: number };
 
 export class ApiError extends Error {
   status: number;
+  // A machine-readable reason, for the few errors the server explains that way (e.g. a sign-in
+  // refused because the account is "pending" approval or "disabled")
+  code?: string;
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, code?: string) {
     super(message);
     this.status = status;
+    this.code = code;
   }
 }
 
@@ -146,10 +150,8 @@ function friendlyMessage(status: number, body: string): string {
   return body || `Request failed (${status})`;
 }
 
-async function request<T>(method: string, path: string, body?: unknown, credentials?: Credentials): Promise<T> {
-  const creds = credentials ?? getCredentials();
+async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   const headers: Record<string, string> = { Accept: 'application/json' };
-  if (creds) headers.Authorization = basicAuthHeader(creds);
   if (body !== undefined) headers['Content-Type'] = 'application/json';
 
   let response: Response;
@@ -158,23 +160,41 @@ async function request<T>(method: string, path: string, body?: unknown, credenti
       method,
       headers,
       body: body === undefined ? undefined : JSON.stringify(body),
+      // The session cookie rides along on its own; it's never readable from this code
+      credentials: 'same-origin',
     });
   } catch {
     throw new ApiError(0, "Couldn't reach the server. Check your connection and try again.");
   }
 
   if (!response.ok) {
-    const text = (await response.text().catch(() => '')).slice(0, 300);
-    // Stored credentials stopped working (password changed, etc.): send the user to sign in.
-    if (response.status === 401 && !credentials) signOut();
-    throw new ApiError(response.status, friendlyMessage(response.status, text));
+    let text = (await response.text().catch(() => '')).slice(0, 300);
+    let code: string | undefined;
+    // Most errors are plain text, but a few come as { code, message }
+    if (response.headers.get('Content-Type')?.includes('application/json')) {
+      try {
+        const parsed = JSON.parse(text);
+        if (typeof parsed?.message === 'string') text = parsed.message;
+        if (typeof parsed?.code === 'string') code = parsed.code;
+      } catch {
+        // Not JSON after all; use the text as it came
+      }
+    }
+    // The session ended (signed out elsewhere, expired, account disabled): back to sign-in. A
+    // refused sign-in attempt is a 401 too, but there's no session to end.
+    if (response.status === 401 && path !== '/auth/login') setSignedOut();
+    throw new ApiError(response.status, friendlyMessage(response.status, text), code);
   }
   if (response.status === 204) return undefined as T;
   return (await response.json()) as T;
 }
 
 export const api = {
-  checkCredentials: (credentials: Credentials) => request<{ ok: true }>('GET', '/session', undefined, credentials),
+  login: (email: string, password: string, remember: boolean) =>
+    request<{ user: SessionUser }>('POST', '/auth/login', { email, password, remember }),
+  logout: () => request<void>('POST', '/auth/logout'),
+  // Who the browser's session cookie belongs to; a 401 means nobody
+  me: () => request<{ user: SessionUser }>('GET', '/auth/me'),
 
   menus: () => request<MenuSummary[]>('GET', '/menus'),
   createMenu: (displayName: string) => request<MenuSummary>('POST', '/menus', { displayName }),

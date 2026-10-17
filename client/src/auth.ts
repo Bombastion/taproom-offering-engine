@@ -1,64 +1,59 @@
 import { useSyncExternalStore } from 'react';
 
 /*
-The server protects its admin API with HTTP Basic Auth (one shared admin username/password; see
-middleware/auth.ts on the server). The app keeps those credentials for the tab session by
-default, or on the device if "Keep me signed in" was ticked, and sends them with every API call.
+Who is signed in. The server keeps the session: signing in sets an httpOnly cookie that the
+browser sends with every request on its own, so this app never sees or stores a password or a
+token. All it keeps here is what the server last said about the signed-in user, which drives
+the sign-in screen and what each screen shows.
+
+This file is only the state. Asking the server (GET /api/auth/me) is in session.ts.
 */
 
-export type Credentials = { username: string; password: string };
+export type SessionUser = {
+  id: string;
+  email: string;
+  displayName: string | null;
+  role: 'USER' | 'ADMIN';
+};
 
-const STORAGE_KEY = 'taproom-admin-credentials';
+export type SessionState =
+  // The server hasn't been asked yet whether the browser's cookie is still good
+  | { status: 'loading' }
+  // The server couldn't be reached to find out
+  | { status: 'error'; error: unknown }
+  | { status: 'signedOut' }
+  | { status: 'signedIn'; user: SessionUser };
 
-function readStored(): Credentials | null {
-  for (const storage of [sessionStorage, localStorage]) {
-    try {
-      const raw = storage.getItem(STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (typeof parsed?.username === 'string' && typeof parsed?.password === 'string') {
-          return parsed;
-        }
-      }
-    } catch {
-      // Storage can be unavailable (private browsing, blocked site data); fall through.
-    }
-  }
-  return null;
-}
+const LOADING: SessionState = { status: 'loading' };
+const SIGNED_OUT: SessionState = { status: 'signedOut' };
 
-let current: Credentials | null = readStored();
+let current: SessionState = LOADING;
 const listeners = new Set<() => void>();
 
-function emit() {
+function set(next: SessionState) {
+  current = next;
   listeners.forEach((listener) => listener());
 }
 
-export function getCredentials(): Credentials | null {
+export function getSession(): SessionState {
   return current;
 }
 
-export function signIn(credentials: Credentials, remember: boolean) {
-  current = credentials;
-  try {
-    sessionStorage.removeItem(STORAGE_KEY);
-    localStorage.removeItem(STORAGE_KEY);
-    (remember ? localStorage : sessionStorage).setItem(STORAGE_KEY, JSON.stringify(credentials));
-  } catch {
-    // Still signed in for this page load even if storage is unavailable.
-  }
-  emit();
+export function setSignedIn(user: SessionUser) {
+  set({ status: 'signedIn', user });
 }
 
-export function signOut() {
-  current = null;
-  try {
-    sessionStorage.removeItem(STORAGE_KEY);
-    localStorage.removeItem(STORAGE_KEY);
-  } catch {
-    // Nothing stored to clear.
-  }
-  emit();
+export function setSignedOut() {
+  if (current !== SIGNED_OUT) set(SIGNED_OUT);
+}
+
+export function setSessionError(error: unknown) {
+  set({ status: 'error', error });
+}
+
+// Back to "don't know yet", so the next screen to need the session asks the server again
+export function resetSession() {
+  if (current !== LOADING) set(LOADING);
 }
 
 function subscribe(listener: () => void) {
@@ -66,14 +61,6 @@ function subscribe(listener: () => void) {
   return () => listeners.delete(listener);
 }
 
-export function useCredentials(): Credentials | null {
-  return useSyncExternalStore(subscribe, getCredentials);
-}
-
-// Basic Auth wants base64 of the UTF-8 bytes; btoa alone only handles Latin-1.
-export function basicAuthHeader(credentials: Credentials): string {
-  const bytes = new TextEncoder().encode(`${credentials.username}:${credentials.password}`);
-  let binary = '';
-  bytes.forEach((byte) => (binary += String.fromCharCode(byte)));
-  return `Basic ${btoa(binary)}`;
+export function useSessionState(): SessionState {
+  return useSyncExternalStore(subscribe, getSession);
 }

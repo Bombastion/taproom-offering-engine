@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { routes } from '../src/app';
-import { signIn } from '../src/auth';
+import { resetSession, SessionUser, setSignedIn, setSignedOut } from '../src/auth';
 import { ToastProvider } from '../src/components/Toast';
 
 export type RecordedRequest = {
@@ -65,11 +65,14 @@ export function mockApi(handlers: Record<string, Handler>) {
   };
 }
 
-export const ADMIN = { username: 'admin', password: 'hunter2' };
+export const ADMIN: SessionUser = { id: 'u1', email: 'admin@example.com', displayName: 'Admin', role: 'ADMIN' };
 
-// Renders the real app routes at a URL, signed in by default
-export function renderApp(path: string, { signedIn = true } = {}) {
-  if (signedIn) signIn(ADMIN, false);
+// Renders the real app routes at a URL, signed in by default. `signedIn: 'unknown'` leaves the
+// app not yet knowing, so it asks the server (GET /api/auth/me) like it does on a fresh page load.
+export function renderApp(path: string, { signedIn = true as boolean | 'unknown' } = {}) {
+  if (signedIn === 'unknown') resetSession();
+  else if (signedIn) setSignedIn(ADMIN);
+  else setSignedOut();
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: 30_000 } },
   });
