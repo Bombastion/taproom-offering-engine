@@ -20,6 +20,11 @@ model Brewery {
   name String
   defaultLogo String?
   location String?
+  // Whose this is. Everything the admin app shows or changes is limited to its owner.
+  ownerId String
+  owner User @relation(fields: [ownerId], references: [id])
+
+  @@index([ownerId])
 }
 
 model ItemContainer {
@@ -27,6 +32,11 @@ model ItemContainer {
   containerName String
   displayName String
   order Int?
+  // Whose this is. Everything the admin app shows or changes is limited to its owner.
+  ownerId String
+  owner User @relation(fields: [ownerId], references: [id])
+
+  @@index([ownerId])
 }
 
 model SaleContainer {
@@ -34,6 +44,11 @@ model SaleContainer {
   containerId String
   menuItemId String
   price Float
+  // Whose this is. Everything the admin app shows or changes is limited to its owner.
+  ownerId String
+  owner User @relation(fields: [ownerId], references: [id])
+
+  @@index([ownerId])
 }
 
 model Item {
@@ -45,6 +60,11 @@ model Item {
   abv Float?
   description String?
   category String?
+  // Whose this is. Everything the admin app shows or changes is limited to its owner.
+  ownerId String
+  owner User @relation(fields: [ownerId], references: [id])
+
+  @@index([ownerId])
 }
 
 model Menu {
@@ -52,6 +72,11 @@ model Menu {
   internalName String
   displayName String
   logo String?
+  // Whose this is. Everything the admin app shows or changes is limited to its owner.
+  ownerId String
+  owner User @relation(fields: [ownerId], references: [id])
+
+  @@index([ownerId])
 }
 
 model SubMenu {
@@ -60,6 +85,11 @@ model SubMenu {
   displayName String
   menuId String
   order Int?
+  // Whose this is. Everything the admin app shows or changes is limited to its owner.
+  ownerId String
+  owner User @relation(fields: [ownerId], references: [id])
+
+  @@index([ownerId])
 }
 
 model MenuItem {
@@ -74,6 +104,11 @@ model MenuItem {
   // Inactive items stay on the section (keeping their place and prices) but are left off the
   // published menu views
   active Boolean @default(true)
+  // Whose this is. Everything the admin app shows or changes is limited to its owner.
+  ownerId String
+  owner User @relation(fields: [ownerId], references: [id])
+
+  @@index([ownerId])
 }
 
 enum UserRole {
@@ -100,6 +135,13 @@ model User {
   approvedAt DateTime?
   approvedById String?
   sessions Session[]
+  breweries Brewery[]
+  containers ItemContainer[]
+  saleContainers SaleContainer[]
+  items Item[]
+  menus Menu[]
+  subMenus SubMenu[]
+  menuItems MenuItem[]
 }
 
 model Session {

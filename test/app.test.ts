@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import request from 'supertest';
 import { Express } from 'express';
 import { createApp } from '../app';
-import { addUser, Fixture, memoryProvider, seed, signedInAs } from './helpers';
+import { addUser, Fixture, memoryProvider, seed, sessionCookieFor } from './helpers';
 import { LocalDataProvider } from '../storage/providers';
 
 // The whole middleware stack from app.ts (helmet, rate limits, auth, CORS, caching headers,
@@ -16,8 +16,9 @@ let admin: string;
 
 beforeEach(async () => {
   provider = memoryProvider();
-  data = await seed(provider);
-  admin = await signedInAs(provider);
+  const owner = await addUser(provider);
+  data = await seed(provider.forOwner(owner.id));
+  admin = await sessionCookieFor(provider, owner);
   app = createApp(provider);
 });
 

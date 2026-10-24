@@ -56,4 +56,50 @@ describe('ensureBootstrapAdmin', () => {
     await ensureBootstrapAdmin(provider, { TOE_ADMIN_PASSWORD: 'super-secret-value' }, log);
     expect(JSON.stringify(log.log.mock.calls)).not.toContain('super-secret-value');
   });
+
+  describe('the placeholder admin left by the asset-owners migration', () => {
+    async function addPlaceholder() {
+      return provider.createUser({ email: 'admin', displayName: 'Admin', role: 'ADMIN', status: 'ACTIVE' });
+    }
+
+    it('is adopted: it gets the configured email and password, and stays the only user', async () => {
+      const placeholder = await addPlaceholder();
+      await ensureBootstrapAdmin(provider, { TOE_ADMIN_EMAIL: 'Owner@Example.com', TOE_ADMIN_PASSWORD: 's3cret' }, log);
+      const admin = await provider.getUser(placeholder.id);
+      expect(admin).toMatchObject({ email: 'owner@example.com', role: 'ADMIN', status: 'ACTIVE' });
+      expect(await verifyPassword('s3cret', admin!.passwordHash)).toBe(true);
+      expect(await provider.countUsers()).toBe(1);
+    });
+
+    it('keeps owning the data it already owned', async () => {
+      const placeholder = await addPlaceholder();
+      const brewery = await provider.forOwner(placeholder.id).addBrewery({ name: 'Old Brewery' } as any);
+      await ensureBootstrapAdmin(provider, { TOE_ADMIN_PASSWORD: 'pw' }, log);
+      expect(await provider.forOwner(placeholder.id).getBrewery(brewery.id!)).not.toBeNull();
+    });
+
+    it('is not touched again once it has a password', async () => {
+      const placeholder = await addPlaceholder();
+      await ensureBootstrapAdmin(provider, { TOE_ADMIN_EMAIL: 'owner@example.com', TOE_ADMIN_PASSWORD: 'first' }, log);
+      await ensureBootstrapAdmin(provider, { TOE_ADMIN_EMAIL: 'other@example.com', TOE_ADMIN_PASSWORD: 'second' }, log);
+      const admin = await provider.getUser(placeholder.id);
+      expect(admin!.email).toBe('owner@example.com');
+      expect(await verifyPassword('first', admin!.passwordHash)).toBe(true);
+    });
+
+    it('is left alone when another admin can already sign in', async () => {
+      const placeholder = await addPlaceholder();
+      await addUser(provider, { email: 'real@example.com', password: 'pw', role: 'ADMIN' });
+      await ensureBootstrapAdmin(provider, { TOE_ADMIN_EMAIL: 'owner@example.com', TOE_ADMIN_PASSWORD: 'changed' }, log);
+      expect((await provider.getUser(placeholder.id))!.email).toBe('admin');
+      expect(await provider.countUsers()).toBe(2);
+    });
+
+    it('warns and changes nothing when no password is configured', async () => {
+      const placeholder = await addPlaceholder();
+      await ensureBootstrapAdmin(provider, {}, log);
+      expect((await provider.getUser(placeholder.id))!.passwordHash).toBeNull();
+      expect(log.warn).toHaveBeenCalledWith(expect.stringMatching(/TOE_ADMIN_PASSWORD/));
+    });
+  });
 });

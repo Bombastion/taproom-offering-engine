@@ -1,10 +1,10 @@
 import express, { Express } from 'express';
-import { LocalDataProvider } from '../storage/providers';
+import { DataProvider, LocalDataProvider } from '../storage/providers';
 import { Brewery } from '../models/breweries';
 import { ItemContainer, SaleContainer } from '../models/containers';
 import { Item } from '../models/items';
 import { Menu, MenuItem, SubMenu } from '../models/menus';
-import { NewUser, User } from '../models/users';
+import { NewUser, PublicUser, toPublicUser, User } from '../models/users';
 import { hashPassword } from '../auth/passwords';
 import { newSessionToken, SESSION_COOKIE } from '../auth/sessions';
 
@@ -53,10 +53,18 @@ export async function signedInAs(provider: LocalDataProvider, overrides?: Parame
 }
 
 // A bare Express app with JSON parsing and a single router mounted, for testing a router
-// without the auth and rate-limit middleware in front of it.
-export function appWith(mountPath: string, router: express.Router): Express {
+// without the auth and rate-limit middleware in front of it. `user` is who the requests count as
+// being from, as if they had signed in (the API router works on that user's data).
+export function appWith(mountPath: string, router: express.Router, user?: User | PublicUser): Express {
   const app = express();
   app.use(express.json({ limit: '5mb' }));
+  if (user) {
+    const signedIn = toPublicUser(user as User);
+    app.use((req, _res, next) => {
+      req.user = signedIn;
+      next();
+    });
+  }
   app.use(mountPath, router);
   return app;
 }
@@ -74,7 +82,8 @@ A small but realistic menu:
     Section "Guest Taps" (order 2): Guest Sour
     Section "Empty" (order 3): nothing
 */
-export async function seed(provider: LocalDataProvider) {
+// Pass a provider limited to a user (provider.forOwner(user.id)) to make it that user's menu.
+export async function seed(provider: DataProvider) {
   const zymos = await provider.addBrewery(new Brewery(null, 'Zymos Brewing', null, 'Littleton, CO'));
   const guestCo = await provider.addBrewery(new Brewery(null, 'Guest Co', TINY_PNG, null));
 

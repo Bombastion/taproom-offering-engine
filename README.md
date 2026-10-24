@@ -164,6 +164,22 @@ password. The container now runs `prisma migrate deploy` instead of `migrate dev
 migrations (this one adds the user and session tables) are applied automatically on start.
 Back up the `pg_data` volume before upgrading.
 
+### Whose data it is
+
+Everything the admin app manages (breweries, pour sizes, items, menus, sections and their items)
+belongs to one account, and the admin API only ever shows and changes the signed-in account's own.
+Another account's menu, item or pour size isn't hidden, it doesn't exist as far as a request is
+concerned: asking for it by ID gets a 404, and so does linking to it from your own data. Admins see
+only their own data too. The one exception is the public menu formats below, which are found by the
+menu's link and need no login.
+
+Upgrading from before accounts existed: the `asset_owners` migration gives every existing row to
+the single admin account. If there is no admin yet it creates a placeholder with no password, and
+on startup that placeholder becomes the account with your `TOE_ADMIN_EMAIL` and
+`TOE_ADMIN_PASSWORD` (so it keeps all your existing data) instead of a second admin being made.
+Deploy this before approving anyone else: until then nothing separates one account's data from
+another's. Back up the `pg_data` volume first.
+
 ## Public menu URLs
 
 Menu IDs are visible in the admin app's URLs (`/admin/menus/<menuId>`).
