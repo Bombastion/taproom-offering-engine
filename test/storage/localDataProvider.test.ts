@@ -7,7 +7,7 @@ import { Brewery } from '../../models/breweries';
 import { ItemContainer, SaleContainer } from '../../models/containers';
 import { Item } from '../../models/items';
 import { Menu, MenuItem, SubMenu } from '../../models/menus';
-import { memoryProvider } from '../helpers';
+import { addUser, memoryProvider } from '../helpers';
 
 // The JSON-file-backed, in-memory provider. The other server tests use it as their data store,
 // so its behavior is pinned down here.
@@ -365,5 +365,125 @@ describe('users and sessions', () => {
     expect(await provider.getSession('older')).toBeNull();
     expect(await provider.getSession('live')).not.toBeNull();
     expect(await provider.deleteExpiredSessions(now)).toBe(0);
+  });
+});
+
+describe('limited to one user (forOwner)', () => {
+  let provider: LocalDataProvider;
+  let alice: string;
+  let bob: string;
+
+  beforeEach(async () => {
+    provider = memoryProvider();
+    alice = (await addUser(provider, { email: 'alice@example.com' })).id;
+    bob = (await addUser(provider, { email: 'bob@example.com' })).id;
+  });
+
+  it('only sees what it made itself', async () => {
+    const mine = provider.forOwner(alice);
+    const theirs = provider.forOwner(bob);
+    const brewery = await mine.addBrewery(new Brewery(null, 'Zymos', null, null));
+    expect(await mine.getBrewery(brewery.id!)).not.toBeNull();
+    expect(await theirs.getBrewery(brewery.id!)).toBeNull();
+    expect(await theirs.getBreweries()).toEqual([]);
+    expect(await mine.getBreweries()).toHaveLength(1);
+  });
+
+  it('is unscoped data underneath: the unscoped provider sees everyone\'s', async () => {
+    await provider.forOwner(alice).addMenu(new Menu(null, 'a', 'A', null));
+    await provider.forOwner(bob).addMenu(new Menu(null, 'b', 'B', null));
+    expect(await provider.getMenus()).toHaveLength(2);
+  });
+
+  it('cannot change or remove what it cannot see', async () => {
+    const menu = await provider.forOwner(alice).addMenu(new Menu(null, 'a', 'A', null));
+    const theirs = provider.forOwner(bob);
+    await expect(theirs.replaceMenu(menu.id!, new Menu(null, 'x', 'X', null))).rejects.toMatchObject({ statusCode: 404 });
+    await expect(theirs.updateMenu(menu.id!, new Menu(null, null, 'X', null))).rejects.toMatchObject({ statusCode: 404 });
+    expect(await provider.forOwner(alice).getMenu(menu.id!)).toMatchObject({ displayName: 'A' });
+  });
+
+  it('refuses links to what it cannot see, as if they did not exist', async () => {
+    const mine = provider.forOwner(alice);
+    const theirs = provider.forOwner(bob);
+    const brewery = await mine.addBrewery(new Brewery(null, 'Zymos', null, null));
+    const menu = await mine.addMenu(new Menu(null, 'a', 'A', null));
+    const container = await mine.addContainer(new ItemContainer(null, 'Pint', 'Pint', 1));
+    const item = await mine.addItem(new Item(null, 'x', 'X', brewery.id, null, null, null, 'beer'));
+    const section = await mine.addSubMenu(new SubMenu(null, 's', 'S', menu.id, 1));
+    const menuItem = await mine.addMenuItem(new MenuItem(null, menu.id, item.id, section.id, null, 1));
+
+    await expect(theirs.addItem(new Item(null, 'y', 'Y', brewery.id, null, null, null, 'beer'))).rejects.toMatchObject({ statusCode: 404 });
+    await expect(theirs.addSubMenu(new SubMenu(null, 's', 'S', menu.id, 1))).rejects.toMatchObject({ statusCode: 404 });
+    await expect(theirs.addMenuItem(new MenuItem(null, menu.id, item.id, section.id, null, 1))).rejects.toMatchObject({ statusCode: 404 });
+    await expect(theirs.addSaleContainer(new SaleContainer(null, container.id!, menuItem.id!, 5))).rejects.toMatchObject({ statusCode: 404 });
+    // The unscoped provider keeps its lenient behavior, which the sample data relies on
+    await expect(provider.addSubMenu(new SubMenu(null, 's', 'S', 'no-such-menu', 1))).resolves.toBeDefined();
+  });
+
+  it('finds only its own placements and prices', async () => {
+    const mine = provider.forOwner(alice);
+    const theirs = provider.forOwner(bob);
+    const menu = await mine.addMenu(new Menu(null, 'a', 'A', null));
+    const section = await mine.addSubMenu(new SubMenu(null, 's', 'S', menu.id, 1));
+    const item = await mine.addItem(new Item(null, 'x', 'X', null, null, null, null, 'beer'));
+    const container = await mine.addContainer(new ItemContainer(null, 'Pint', 'Pint', 1));
+    const menuItem = await mine.addMenuItem(new MenuItem(null, menu.id, item.id, section.id, null, 1));
+    await mine.addSaleContainer(new SaleContainer(null, container.id!, menuItem.id!, 5));
+
+    expect(await mine.getMenuItemsForMenu(menu.id!)).toHaveLength(1);
+    expect(await theirs.getMenuItemsForMenu(menu.id!)).toEqual([]);
+    expect(await theirs.getMenuItemsForSubMenu(section.id!)).toEqual([]);
+    expect(await theirs.getMenuItemsForItem(item.id!)).toEqual([]);
+    expect(await theirs.getSubMenusForMenu(menu.id!)).toEqual([]);
+    expect(await theirs.getSaleContainersForMenuItem(menuItem.id!)).toEqual([]);
+    expect(await theirs.getSaleContainersForContainer(container.id!)).toEqual([]);
+  });
+
+  it('cannot remove what it cannot see', async () => {
+    const mine = provider.forOwner(alice);
+    const container = await mine.addContainer(new ItemContainer(null, 'Pint', 'Pint', 1));
+    const item = await mine.addItem(new Item(null, 'x', 'X', null, null, null, null, 'beer'));
+    expect(await provider.forOwner(bob).removeContainer(container.id!)).toBe(false);
+    expect(await provider.forOwner(bob).removeItem(item.id!)).toBe(false);
+    expect(await mine.getContainer(container.id!)).not.toBeNull();
+    expect(await mine.getItem(item.id!)).not.toBeNull();
+  });
+
+  it('can be narrowed to the same user again but not switched to another', () => {
+    const mine = provider.forOwner(alice);
+    expect(mine.forOwner(alice)).toBe(mine);
+    expect(() => mine.forOwner(bob)).toThrow(/already limited/);
+  });
+});
+
+describe('users', () => {
+  it('lists them oldest first, as copies', async () => {
+    const provider = memoryProvider();
+    const first = await addUser(provider, { email: 'a@example.com' });
+    const second = await addUser(provider, { email: 'b@example.com' });
+    const users = await provider.getUsers();
+    expect(users.map((u) => u.id)).toEqual([first.id, second.id]);
+    users[0].email = 'changed@example.com';
+    expect((await provider.getUser(first.id))!.email).toBe('a@example.com');
+  });
+
+  it('updates only the fields given, normalizing the email', async () => {
+    const provider = memoryProvider();
+    const user = await addUser(provider, { email: 'a@example.com', displayName: 'A' });
+    const updated = await provider.updateUser(user.id, { email: '  New@Example.com ', status: 'DISABLED' });
+    expect(updated).toMatchObject({ email: 'new@example.com', status: 'DISABLED', displayName: 'A', role: 'ADMIN' });
+    expect(await provider.getUserByEmail('new@example.com')).toMatchObject({ id: user.id });
+    expect(await provider.getUserByEmail('a@example.com')).toBeNull();
+  });
+
+  it('refuses an email that another account has, and unknown users', async () => {
+    const provider = memoryProvider();
+    await addUser(provider, { email: 'a@example.com' });
+    const other = await addUser(provider, { email: 'b@example.com' });
+    await expect(provider.updateUser(other.id, { email: 'A@example.com' })).rejects.toMatchObject({ statusCode: 409 });
+    await expect(provider.updateUser('nobody', { status: 'ACTIVE' })).rejects.toMatchObject({ statusCode: 404 });
+    // Keeping your own email is not a clash
+    await expect(provider.updateUser(other.id, { email: 'b@example.com' })).resolves.toBeDefined();
   });
 });

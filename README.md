@@ -164,6 +164,13 @@ password. The container now runs `prisma migrate deploy` instead of `migrate dev
 migrations (this one adds the user and session tables) are applied automatically on start.
 Back up the `pg_data` volume before upgrading.
 
+### Data ownership
+
+Everything the admin app manages belongs to one account.
+Another account's menus, items, etc., item or pour size produces a 404, and so does linking to it
+from your own data. The one exception is the public menu formats below, which are found by the
+menu's link and don't require login.
+
 ## Public menu URLs
 
 Menu IDs are visible in the admin app's URLs (`/admin/menus/<menuId>`).

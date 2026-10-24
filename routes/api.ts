@@ -1,6 +1,7 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { Request, Response } from 'express';
 import Routes from './common';
-import { DataProviderError } from '../storage/providers';
+import { DataProvider, DataProviderError } from '../storage/providers';
 import { Menu, MenuItem, SubMenu } from '../models/menus';
 import { Item } from '../models/items';
 import { Brewery } from '../models/breweries';
@@ -14,6 +15,11 @@ public menu data.
 The shapes returned here are tailored to the client's screens (menu list -> menu -> section ->
 item editor) so each screen needs a single request, rather than mirroring the database tables
 one-to-one.
+
+Everything here belongs to the signed-in user: each request works through a data provider that is
+limited to that user's rows (DataProvider.forOwner), so another user's menus, items and so on
+aren't just hidden from the lists, they don't exist as far as a request is concerned (404). The
+handlers below must only use `this.data`, never the unscoped `this.dataProvider`; a test checks that.
 */
 
 type Ordered = { order: number | null };
@@ -131,12 +137,31 @@ function parsePours(body: any): PourInput[] | null {
 }
 
 export class ApiRoutes extends Routes {
+  // The provider limited to the user making the current request. It's carried along with the
+  // request (AsyncLocalStorage) so the handlers can reach it as this.data without passing it
+  // around, and so one request can never pick up another's.
+  private scoped = new AsyncLocalStorage<DataProvider>();
+
+  get data(): DataProvider {
+    const scoped = this.scoped.getStore();
+    if (!scoped) {
+      throw new Error('The API data is only available while handling a request from a signed-in user');
+    }
+    return scoped;
+  }
+
   registerRoutes(): void {
-    // Wraps a handler so thrown DataProviderErrors become proper 4xx responses.
+    // Wraps a handler so it runs as the signed-in user, and thrown DataProviderErrors become
+    // proper 4xx responses.
     const handle = (fn: (req: Request, res: Response) => Promise<void>) => {
       return async (req: Request, res: Response) => {
         try {
-          await fn(req, res);
+          if (!req.user) {
+            // requireSession keeps this from happening; refuse anyway rather than guess a user
+            res.status(401).send('Sign in required');
+            return;
+          }
+          await this.scoped.run(this.dataProvider.forOwner(req.user.id), () => fn(req, res));
         } catch (e: any) {
           this.handleError(res, e);
         }
@@ -146,11 +171,11 @@ export class ApiRoutes extends Routes {
     // ---- Menus ----
 
     this.router.get('/menus', handle(async (_req, res) => {
-      const menus = await this.dataProvider.getMenus();
+      const menus = await this.data.getMenus();
       const result = [];
       for (const menu of menus) {
-        const sections = await this.dataProvider.getSubMenusForMenu(menu.id!);
-        const menuItems = await this.dataProvider.getMenuItemsForMenu(menu.id!);
+        const sections = await this.data.getSubMenusForMenu(menu.id!);
+        const menuItems = await this.data.getMenuItemsForMenu(menu.id!);
         result.push({
           id: menu.id,
           displayName: menu.displayName,
@@ -166,18 +191,18 @@ export class ApiRoutes extends Routes {
     this.router.post('/menus', handle(async (req, res) => {
       const displayName = requiredString(req.body, 'displayName');
       const internalName = optionalString(req.body, 'internalName') ?? slugify(displayName);
-      const menu = await this.dataProvider.addMenu(new Menu(null, internalName, displayName, null));
+      const menu = await this.data.addMenu(new Menu(null, internalName, displayName, null));
       res.status(201).json({ id: menu.id, displayName: menu.displayName, internalName: menu.internalName });
     }));
 
     this.router.get('/menus/:menuId', handle(async (req, res) => {
-      const menu = await this.dataProvider.getMenu(req.params.menuId as string);
+      const menu = await this.data.getMenu(req.params.menuId as string);
       if (!menu) throw notFound('Menu');
-      const sections = (await this.dataProvider.getSubMenusForMenu(menu.id!)).sort(byOrder);
+      const sections = (await this.data.getSubMenusForMenu(menu.id!)).sort(byOrder);
       const items = new Map<string, Item | null>();
       const sectionResults = [];
       for (const section of sections) {
-        const menuItems = (await this.dataProvider.getMenuItemsForSubMenu(section.id!)).sort(byOrder);
+        const menuItems = (await this.data.getMenuItemsForSubMenu(section.id!)).sort(byOrder);
         // Names of what's showing on the published menu; inactive items are only counted
         const names: string[] = [];
         let inactiveCount = 0;
@@ -187,7 +212,7 @@ export class ApiRoutes extends Routes {
             continue;
           }
           if (!items.has(menuItem.itemId!)) {
-            items.set(menuItem.itemId!, await this.dataProvider.getItem(menuItem.itemId!));
+            items.set(menuItem.itemId!, await this.data.getItem(menuItem.itemId!));
           }
           const name = items.get(menuItem.itemId!)?.displayName;
           if (name) names.push(name);
@@ -215,49 +240,49 @@ export class ApiRoutes extends Routes {
     this.router.patch('/menus/:menuId', handle(async (req, res) => {
       const displayName = optionalString(req.body, 'displayName', 200);
       const internalName = optionalString(req.body, 'internalName', 200);
-      const menu = await this.dataProvider.updateMenu(req.params.menuId as string, new Menu(null, internalName, displayName, null));
+      const menu = await this.data.updateMenu(req.params.menuId as string, new Menu(null, internalName, displayName, null));
       res.json({ id: menu.id, displayName: menu.displayName, internalName: menu.internalName });
     }));
 
     // Sets or replaces a menu's logo (shown on the print view, the menu board PDF and the widget)
     this.router.put('/menus/:menuId/logo', handle(async (req, res) => {
-      const menu = await this.dataProvider.getMenu(req.params.menuId as string);
+      const menu = await this.data.getMenu(req.params.menuId as string);
       if (!menu) throw notFound('Menu');
       const logo = parseLogo(req.body);
-      await this.dataProvider.replaceMenu(menu.id!, new Menu(null, menu.internalName, menu.displayName, logo));
+      await this.data.replaceMenu(menu.id!, new Menu(null, menu.internalName, menu.displayName, logo));
       res.json({ logo: logoDataUrl(logo) });
     }));
 
     this.router.delete('/menus/:menuId/logo', handle(async (req, res) => {
-      const menu = await this.dataProvider.getMenu(req.params.menuId as string);
+      const menu = await this.data.getMenu(req.params.menuId as string);
       if (!menu) throw notFound('Menu');
-      await this.dataProvider.replaceMenu(menu.id!, new Menu(null, menu.internalName, menu.displayName, null));
+      await this.data.replaceMenu(menu.id!, new Menu(null, menu.internalName, menu.displayName, null));
       res.sendStatus(204);
     }));
 
     // Adds a new section to the end of a menu
     this.router.post('/menus/:menuId/sections', handle(async (req, res) => {
-      const menu = await this.dataProvider.getMenu(req.params.menuId as string);
+      const menu = await this.data.getMenu(req.params.menuId as string);
       if (!menu) throw notFound('Menu');
       const displayName = requiredString(req.body, 'displayName');
       const internalName = optionalString(req.body, 'internalName') ?? slugify(`${menu.internalName}-${displayName}`);
-      const existing = await this.dataProvider.getSubMenusForMenu(menu.id!);
+      const existing = await this.data.getSubMenusForMenu(menu.id!);
       const nextOrder = existing.reduce((max, s) => Math.max(max, s.order ?? 0), 0) + 1;
-      const section = await this.dataProvider.addSubMenu(new SubMenu(null, internalName, displayName, menu.id, nextOrder));
+      const section = await this.data.addSubMenu(new SubMenu(null, internalName, displayName, menu.id, nextOrder));
       res.status(201).json(section);
     }));
 
     // Reorders a menu's sections to match the given list of section IDs
     this.router.put('/menus/:menuId/sections/order', handle(async (req, res) => {
       const ids = idList(req.body, 'sectionIds');
-      const existing = await this.dataProvider.getSubMenusForMenu(req.params.menuId as string);
+      const existing = await this.data.getSubMenusForMenu(req.params.menuId as string);
       const existingIds = new Set(existing.map((s) => s.id));
       if (ids.length !== existing.length || ids.some((id) => !existingIds.has(id))) {
         throw badRequest('sectionIds must list every section of this menu exactly once');
       }
       // Orders start at 1: the data layer treats a falsy order as "unchanged"
       for (let i = 0; i < ids.length; i++) {
-        await this.dataProvider.updateSubMenu(ids[i], new SubMenu(null, null, null, null, i + 1));
+        await this.data.updateSubMenu(ids[i], new SubMenu(null, null, null, null, i + 1));
       }
       res.sendStatus(204);
     }));
@@ -265,18 +290,18 @@ export class ApiRoutes extends Routes {
     // ---- Sections (sub-menus) ----
 
     const loadSection = async (sectionId: string) => {
-      const section = await this.dataProvider.getSubMenu(sectionId);
+      const section = await this.data.getSubMenu(sectionId);
       if (!section) throw notFound('Section');
-      const menu = await this.dataProvider.getMenu(section.menuId!);
+      const menu = await this.data.getMenu(section.menuId!);
       if (!menu) throw notFound('Menu');
       return { section, menu };
     };
 
     const describePours = async (menuItemId: string) => {
-      const saleContainers = await this.dataProvider.getSaleContainersForMenuItem(menuItemId);
+      const saleContainers = await this.data.getSaleContainersForMenuItem(menuItemId);
       const pours = [];
       for (const saleContainer of saleContainers) {
-        const container = await this.dataProvider.getContainer(saleContainer.containerId);
+        const container = await this.data.getContainer(saleContainer.containerId);
         pours.push({
           containerId: saleContainer.containerId,
           displayName: container?.displayName ?? 'Pour',
@@ -290,7 +315,7 @@ export class ApiRoutes extends Routes {
     const describeItem = async (item: Item | null) => {
       if (!item) return null;
       let brewery: Brewery | null = null;
-      if (item.breweryId) brewery = await this.dataProvider.getBrewery(item.breweryId);
+      if (item.breweryId) brewery = await this.data.getBrewery(item.breweryId);
       return {
         id: item.id,
         displayName: item.displayName,
@@ -306,8 +331,8 @@ export class ApiRoutes extends Routes {
 
     // Where a menu item sits, for linking to it
     const describePlacement = async (menuItem: MenuItem) => {
-      const section = await this.dataProvider.getSubMenu(menuItem.subMenuId!);
-      const menu = await this.dataProvider.getMenu(menuItem.menuId!);
+      const section = await this.data.getSubMenu(menuItem.subMenuId!);
+      const menu = await this.data.getMenu(menuItem.menuId!);
       return {
         menuItemId: menuItem.id,
         active: MenuItem.isActive(menuItem),
@@ -323,14 +348,14 @@ export class ApiRoutes extends Routes {
 
     this.router.get('/sections/:sectionId', handle(async (req, res) => {
       const { section, menu } = await loadSection(req.params.sectionId as string);
-      const menuItems = (await this.dataProvider.getMenuItemsForSubMenu(section.id!)).sort(byOrder);
+      const menuItems = (await this.data.getMenuItemsForSubMenu(section.id!)).sort(byOrder);
       const entries = [];
       for (const menuItem of menuItems) {
         entries.push({
           menuItemId: menuItem.id,
           order: menuItem.order,
           active: MenuItem.isActive(menuItem),
-          item: await describeItem(await this.dataProvider.getItem(menuItem.itemId!)),
+          item: await describeItem(await this.data.getItem(menuItem.itemId!)),
           pours: await describePours(menuItem.id!),
         });
       }
@@ -346,12 +371,18 @@ export class ApiRoutes extends Routes {
     this.router.patch('/sections/:sectionId', handle(async (req, res) => {
       const displayName = optionalString(req.body, 'displayName', 200);
       const internalName = optionalString(req.body, 'internalName', 200);
-      const section = await this.dataProvider.updateSubMenu(req.params.sectionId as string, new SubMenu(null, internalName, displayName, null, null));
-      res.json(section);
+      const section = await this.data.updateSubMenu(req.params.sectionId as string, new SubMenu(null, internalName, displayName, null, null));
+      res.json({
+        id: section.id,
+        menuId: section.menuId,
+        internalName: section.internalName,
+        displayName: section.displayName,
+        order: section.order,
+      });
     }));
 
     this.router.delete('/sections/:sectionId', handle(async (req, res) => {
-      const removed = await this.dataProvider.removeSubMenu(req.params.sectionId as string);
+      const removed = await this.data.removeSubMenu(req.params.sectionId as string);
       if (!removed) throw notFound('Section');
       res.sendStatus(204);
     }));
@@ -359,16 +390,16 @@ export class ApiRoutes extends Routes {
     // Checked up front, before anything is written, so a bad request doesn't half-save
     const validatePours = async (pours: PourInput[] | null) => {
       for (const pour of pours ?? []) {
-        if (!(await this.dataProvider.getContainer(pour.containerId))) throw notFound('Pour size');
+        if (!(await this.data.getContainer(pour.containerId))) throw notFound('Pour size');
       }
     };
 
     const replacePours = async (menuItemId: string, pours: PourInput[]) => {
-      for (const existing of await this.dataProvider.getSaleContainersForMenuItem(menuItemId)) {
-        await this.dataProvider.removeSaleContainer(existing.id!);
+      for (const existing of await this.data.getSaleContainersForMenuItem(menuItemId)) {
+        await this.data.removeSaleContainer(existing.id!);
       }
       for (const pour of pours) {
-        await this.dataProvider.addSaleContainer(new SaleContainer(null, pour.containerId, menuItemId, pour.price));
+        await this.data.addSaleContainer(new SaleContainer(null, pour.containerId, menuItemId, pour.price));
       }
     };
 
@@ -376,7 +407,7 @@ export class ApiRoutes extends Routes {
       const displayName = requiredString(body, 'displayName');
       const internalName = optionalString(body, 'internalName', 200) ?? slugify(displayName);
       const breweryId = optionalString(body, 'breweryId', 100);
-      if (breweryId && !(await this.dataProvider.getBrewery(breweryId))) throw notFound('Brewery');
+      if (breweryId && !(await this.data.getBrewery(breweryId))) throw notFound('Brewery');
       const abv = optionalNumber(body, 'abv');
       if (abv !== null && (abv < 0 || abv > 100)) throw badRequest('abv must be between 0 and 100');
       return new Item(
@@ -399,31 +430,31 @@ export class ApiRoutes extends Routes {
     */
     this.router.post('/sections/:sectionId/items', handle(async (req, res) => {
       const { section } = await loadSection(req.params.sectionId as string);
-      const existingItems = await this.dataProvider.getMenuItemsForSubMenu(section.id!);
+      const existingItems = await this.data.getMenuItemsForSubMenu(section.id!);
       const nextOrder = existingItems.reduce((max, m) => Math.max(max, m.order ?? 0), 0) + 1;
 
       let itemId: string;
       let pours: PourInput[] = [];
       if (typeof req.body?.itemId === 'string') {
-        const item = await this.dataProvider.getItem(req.body.itemId);
+        const item = await this.data.getItem(req.body.itemId);
         if (!item) throw notFound('Item');
         itemId = item.id!;
         // Oldest first, so the last one is the most recent placement
-        const otherPlacements = await this.dataProvider.getMenuItemsForItem(itemId);
+        const otherPlacements = await this.data.getMenuItemsForItem(itemId);
         const source = otherPlacements[otherPlacements.length - 1];
         if (source) {
-          pours = (await this.dataProvider.getSaleContainersForMenuItem(source.id!)).map((s) => ({ containerId: s.containerId, price: s.price }));
+          pours = (await this.data.getSaleContainersForMenuItem(source.id!)).map((s) => ({ containerId: s.containerId, price: s.price }));
         }
       } else if (req.body?.item) {
         pours = parsePours(req.body) ?? [];
         await validatePours(pours);
-        const created = await this.dataProvider.addItem(await itemFromBody(req.body.item));
+        const created = await this.data.addItem(await itemFromBody(req.body.item));
         itemId = created.id!;
       } else {
         throw badRequest('Either itemId or item must be provided');
       }
 
-      const menuItem = await this.dataProvider.addMenuItem(new MenuItem(null, section.menuId, itemId, section.id, null, nextOrder));
+      const menuItem = await this.data.addMenuItem(new MenuItem(null, section.menuId, itemId, section.id, null, nextOrder));
       await replacePours(menuItem.id!, pours);
       res.status(201).json({ menuItemId: menuItem.id, itemId });
     }));
@@ -431,13 +462,13 @@ export class ApiRoutes extends Routes {
     // Reorders the items within a section to match the given list of menu item IDs
     this.router.put('/sections/:sectionId/items/order', handle(async (req, res) => {
       const ids = idList(req.body, 'menuItemIds');
-      const existing = await this.dataProvider.getMenuItemsForSubMenu(req.params.sectionId as string);
+      const existing = await this.data.getMenuItemsForSubMenu(req.params.sectionId as string);
       const existingIds = new Set(existing.map((m) => m.id));
       if (ids.length !== existing.length || ids.some((id) => !existingIds.has(id))) {
         throw badRequest('menuItemIds must list every item in this section exactly once');
       }
       for (let i = 0; i < ids.length; i++) {
-        await this.dataProvider.updateMenuItem(ids[i], new MenuItem(null, null, null, null, null, i + 1));
+        await this.data.updateMenuItem(ids[i], new MenuItem(null, null, null, null, null, i + 1));
       }
       res.sendStatus(204);
     }));
@@ -445,14 +476,14 @@ export class ApiRoutes extends Routes {
     // ---- Menu items (an item placed on a section, with its prices) ----
 
     this.router.get('/menu-items/:menuItemId', handle(async (req, res) => {
-      const menuItem = await this.dataProvider.getMenuItem(req.params.menuItemId as string);
+      const menuItem = await this.data.getMenuItem(req.params.menuItemId as string);
       if (!menuItem) throw notFound('Menu item');
       const { section, menu } = await loadSection(menuItem.subMenuId!);
-      const placements = await this.dataProvider.getMenuItemsForItem(menuItem.itemId!);
-      const itemRecord = await this.dataProvider.getItem(menuItem.itemId!);
+      const placements = await this.data.getMenuItemsForItem(menuItem.itemId!);
+      const itemRecord = await this.data.getItem(menuItem.itemId!);
       // What the widget shows for this item when it has no image of its own, in the same order
       // as the widget format in routes/menus.ts (the PDF skips the brewery step)
-      const brewery = itemRecord?.breweryId ? await this.dataProvider.getBrewery(itemRecord.breweryId) : null;
+      const brewery = itemRecord?.breweryId ? await this.data.getBrewery(itemRecord.breweryId) : null;
       const logoFallback = brewery?.defaultLogo ? 'brewery' : menu.logo ? 'menu' : 'none';
       res.json({
         menuItemId: menuItem.id,
@@ -462,7 +493,7 @@ export class ApiRoutes extends Routes {
         logoFallback,
         section: { id: section.id, displayName: section.displayName },
         menu: { id: menu.id, displayName: menu.displayName },
-        item: await describeItem(await this.dataProvider.getItem(menuItem.itemId!)),
+        item: await describeItem(await this.data.getItem(menuItem.itemId!)),
         pours: await describePours(menuItem.id!),
         // How many other places this item appears; edits to the item itself show up there too
         otherPlacementCount: placements.length - 1,
@@ -471,16 +502,16 @@ export class ApiRoutes extends Routes {
 
     // Saves the item's details and this placement's prices together
     this.router.put('/menu-items/:menuItemId', handle(async (req, res) => {
-      const menuItem = await this.dataProvider.getMenuItem(req.params.menuItemId as string);
+      const menuItem = await this.data.getMenuItem(req.params.menuItemId as string);
       if (!menuItem) throw notFound('Menu item');
       const pours = parsePours(req.body);
       await validatePours(pours);
       if (req.body?.item) {
-        const original = await this.dataProvider.getItem(menuItem.itemId!);
+        const original = await this.data.getItem(menuItem.itemId!);
         const updated = await itemFromBody(req.body.item);
         // Category isn't edited in the client; keep whatever it was
         updated.category = original?.category ?? null;
-        await this.dataProvider.replaceItem(menuItem.itemId!, updated);
+        await this.data.replaceItem(menuItem.itemId!, updated);
       }
       if (pours !== null) await replacePours(menuItem.id!, pours);
       res.sendStatus(204);
@@ -494,9 +525,9 @@ export class ApiRoutes extends Routes {
     this.router.put('/menu-items/:menuItemId/active', handle(async (req, res) => {
       const active = req.body?.active;
       if (typeof active !== 'boolean') throw badRequest('active must be true or false');
-      const menuItem = await this.dataProvider.getMenuItem(req.params.menuItemId as string);
+      const menuItem = await this.data.getMenuItem(req.params.menuItemId as string);
       if (!menuItem) throw notFound('Menu item');
-      const updated = await this.dataProvider.setMenuItemActive(menuItem.id!, active);
+      const updated = await this.data.setMenuItemActive(menuItem.id!, active);
       res.json({ menuItemId: updated.id, active: MenuItem.isActive(updated) });
     }));
 
@@ -506,36 +537,36 @@ export class ApiRoutes extends Routes {
     menu's, and the PDF to the menu's.
     */
     this.router.put('/menu-items/:menuItemId/logo', handle(async (req, res) => {
-      const menuItem = await this.dataProvider.getMenuItem(req.params.menuItemId as string);
+      const menuItem = await this.data.getMenuItem(req.params.menuItemId as string);
       if (!menuItem) throw notFound('Menu item');
       const logo = parseLogo(req.body);
-      await this.dataProvider.setMenuItemLogo(menuItem.id!, logo);
+      await this.data.setMenuItemLogo(menuItem.id!, logo);
       res.json({ logo: logoDataUrl(logo) });
     }));
 
     this.router.delete('/menu-items/:menuItemId/logo', handle(async (req, res) => {
-      const menuItem = await this.dataProvider.getMenuItem(req.params.menuItemId as string);
+      const menuItem = await this.data.getMenuItem(req.params.menuItemId as string);
       if (!menuItem) throw notFound('Menu item');
-      await this.dataProvider.setMenuItemLogo(menuItem.id!, null);
+      await this.data.setMenuItemLogo(menuItem.id!, null);
       res.sendStatus(204);
     }));
 
     // Takes an item off a section (the item itself stays in the library)
     this.router.delete('/menu-items/:menuItemId', handle(async (req, res) => {
-      const menuItem = await this.dataProvider.getMenuItem(req.params.menuItemId as string);
+      const menuItem = await this.data.getMenuItem(req.params.menuItemId as string);
       if (!menuItem) throw notFound('Menu item');
-      for (const saleContainer of await this.dataProvider.getSaleContainersForMenuItem(menuItem.id!)) {
-        await this.dataProvider.removeSaleContainer(saleContainer.id!);
+      for (const saleContainer of await this.data.getSaleContainersForMenuItem(menuItem.id!)) {
+        await this.data.removeSaleContainer(saleContainer.id!);
       }
-      await this.dataProvider.removeMenuItem(menuItem.id!);
+      await this.data.removeMenuItem(menuItem.id!);
       res.sendStatus(204);
     }));
 
     // ---- Library ----
 
     this.router.get('/items', handle(async (_req, res) => {
-      const items = await this.dataProvider.getItems();
-      const breweries = new Map((await this.dataProvider.getBreweries()).map((b) => [b.id, b.name]));
+      const items = await this.data.getItems();
+      const breweries = new Map((await this.data.getBreweries()).map((b) => [b.id, b.name]));
       res.json(items
         .map((item) => ({
           id: item.id,
@@ -551,12 +582,12 @@ export class ApiRoutes extends Routes {
 
     // Adds an item to the library without putting it on a menu
     this.router.post('/items', handle(async (req, res) => {
-      const created = await this.dataProvider.addItem(await itemFromBody(req.body));
+      const created = await this.data.addItem(await itemFromBody(req.body));
       res.status(201).json(await describeItem(created));
     }));
 
     const loadItem = async (itemId: string) => {
-      const item = await this.dataProvider.getItem(itemId);
+      const item = await this.data.getItem(itemId);
       if (!item) throw notFound('Item');
       return item;
     };
@@ -564,7 +595,7 @@ export class ApiRoutes extends Routes {
     this.router.get('/items/:itemId', handle(async (req, res) => {
       const item = await loadItem(req.params.itemId as string);
       const placements = [];
-      for (const menuItem of await this.dataProvider.getMenuItemsForItem(item.id!)) {
+      for (const menuItem of await this.data.getMenuItemsForItem(item.id!)) {
         placements.push(await describePlacement(menuItem));
       }
       placements.sort(byPlacement);
@@ -577,18 +608,18 @@ export class ApiRoutes extends Routes {
       const updated = await itemFromBody(req.body);
       // Category isn't edited in the client; keep whatever it was
       updated.category = original.category;
-      res.json(await describeItem(await this.dataProvider.replaceItem(original.id!, updated)));
+      res.json(await describeItem(await this.data.replaceItem(original.id!, updated)));
     }));
 
     // Deletes an item from the library. Only allowed once it's off every menu (409 otherwise).
     this.router.delete('/items/:itemId', handle(async (req, res) => {
-      const removed = await this.dataProvider.removeItem(req.params.itemId as string);
+      const removed = await this.data.removeItem(req.params.itemId as string);
       if (!removed) throw notFound('Item');
       res.sendStatus(204);
     }));
 
     this.router.get('/breweries', handle(async (_req, res) => {
-      const breweries = await this.dataProvider.getBreweries();
+      const breweries = await this.data.getBreweries();
       res.json(breweries
         .map((b) => ({ id: b.id, name: b.name, location: b.location, hasLogo: Boolean(b.defaultLogo) }))
         .sort((a, b) => (a.name ?? '').localeCompare(b.name ?? '')));
@@ -597,12 +628,12 @@ export class ApiRoutes extends Routes {
     this.router.post('/breweries', handle(async (req, res) => {
       const name = requiredString(req.body, 'name');
       const location = optionalString(req.body, 'location', 200);
-      const brewery = await this.dataProvider.addBrewery(new Brewery(null, name, null, location));
+      const brewery = await this.data.addBrewery(new Brewery(null, name, null, location));
       res.status(201).json({ id: brewery.id, name: brewery.name, location: brewery.location, hasLogo: false });
     }));
 
     const describeBrewery = async (brewery: Brewery) => {
-      const items = (await this.dataProvider.getItems())
+      const items = (await this.data.getItems())
         .filter((item) => item.breweryId === brewery.id)
         .map((item) => ({ id: item.id, displayName: item.displayName, style: item.style, abv: item.abv }))
         .sort((a, b) => (a.displayName ?? '').localeCompare(b.displayName ?? ''));
@@ -616,7 +647,7 @@ export class ApiRoutes extends Routes {
     };
 
     const loadBrewery = async (breweryId: string) => {
-      const brewery = await this.dataProvider.getBrewery(breweryId);
+      const brewery = await this.data.getBrewery(breweryId);
       if (!brewery) throw notFound('Brewery');
       return brewery;
     };
@@ -630,7 +661,7 @@ export class ApiRoutes extends Routes {
       const brewery = await loadBrewery(req.params.breweryId as string);
       const name = requiredString(req.body, 'name');
       const location = optionalString(req.body, 'location', 200);
-      const updated = await this.dataProvider.replaceBrewery(brewery.id!, new Brewery(null, name, brewery.defaultLogo, location));
+      const updated = await this.data.replaceBrewery(brewery.id!, new Brewery(null, name, brewery.defaultLogo, location));
       res.json(await describeBrewery(updated));
     }));
 
@@ -639,13 +670,13 @@ export class ApiRoutes extends Routes {
     this.router.put('/breweries/:breweryId/logo', handle(async (req, res) => {
       const brewery = await loadBrewery(req.params.breweryId as string);
       const logo = parseLogo(req.body);
-      await this.dataProvider.replaceBrewery(brewery.id!, new Brewery(null, brewery.name, logo, brewery.location));
+      await this.data.replaceBrewery(brewery.id!, new Brewery(null, brewery.name, logo, brewery.location));
       res.json({ logo: logoDataUrl(logo) });
     }));
 
     this.router.delete('/breweries/:breweryId/logo', handle(async (req, res) => {
       const brewery = await loadBrewery(req.params.breweryId as string);
-      await this.dataProvider.replaceBrewery(brewery.id!, new Brewery(null, brewery.name, null, brewery.location));
+      await this.data.replaceBrewery(brewery.id!, new Brewery(null, brewery.name, null, brewery.location));
       res.sendStatus(204);
     }));
 
@@ -657,11 +688,11 @@ export class ApiRoutes extends Routes {
       displayName: c.displayName,
       containerName: c.containerName,
       order: c.order,
-      priceCount: (await this.dataProvider.getSaleContainersForContainer(c.id!)).length,
+      priceCount: (await this.data.getSaleContainersForContainer(c.id!)).length,
     });
 
     const loadContainer = async (containerId: string) => {
-      const container = await this.dataProvider.getContainer(containerId);
+      const container = await this.data.getContainer(containerId);
       if (!container) throw notFound('Pour size');
       return container;
     };
@@ -675,7 +706,7 @@ export class ApiRoutes extends Routes {
     };
 
     this.router.get('/containers', handle(async (_req, res) => {
-      const containers = await this.dataProvider.getContainers();
+      const containers = await this.data.getContainers();
       const described = [];
       for (const container of containers) described.push(await describeContainer(container));
       res.json(described.sort(byOrder));
@@ -683,30 +714,30 @@ export class ApiRoutes extends Routes {
 
     // Adds a pour size to the end of the list
     this.router.post('/containers', handle(async (req, res) => {
-      const existing = await this.dataProvider.getContainers();
+      const existing = await this.data.getContainers();
       const nextOrder = existing.reduce((max, c) => Math.max(max, c.order ?? 0), 0) + 1;
-      const container = await this.dataProvider.addContainer(containerFromBody(req.body, nextOrder));
+      const container = await this.data.addContainer(containerFromBody(req.body, nextOrder));
       res.status(201).json(await describeContainer(container));
     }));
 
     // Reorders the pour sizes (the column order on menus) to match the given list of IDs
     this.router.put('/containers/order', handle(async (req, res) => {
       const ids = idList(req.body, 'containerIds');
-      const existing = await this.dataProvider.getContainers();
+      const existing = await this.data.getContainers();
       const existingIds = new Set(existing.map((c) => c.id));
       if (ids.length !== existing.length || new Set(ids).size !== ids.length || ids.some((id) => !existingIds.has(id))) {
         throw badRequest('containerIds must list every pour size exactly once');
       }
       // Orders start at 1: the data layer treats a falsy order as "unchanged"
       for (let i = 0; i < ids.length; i++) {
-        await this.dataProvider.updateContainer(ids[i], new ItemContainer(null, null, null, i + 1));
+        await this.data.updateContainer(ids[i], new ItemContainer(null, null, null, i + 1));
       }
       res.sendStatus(204);
     }));
 
     this.router.patch('/containers/:containerId', handle(async (req, res) => {
       const container = await loadContainer(req.params.containerId as string);
-      const updated = await this.dataProvider.updateContainer(container.id!, containerFromBody(req.body, null));
+      const updated = await this.data.updateContainer(container.id!, containerFromBody(req.body, null));
       res.json(await describeContainer(updated));
     }));
 
@@ -714,10 +745,10 @@ export class ApiRoutes extends Routes {
     this.router.get('/containers/:containerId/uses', handle(async (req, res) => {
       const container = await loadContainer(req.params.containerId as string);
       const uses = [];
-      for (const saleContainer of await this.dataProvider.getSaleContainersForContainer(container.id!)) {
-        const menuItem = await this.dataProvider.getMenuItem(saleContainer.menuItemId);
+      for (const saleContainer of await this.data.getSaleContainersForContainer(container.id!)) {
+        const menuItem = await this.data.getMenuItem(saleContainer.menuItemId);
         if (!menuItem) continue;
-        const item = await this.dataProvider.getItem(menuItem.itemId!);
+        const item = await this.data.getItem(menuItem.itemId!);
         uses.push({ ...(await describePlacement(menuItem)), itemName: item?.displayName ?? 'Item', price: saleContainer.price });
       }
       uses.sort((a, b) => byPlacement(a, b) || a.itemName.localeCompare(b.itemName));
@@ -726,7 +757,7 @@ export class ApiRoutes extends Routes {
 
     // Deletes a pour size. Only allowed once no item prices use it (409 otherwise).
     this.router.delete('/containers/:containerId', handle(async (req, res) => {
-      const removed = await this.dataProvider.removeContainer(req.params.containerId as string);
+      const removed = await this.data.removeContainer(req.params.containerId as string);
       if (!removed) throw notFound('Pour size');
       res.sendStatus(204);
     }));

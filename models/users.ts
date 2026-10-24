@@ -37,6 +37,9 @@ export interface Session {
     expiresAt: Date;
 }
 
+// The fields of a user that can be changed after it's created
+export type UserUpdate = Partial<Pick<User, 'email' | 'displayName' | 'passwordHash' | 'role' | 'status' | 'approvedAt' | 'approvedById'>>;
+
 // The parts of a user that are safe to send to the client
 export interface PublicUser {
     id: string;

@@ -188,7 +188,9 @@ export class MenusRoutes extends Routes {
 
       if (req.query.format === "json" || req.query.format === undefined) {
         if (result !== null) {
-          res.send(result);
+          // Spelled out rather than sending the stored row, so a field added to the table later
+          // (like the owner) isn't published by accident
+          res.send({ id: result.id, internalName: result.internalName, displayName: result.displayName, logo: result.logo });
           return
         }
       }

@@ -2,22 +2,26 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import request from 'supertest';
 import { Express } from 'express';
 import { ApiRoutes } from '../../routes/api';
-import { LocalDataProvider } from '../../storage/providers';
+import { DataProvider, LocalDataProvider } from '../../storage/providers';
 import { ItemContainer } from '../../models/containers';
-import { appWith, Fixture, GIF_HEADER, JPEG_HEADER, memoryProvider, seed, TINY_PNG } from '../helpers';
+import { addUser, appWith, Fixture, GIF_HEADER, JPEG_HEADER, memoryProvider, seed, TINY_PNG } from '../helpers';
 
 // The admin JSON API (routes/api.ts), exercised over HTTP against the in-memory data provider.
 // Auth and rate limiting sit in front of this router in the real app; they're covered in
-// test/middleware and test/app.test.ts.
+// test/middleware and test/app.test.ts. Who can see whose data is covered in test/tenancy.test.ts.
+// Here everything belongs to one signed-in user, and `provider` is limited to them too, so the
+// direct reads and writes in these tests see what the API sees.
 
-let provider: LocalDataProvider;
+let provider: DataProvider;
 let data: Fixture;
 let app: Express;
 
 beforeEach(async () => {
-  provider = memoryProvider();
+  const storage = memoryProvider();
+  const owner = await addUser(storage);
+  provider = storage.forOwner(owner.id);
   data = await seed(provider);
-  app = appWith('/api', new ApiRoutes(provider).router);
+  app = appWith('/api', new ApiRoutes(storage).router, owner);
 });
 
 describe('menus', () => {
@@ -836,7 +840,8 @@ describe('errors', () => {
   });
 
   it("doesn't leak internal error details", async () => {
-    vi.spyOn(provider, 'getMenus').mockRejectedValue(new Error('connect ECONNREFUSED 10.0.0.5:5432'));
+    // Each request works through its own provider limited to the user, so spy on the class
+    vi.spyOn(LocalDataProvider.prototype, 'getMenus').mockRejectedValueOnce(new Error('connect ECONNREFUSED 10.0.0.5:5432'));
     const res = await request(app).get('/api/menus');
     expect(res.status).toBe(500);
     expect(res.text).toBe('Unexpected error occurred');

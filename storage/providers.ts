@@ -3,7 +3,7 @@ import { ItemContainer, SaleContainer } from '../models/containers';
 import { Item } from "../models/items";
 import { Brewery } from '../models/breweries';
 import { Menu, MenuItem, SubMenu } from '../models/menus';
-import { NewUser, normalizeEmail, Session, User } from '../models/users';
+import { NewUser, normalizeEmail, Session, User, UserUpdate } from '../models/users';
 import {v4 as uuidv4} from 'uuid';
 import { PrismaClient } from '../generated/prisma/client';
 
@@ -25,6 +25,23 @@ function itemInUse(count: number): DataProviderError {
 }
 
 export abstract class DataProvider {
+    /*
+    Everything a user owns (breweries, pour sizes, prices, items, menus, sections and menu items)
+    is stamped with that user's ID, and nobody else can see or change it.
+
+    A provider made directly (new PrismaDataProvider(...)) is the *unscoped* one: it can read
+    anything, which is what the public menu views need since they look a menu up by its ID alone
+    and have no signed-in user. It can't create owned data, though, because it doesn't know whose
+    it would be. Everything that acts for a signed-in user goes through forOwner() instead:
+
+    The provider it returns has the same methods, but only ever sees that user's data (another
+    user's IDs come back as "not found", and lists leave theirs out), creates data owned by that
+    user, and refuses to link to things the user doesn't own (an item at someone else's brewery, a
+    price in someone else's pour size). Users and sessions aren't owned data, and work the same on
+    both.
+    */
+    abstract forOwner(ownerId: string): DataProvider;
+
     abstract addBrewery(brewery: Brewery): Promise<Brewery>;
     abstract getBrewery(id: string): Promise<Brewery | null>;
     abstract getBreweries(): Promise<Array<Brewery>>;
@@ -97,6 +114,11 @@ export abstract class DataProvider {
     // Case-insensitive
     abstract getUserByEmail(email: string): Promise<User | null>;
     abstract countUsers(): Promise<number>;
+    // Everyone, oldest account first
+    abstract getUsers(): Promise<Array<User>>;
+    // Changes the given fields of a user, lowercasing a new email. Refuses with a 404 if there is
+    // no such user, and a 409 if the new email is taken.
+    abstract updateUser(id: string, fields: UserUpdate): Promise<User>;
 
     abstract createSession(session: Session): Promise<Session>;
     abstract getSession(id: string): Promise<Session | null>;
@@ -108,15 +130,44 @@ export abstract class DataProvider {
 
 export class PrismaDataProvider extends DataProvider {
     prismaClient: PrismaClient
+    // The user whose data this provider is limited to, or null for the unscoped provider (see
+    // DataProvider.forOwner)
+    ownerId: string | null
 
-    constructor(prisma: PrismaClient) {
+    constructor(prisma: PrismaClient, ownerId: string | null = null) {
         super();
         this.prismaClient = prisma;
+        this.ownerId = ownerId;
+    }
+
+    forOwner(ownerId: string): DataProvider {
+        if (this.ownerId !== null) {
+            if (this.ownerId === ownerId) {
+                return this;
+            }
+            // Widening or switching a user's view must never be possible from inside the app
+            throw new Error('This provider is already limited to a user');
+        }
+        return new PrismaDataProvider(this.prismaClient, ownerId);
+    }
+
+    // Added to the `where` of every query on owned data: nothing for the unscoped provider
+    private owned(): { ownerId?: string } {
+        return this.ownerId === null ? {} : { ownerId: this.ownerId };
+    }
+
+    // The owner to put on anything created
+    private owner(): string {
+        if (this.ownerId === null) {
+            throw new Error('Data can only be created through forOwner(userId), so it has an owner');
+        }
+        return this.ownerId;
     }
 
     async addBrewery(brewery: Brewery): Promise<Brewery> {
         return await this.prismaClient.brewery.create({
             data: {
+                ownerId: this.owner(),
                 name: brewery.name!!,
                 defaultLogo: brewery.defaultLogo,
                 location: brewery.location
@@ -125,15 +176,11 @@ export class PrismaDataProvider extends DataProvider {
     }
 
     async getBrewery(id: string): Promise<Brewery | null> {
-        return await this.prismaClient.brewery.findUnique({
-            where: {
-                id: id
-            }
-        });
+        return await this.prismaClient.brewery.findFirst({ where: { id: id, ...this.owned() } });
     }
 
     async getBreweries(): Promise<Array<Brewery>> {
-        return await this.prismaClient.brewery.findMany({});
+        return await this.prismaClient.brewery.findMany({ where: this.owned() });
     }
 
     async replaceBrewery(breweryId: string, brewery: Brewery): Promise<Brewery> {
@@ -146,7 +193,7 @@ export class PrismaDataProvider extends DataProvider {
         }
         return await this.prismaClient.brewery.update({
             where: {
-                id: breweryId
+                id: breweryId, ...this.owned()
             },
             data: {
                 name: brewery.name,
@@ -159,6 +206,7 @@ export class PrismaDataProvider extends DataProvider {
     async addContainer(container: ItemContainer): Promise<ItemContainer> {
         return await this.prismaClient.itemContainer.create({
             data: {
+                ownerId: this.owner(),
                 containerName: container.containerName!!,
                 displayName: container.displayName!!,
                 order: container.order
@@ -167,15 +215,11 @@ export class PrismaDataProvider extends DataProvider {
     }
 
     async getContainer(id: string): Promise<ItemContainer | null> {
-        return await this.prismaClient.itemContainer.findUnique({
-            where: {
-                id: id
-            }
-        })
+        return await this.prismaClient.itemContainer.findFirst({ where: { id: id, ...this.owned() } })
     }
 
     async getContainers(): Promise<Array<ItemContainer>> {
-        return await this.prismaClient.itemContainer.findMany({});
+        return await this.prismaClient.itemContainer.findMany({ where: this.owned() });
     }
 
     async updateContainer(containerId: string, container: ItemContainer): Promise<ItemContainer> {
@@ -185,7 +229,7 @@ export class PrismaDataProvider extends DataProvider {
         }
         const updateResult = await this.prismaClient.itemContainer.update({
             where: {
-                id: containerId
+                id: containerId, ...this.owned()
             },
             data: {
                 containerName: container.containerName? container.containerName : original.containerName!!,
@@ -200,16 +244,16 @@ export class PrismaDataProvider extends DataProvider {
     async removeContainer(id: string): Promise<boolean> {
         // Check and delete in one transaction, so a price added in between can't be orphaned
         return await this.prismaClient.$transaction(async (tx) => {
-            const prices = await tx.saleContainer.findMany({ where: { containerId: id } });
-            const menuItems = await tx.menuItem.findMany({ where: { id: { in: prices.map((p) => p.menuItemId) } } });
+            const prices = await tx.saleContainer.findMany({ where: { containerId: id, ...this.owned() } });
+            const menuItems = await tx.menuItem.findMany({ where: { id: { in: prices.map((p) => p.menuItemId) }, ...this.owned() } });
             const liveIds = new Set(menuItems.map((m) => m.id));
             const uses = prices.filter((p) => liveIds.has(p.menuItemId)).length;
             if (uses > 0) {
                 throw containerInUse(uses);
             }
             // Only leftovers from deleted menu items remain at this point
-            await tx.saleContainer.deleteMany({ where: { containerId: id } });
-            const { count } = await tx.itemContainer.deleteMany({ where: { id: id } });
+            await tx.saleContainer.deleteMany({ where: { containerId: id, ...this.owned() } });
+            const { count } = await tx.itemContainer.deleteMany({ where: { id: id, ...this.owned() } });
             return count > 0;
         });
     }
@@ -224,6 +268,7 @@ export class PrismaDataProvider extends DataProvider {
 
         return await this.prismaClient.saleContainer.create({
             data: {
+                ownerId: this.owner(),
                 containerId: container.containerId,
                 menuItemId: container.menuItemId,
                 price: container.price
@@ -234,7 +279,8 @@ export class PrismaDataProvider extends DataProvider {
     async getSaleContainersForMenuItem(itemId: string): Promise<Array<SaleContainer>> {
         return await this.prismaClient.saleContainer.findMany({
             where: {
-                menuItemId: itemId
+                menuItemId: itemId,
+                ...this.owned(),
             }
         });
     }
@@ -242,12 +288,14 @@ export class PrismaDataProvider extends DataProvider {
     async getSaleContainersForContainer(containerId: string): Promise<Array<SaleContainer>> {
         const prices = await this.prismaClient.saleContainer.findMany({
             where: {
-                containerId: containerId
+                containerId: containerId,
+                ...this.owned(),
             }
         });
         const menuItems = await this.prismaClient.menuItem.findMany({
             where: {
-                id: { in: prices.map((p) => p.menuItemId) }
+                id: { in: prices.map((p) => p.menuItemId) },
+                ...this.owned(),
             }
         });
         const liveIds = new Set(menuItems.map((m) => m.id));
@@ -259,7 +307,7 @@ export class PrismaDataProvider extends DataProvider {
         // expect false for that (see DataProvider.removeSaleContainer)
         const { count } = await this.prismaClient.saleContainer.deleteMany({
             where: {
-                id: id
+                id: id, ...this.owned()
             }
         });
         return count > 0;
@@ -276,6 +324,7 @@ export class PrismaDataProvider extends DataProvider {
 
         return await this.prismaClient.item.create({
             data: {
+                ownerId: this.owner(),
                 internalName: item.internalName!!,
                 displayName: item.displayName!!,
                 breweryId: item.breweryId,
@@ -288,15 +337,12 @@ export class PrismaDataProvider extends DataProvider {
     }
 
     async getItem(id: string): Promise<Item | null> { 
-        return await this.prismaClient.item.findUnique({
-            where: {
-                id: id
-            }
-        });
+        return await this.prismaClient.item.findFirst({ where: { id: id, ...this.owned() } });
     }
     
     async getItems(): Promise<Array<Item>> {
         return await this.prismaClient.item.findMany({
+            where: this.owned(),
             orderBy: [
                 {
                     displayName: 'asc'
@@ -317,7 +363,7 @@ export class PrismaDataProvider extends DataProvider {
         }
         return await this.prismaClient.item.update({
             where: {
-                id: itemId
+                id: itemId, ...this.owned()
             },
             data: {
                 internalName: item.internalName,
@@ -333,11 +379,11 @@ export class PrismaDataProvider extends DataProvider {
 
     async removeItem(id: string): Promise<boolean> {
         return await this.prismaClient.$transaction(async (tx) => {
-            const placements = await tx.menuItem.count({ where: { itemId: id } });
+            const placements = await tx.menuItem.count({ where: { itemId: id, ...this.owned() } });
             if (placements > 0) {
                 throw itemInUse(placements);
             }
-            const { count } = await tx.item.deleteMany({ where: { id: id } });
+            const { count } = await tx.item.deleteMany({ where: { id: id, ...this.owned() } });
             return count > 0;
         });
     }
@@ -345,6 +391,7 @@ export class PrismaDataProvider extends DataProvider {
     async addMenu(menu: Menu): Promise<Menu> {
         return await this.prismaClient.menu.create({
             data: {
+                ownerId: this.owner(),
                 internalName: menu.internalName!!,
                 displayName: menu.displayName!!,
                 logo: menu.logo,
@@ -353,15 +400,11 @@ export class PrismaDataProvider extends DataProvider {
     }
 
     async getMenu(id: string): Promise<Menu | null> {
-        return await this.prismaClient.menu.findUnique({
-            where: {
-                id: id
-            }
-        });
+        return await this.prismaClient.menu.findFirst({ where: { id: id, ...this.owned() } });
     }
 
     async getMenus(): Promise<Array<Menu>> {
-        return await this.prismaClient.menu.findMany({});
+        return await this.prismaClient.menu.findMany({ where: this.owned() });
     }
 
     async updateMenu(id: string, menu: Menu): Promise<Menu> {
@@ -371,7 +414,7 @@ export class PrismaDataProvider extends DataProvider {
         }
         return await this.prismaClient.menu.update({
             where: {
-                id: id
+                id: id, ...this.owned()
             },
             data: {
                 internalName: menu.internalName? menu.internalName : original.internalName!!,
@@ -391,7 +434,7 @@ export class PrismaDataProvider extends DataProvider {
         }
         return await this.prismaClient.menu.update({
             where: {
-                id: id
+                id: id, ...this.owned()
             },
             data: {
                 internalName: menu.internalName,
@@ -412,6 +455,7 @@ export class PrismaDataProvider extends DataProvider {
 
         return await this.prismaClient.subMenu.create({
             data: {
+                ownerId: this.owner(),
                 internalName: menu.internalName!!,
                 displayName: menu.displayName!!,
                 menuId: menu.menuId!!,
@@ -421,17 +465,14 @@ export class PrismaDataProvider extends DataProvider {
     }
 
     async getSubMenu(id: string): Promise<SubMenu | null> { 
-        return await this.prismaClient.subMenu.findUnique({
-            where: {
-                id: id
-            }
-        });
+        return await this.prismaClient.subMenu.findFirst({ where: { id: id, ...this.owned() } });
     }
 
     async getSubMenusForMenu(menuId: string): Promise<Array<SubMenu>> {
         return await this.prismaClient.subMenu.findMany({
             where: {
-                menuId: menuId
+                menuId: menuId,
+                ...this.owned(),
             }
         });
     }
@@ -445,7 +486,7 @@ export class PrismaDataProvider extends DataProvider {
         }
         return await this.prismaClient.subMenu.update({
             where: {
-                id: id
+                id: id, ...this.owned()
             },
             data: {
                 internalName: subMenu.internalName? subMenu.internalName : original.internalName!!,
@@ -462,11 +503,11 @@ export class PrismaDataProvider extends DataProvider {
             return false;
         }
         await this.prismaClient.$transaction(async (tx) => {
-            const menuItems = await tx.menuItem.findMany({ where: { subMenuId: id } });
+            const menuItems = await tx.menuItem.findMany({ where: { subMenuId: id, ...this.owned() } });
             const menuItemIds = menuItems.map((menuItem) => menuItem.id);
-            await tx.saleContainer.deleteMany({ where: { menuItemId: { in: menuItemIds } } });
-            await tx.menuItem.deleteMany({ where: { subMenuId: id } });
-            await tx.subMenu.delete({ where: { id: id } });
+            await tx.saleContainer.deleteMany({ where: { menuItemId: { in: menuItemIds }, ...this.owned() } });
+            await tx.menuItem.deleteMany({ where: { subMenuId: id, ...this.owned() } });
+            await tx.subMenu.delete({ where: { id: id, ...this.owned() } });
         });
         return true;
     }
@@ -488,6 +529,7 @@ export class PrismaDataProvider extends DataProvider {
 
         return await this.prismaClient.menuItem.create({
             data: {
+                ownerId: this.owner(),
                 menuId: item.menuId!!,
                 itemId: item.itemId!!,
                 subMenuId: item.subMenuId!!,
@@ -499,17 +541,14 @@ export class PrismaDataProvider extends DataProvider {
     }
 
     async getMenuItem(id: string): Promise<MenuItem | null> {
-        return await this.prismaClient.menuItem.findUnique({
-            where: {
-                id: id
-            }
-        });
+        return await this.prismaClient.menuItem.findFirst({ where: { id: id, ...this.owned() } });
     }
 
     async getMenuItemsForMenu(menuId: string): Promise<Array<MenuItem>> {
         return await this.prismaClient.menuItem.findMany({
             where: {
                 menuId: menuId,
+                ...this.owned(),
             }
         });
     }
@@ -518,6 +557,7 @@ export class PrismaDataProvider extends DataProvider {
         return await this.prismaClient.menuItem.findMany({
             where: {
                 subMenuId: subMenuId,
+                ...this.owned(),
             }
         });
     }
@@ -526,6 +566,7 @@ export class PrismaDataProvider extends DataProvider {
         return await this.prismaClient.menuItem.findMany({
             where: {
                 itemId: itemId,
+                ...this.owned(),
             },
             // Oldest placement first. Placements that existed before createdAt was added all
             // share the migration's timestamp, so the ID breaks ties to keep the order stable.
@@ -541,7 +582,7 @@ export class PrismaDataProvider extends DataProvider {
         // expect false for that (see DataProvider.removeMenuItem)
         const { count } = await this.prismaClient.menuItem.deleteMany({
             where: {
-                id: id
+                id: id, ...this.owned()
             }
         });
         return count > 0;
@@ -556,7 +597,7 @@ export class PrismaDataProvider extends DataProvider {
         }
         return await this.prismaClient.menuItem.update({
             where: {
-                id: id
+                id: id, ...this.owned()
             },
             data: {
                 menuId: item.menuId? item.menuId : original.menuId!!,
@@ -575,7 +616,7 @@ export class PrismaDataProvider extends DataProvider {
         }
         return await this.prismaClient.menuItem.update({
             where: {
-                id: id
+                id: id, ...this.owned()
             },
             data: {
                 active: active,
@@ -590,7 +631,7 @@ export class PrismaDataProvider extends DataProvider {
         }
         return await this.prismaClient.menuItem.update({
             where: {
-                id: id
+                id: id, ...this.owned()
             },
             data: {
                 itemLogo: itemLogo,
@@ -620,6 +661,29 @@ export class PrismaDataProvider extends DataProvider {
 
     async getUser(id: string): Promise<User | null> {
         return await this.prismaClient.user.findUnique({ where: { id: id } });
+    }
+
+    async getUsers(): Promise<Array<User>> {
+        return await this.prismaClient.user.findMany({ orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] });
+    }
+
+    async updateUser(id: string, fields: UserUpdate): Promise<User> {
+        const data = { ...fields };
+        if (data.email !== undefined) {
+            data.email = normalizeEmail(data.email);
+        }
+        try {
+            return await this.prismaClient.user.update({ where: { id: id }, data: data });
+        } catch (e: any) {
+            // Prisma's unique constraint violation, and its "record to update not found"
+            if (e?.code === 'P2002') {
+                throw new DataProviderError('An account with that email already exists', 409);
+            }
+            if (e?.code === 'P2025') {
+                throw new DataProviderError(`User with ID ${id} does not exist`, 404);
+            }
+            throw e;
+        }
     }
 
     async getUserByEmail(email: string): Promise<User | null> {
@@ -667,10 +731,23 @@ export class LocalDataProvider extends DataProvider {
 
     dataFolder: string;
     _cache: Map<string, Map<string, any>>;
+    // Who owns each entry, per table: id -> owner ID (null for entries made without an owner,
+    // like the sample data, which only the unscoped provider can see)
+    _owners: Map<string, Map<string, string | null>>;
+    // The user this provider is limited to, or null for the unscoped one (see DataProvider.forOwner)
+    ownerId: string | null;
 
-    constructor(dataFolder: string) {
+    // `shared` is how forOwner() makes a scoped view onto the same data
+    constructor(dataFolder: string, shared?: { cache: Map<string, Map<string, any>>; owners: Map<string, Map<string, string | null>> }, ownerId: string | null = null) {
         super();
         this.dataFolder = dataFolder;
+        this.ownerId = ownerId;
+        if (shared) {
+            this._cache = shared.cache;
+            this._owners = shared.owners;
+            return;
+        }
+        this._owners = new Map;
         this._cache = new Map;
         this._cache.set(this.BREWERIES_KEY, new Map);
         this._cache.set(this.CONTAINERS_KEY, new Map);
@@ -681,7 +758,42 @@ export class LocalDataProvider extends DataProvider {
         this._cache.set(this.SUBMENUS_KEY, new Map);
         this._cache.set(this.USERS_KEY, new Map);
         this._cache.set(this.SESSIONS_KEY, new Map);
+        for (const key of this._cache.keys()) {
+            this._owners.set(key, new Map);
+        }
         this.loadFromFile();
+    }
+
+    forOwner(ownerId: string): DataProvider {
+        if (this.ownerId !== null) {
+            if (this.ownerId === ownerId) {
+                return this;
+            }
+            throw new Error('This provider is already limited to a user');
+        }
+        return new LocalDataProvider(this.dataFolder, { cache: this._cache, owners: this._owners }, ownerId);
+    }
+
+    // Whether this provider may see the entry: the unscoped one sees everything
+    isVisible(id: string, mapName: string): boolean {
+        return this.ownerId === null || this._owners.get(mapName)!.get(id) === this.ownerId;
+    }
+
+    // The entries of a table that this provider may see
+    visibleValues(mapName: string): any[] {
+        const owners = this._owners.get(mapName)!;
+        return [...this._cache.get(mapName)!.values()].filter((value) => this.ownerId === null || owners.get(value.id) === this.ownerId);
+    }
+
+    // The unscoped provider shrugs at a link to something that isn't there (the old behavior,
+    // which the sample data and some tests lean on). A scoped one refuses, like the Prisma
+    // provider does: that is also what stops a user linking to somebody else's data, which looks
+    // exactly like data that doesn't exist.
+    missingReference(kind: string, id: string, todo: string): void {
+        if (this.ownerId !== null) {
+            throw new DataProviderError(`${kind} with ID ${id} does not exist`, 404);
+        }
+        console.log(todo);
     }
 
     handleListJsonImport(validFileNames: Array<string>, filename: string, objectConstructor: Function, addCallback: Function): void {
@@ -734,13 +846,14 @@ export class LocalDataProvider extends DataProvider {
         const newId = this.getIdForAdd(addMap, toAdd.id);
         toAdd.id = newId;
         addMap.set(toAdd.id, toAdd);
+        this._owners.get(mapName)!.set(toAdd.id, this.ownerId);
 
         return toAdd;
     }
 
     getGeneric(id: any, mapName: string): any {
         const result = this._cache.get(mapName)!.get(id);
-        if (!result) {
+        if (!result || !this.isVisible(id, mapName)) {
             return null;
         }
 
@@ -749,12 +862,7 @@ export class LocalDataProvider extends DataProvider {
 
     getGenericList(mapName: string): any {
         // TODO: This needs to support pagination eventually
-        const result = this._cache.get(mapName)!.values();
-        if (!result) {
-            return [];
-        }
-
-        return [...result];
+        return this.visibleValues(mapName);
     }
 
     validateUpdatedObject(updated: any, keysNotAllowed: string[]) {
@@ -805,6 +913,7 @@ export class LocalDataProvider extends DataProvider {
             return false;
         } else {
             this._cache.get(mapName)!.delete(id);
+            this._owners.get(mapName)!.delete(id);
             return true;
         }
     }
@@ -852,9 +961,9 @@ export class LocalDataProvider extends DataProvider {
             throw containerInUse(uses.length);
         }
         // Only leftovers from deleted menu items remain at this point
-        this._cache.get(this.SALE_CONTAINERS_KEY)!.forEach((value: SaleContainer, key: string) => {
+        this.visibleValues(this.SALE_CONTAINERS_KEY).forEach((value: SaleContainer) => {
             if (value.containerId === id) {
-                this._cache.get(this.SALE_CONTAINERS_KEY)!.delete(key);
+                this.removeGeneric(value.id!, this.SALE_CONTAINERS_KEY);
             }
         });
         return this.removeGeneric(id, this.CONTAINERS_KEY);
@@ -866,16 +975,16 @@ export class LocalDataProvider extends DataProvider {
         if (!this.idExists(container.containerId, this.CONTAINERS_KEY)) {
             // TODO: Look up error handling best practices
             // A cursory skim suggests I'll need to refactor a lot of this code
-            console.log(`TODO: Do an error here because ID ${container.containerId} does not exist for containers`)
+            this.missingReference('Container', container.containerId, `TODO: Do an error here because ID ${container.containerId} does not exist for containers`);
         }
         if (!this.idExists(container.menuItemId, this.MENU_ITEMS_KEY)) {
-            console.log(`TODO: Do an error here because ID ${container.menuItemId} does not exist for menu items`)
+            this.missingReference('Menu item', container.menuItemId, `TODO: Do an error here because ID ${container.menuItemId} does not exist for menu items`);
         }
         return this.addGeneric(container, this.SALE_CONTAINERS_KEY);
     }
 
     async getSaleContainersForMenuItem(menuItemId: string): Promise<Array<SaleContainer>> {
-        const saleContainers = this._cache.get(this.SALE_CONTAINERS_KEY)!;
+        const saleContainers = this.visibleValues(this.SALE_CONTAINERS_KEY);
         const results: Array<SaleContainer> = [];
         saleContainers.forEach((value: SaleContainer) => {
             if (value.menuItemId === menuItemId) {
@@ -888,7 +997,7 @@ export class LocalDataProvider extends DataProvider {
 
     async getSaleContainersForContainer(containerId: string): Promise<Array<SaleContainer>> {
         const results: Array<SaleContainer> = [];
-        this._cache.get(this.SALE_CONTAINERS_KEY)!.forEach((value: SaleContainer) => {
+        this.visibleValues(this.SALE_CONTAINERS_KEY).forEach((value: SaleContainer) => {
             if (value.containerId === containerId && this.idExists(value.menuItemId, this.MENU_ITEMS_KEY)) {
                 results.push(value);
             }
@@ -902,7 +1011,7 @@ export class LocalDataProvider extends DataProvider {
 
     validateItem(item: Item) {
         if (item.breweryId && !this.idExists(item.breweryId, this.BREWERIES_KEY)) {
-            console.log(`TODO: Do an error here because ID ${item.breweryId} does not exist for breweries when adding ${item.id}`)
+            this.missingReference('Brewery', item.breweryId, `TODO: Do an error here because ID ${item.breweryId} does not exist for breweries when adding ${item.id}`);
         }
     }
 
@@ -964,7 +1073,7 @@ export class LocalDataProvider extends DataProvider {
 
     validateSubMenu(item: SubMenu) {
         if (item.menuId && !this.idExists(item.menuId, this.MENUS_KEY)) {
-            console.log(`TODO: Do an error here because ID ${item.menuId} does not exist for menus when adding ${item.id}`)
+            this.missingReference('Menu', item.menuId, `TODO: Do an error here because ID ${item.menuId} does not exist for menus when adding ${item.id}`);
         }
     }
 
@@ -978,7 +1087,7 @@ export class LocalDataProvider extends DataProvider {
     }
 
     async getSubMenusForMenu(menuId: string): Promise<Array<SubMenu>> {
-        const subMenus = this._cache.get(this.SUBMENUS_KEY)!;
+        const subMenus = this.visibleValues(this.SUBMENUS_KEY);
         const results: Array<SubMenu> = [];
         subMenus.forEach((value: SubMenu) => {
             if (value.menuId === menuId) {
@@ -1012,13 +1121,13 @@ export class LocalDataProvider extends DataProvider {
 
     validateMenuItem(item: MenuItem) {
         if (item.menuId && !this.idExists(item.menuId, this.MENUS_KEY)) {
-            console.log(`TODO: Do an error here because ID ${item.menuId} does not exist for menus`);
+            this.missingReference('Menu', item.menuId, `TODO: Do an error here because ID ${item.menuId} does not exist for menus`);
         }
         if (item.itemId && !this.idExists(item.itemId, this.ITEMS_KEY)) {
-            console.log(`TODO: Do an error here because ID ${item.itemId} does not exist for items`);
+            this.missingReference('Item', item.itemId, `TODO: Do an error here because ID ${item.itemId} does not exist for items`);
         }
         if (item.subMenuId && !this.idExists(item.subMenuId, this.SUBMENUS_KEY)) {
-            console.log(`TODO: Do an error here because ID ${item.subMenuId} does not exist for submenus`);
+            this.missingReference('Sub Menu', item.subMenuId, `TODO: Do an error here because ID ${item.subMenuId} does not exist for submenus`);
         }
     }
 
@@ -1034,7 +1143,7 @@ export class LocalDataProvider extends DataProvider {
     }
 
     async getMenuItemsForMenu(menuId: string): Promise<Array<MenuItem>> {
-        const itemMap = this._cache.get(this.MENU_ITEMS_KEY)!;
+        const itemMap = this.visibleValues(this.MENU_ITEMS_KEY);
         const results: Array<MenuItem> = [];
         itemMap.forEach((value: MenuItem) => {
             if (value.menuId === menuId) {
@@ -1046,7 +1155,7 @@ export class LocalDataProvider extends DataProvider {
     }
 
     async getMenuItemsForSubMenu(subMenuId: string): Promise<Array<MenuItem>> {
-        const itemMap = this._cache.get(this.MENU_ITEMS_KEY)!;
+        const itemMap = this.visibleValues(this.MENU_ITEMS_KEY);
         
         const results: Array<MenuItem> = [];
         itemMap.forEach((value: MenuItem) => {
@@ -1061,7 +1170,7 @@ export class LocalDataProvider extends DataProvider {
     async getMenuItemsForItem(itemId: string): Promise<Array<MenuItem>> {
         // Maps iterate in insertion order (updates keep an entry's place), so this is oldest first
         const results: Array<MenuItem> = [];
-        this._cache.get(this.MENU_ITEMS_KEY)!.forEach((value: MenuItem) => {
+        this.visibleValues(this.MENU_ITEMS_KEY).forEach((value: MenuItem) => {
             if (value.itemId === itemId) {
                 results.push(value);
             }
@@ -1134,6 +1243,31 @@ export class LocalDataProvider extends DataProvider {
             }
         }
         return null;
+    }
+
+    async getUsers(): Promise<Array<User>> {
+        const users: User[] = [...(this._cache.get(this.USERS_KEY)!.values() as IterableIterator<User>)];
+        // Oldest first; accounts made in the same millisecond stay in the order they were made
+        return users.map((user) => ({ ...user })).sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+    }
+
+    async updateUser(id: string, fields: UserUpdate): Promise<User> {
+        const users = this._cache.get(this.USERS_KEY)!;
+        const existing: User | undefined = users.get(id);
+        if (!existing) {
+            throw new DataProviderError(`User with ID ${id} does not exist`, 404);
+        }
+        const changes = { ...fields };
+        if (changes.email !== undefined) {
+            changes.email = normalizeEmail(changes.email);
+            const taken = await this.getUserByEmail(changes.email);
+            if (taken && taken.id !== id) {
+                throw new DataProviderError('An account with that email already exists', 409);
+            }
+        }
+        const updated: User = { ...existing, ...changes };
+        users.set(id, updated);
+        return { ...updated };
     }
 
     async countUsers(): Promise<number> {
