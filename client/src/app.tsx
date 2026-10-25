@@ -3,6 +3,9 @@ import { QueryClient } from '@tanstack/react-query';
 import { retrySession, useSession } from './session';
 import { ApiError } from './api';
 import { LoginPage } from './pages/LoginPage';
+import { SignupPage } from './pages/SignupPage';
+import { AccountPage } from './pages/AccountPage';
+import { UsersPage } from './pages/UsersPage';
 import { Loading, LoadError } from './components/QueryState';
 import { HomePage } from './pages/HomePage';
 import { MenuPage } from './pages/MenuPage';
@@ -44,11 +47,22 @@ export function RequireSignIn() {
   return <Outlet />;
 }
 
+// Screens only admins can use. Everyone else gets "not found", like any other address that doesn't
+// exist for them. (The server refuses them too; this just doesn't offer what they can't use.)
+export function RequireAdmin() {
+  const session = useSession();
+  if (session.status === 'signedIn' && session.user.role !== 'ADMIN') return <NotFoundPage />;
+  return <Outlet />;
+}
+
 export const routes: RouteObject[] = [
   { path: '/login', element: <LoginPage /> },
+  { path: '/signup', element: <SignupPage /> },
   {
     element: <RequireSignIn />,
     children: [
+      { path: '/account', element: <AccountPage /> },
+      { element: <RequireAdmin />, children: [{ path: '/users', element: <UsersPage /> }] },
       { path: '/', element: <HomePage /> },
       { path: '/menus/:menuId', element: <MenuPage /> },
       { path: '/menus/:menuId/sections/:sectionId', element: <SectionPage /> },

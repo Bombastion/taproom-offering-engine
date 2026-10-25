@@ -31,6 +31,9 @@ and either give a canned reply or compute one from the request. Anything unhandl
 request with a 599 and is listed in `unhandled`, so a test notices calls it didn't expect.
 */
 export function mockApi(handlers: Record<string, Handler>) {
+  // Admins' screens ask for the user list to show the "waiting for approval" badge; most tests
+  // aren't about that, so by default nobody is waiting
+  handlers = { 'GET /api/admin/users': json({ users: [], counts: { PENDING: 0, ACTIVE: 0, DISABLED: 0 } }), ...handlers };
   const requests: RecordedRequest[] = [];
   const unhandled: string[] = [];
 
@@ -66,12 +69,13 @@ export function mockApi(handlers: Record<string, Handler>) {
 }
 
 export const ADMIN: SessionUser = { id: 'u1', email: 'admin@example.com', displayName: 'Admin', role: 'ADMIN' };
+export const MEMBER: SessionUser = { id: 'u2', email: 'member@example.com', displayName: null, role: 'USER' };
 
 // Renders the real app routes at a URL, signed in by default. `signedIn: 'unknown'` leaves the
 // app not yet knowing, so it asks the server (GET /api/auth/me) like it does on a fresh page load.
-export function renderApp(path: string, { signedIn = true as boolean | 'unknown' } = {}) {
+export function renderApp(path: string, { signedIn = true as boolean | 'unknown', as: who = ADMIN }: { signedIn?: boolean | 'unknown'; as?: SessionUser } = {}) {
   if (signedIn === 'unknown') resetSession();
-  else if (signedIn) setSignedIn(ADMIN);
+  else if (signedIn) setSignedIn(who);
   else setSignedOut();
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: 30_000 } },

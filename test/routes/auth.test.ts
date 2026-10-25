@@ -226,3 +226,132 @@ describe('POST /api/auth/logout', () => {
     expect((await request(app).get('/api/auth/me').set('Cookie', phone)).status).toBe(200);
   });
 });
+
+describe('POST /api/auth/signup', () => {
+  const signup = (body: object) => request(app).post('/api/auth/signup').send(body);
+  const good = { email: 'New.Person@Example.com', password: 'a-long-enough-password', displayName: '  Newt  ' };
+
+  it('makes a pending regular account, with the email lowercased and the password hashed', async () => {
+    const res = await signup(good);
+    expect(res.status).toBe(202);
+    expect(res.body).toEqual({ status: 'pending' });
+    const user = await provider.getUserByEmail('new.person@example.com');
+    expect(user).toMatchObject({ role: 'USER', status: 'PENDING', displayName: 'Newt', approvedAt: null });
+    expect(user!.passwordHash).toMatch(/^scrypt\$/);
+    expect(user!.passwordHash).not.toContain(good.password);
+  });
+
+  it('works without a session, and does not sign anyone in', async () => {
+    const res = await signup(good);
+    expect(res.status).toBe(202);
+    expect(res.headers['set-cookie']).toBeUndefined();
+  });
+
+  it('leaves the name empty when none is given', async () => {
+    await signup({ email: 'a@example.com', password: 'a-long-enough-password' });
+    expect((await provider.getUserByEmail('a@example.com'))!.displayName).toBeNull();
+  });
+
+  it('answers the same for an email that already has an account, and changes nothing', async () => {
+    const before = await provider.getUserByEmail('admin@example.com');
+    const res = await signup({ email: 'ADMIN@example.com', password: 'something-else-entirely' });
+    expect(res.status).toBe(202);
+    expect(res.body).toEqual({ status: 'pending' });
+    expect(await provider.getUserByEmail('admin@example.com')).toEqual(before);
+    expect(await provider.countUsers()).toBe(1);
+  });
+
+  it('treats a request that loses a race for the same email like a repeat', async () => {
+    const original = provider.createUser.bind(provider);
+    vi.spyOn(provider, 'createUser').mockImplementationOnce(async (user) => {
+      await original(user);
+      return original(user);
+    });
+    expect((await signup(good)).status).toBe(202);
+  });
+
+  it.each([
+    ['no email', { password: 'a-long-enough-password' }, /valid email/],
+    ['a bad email', { email: 'not-an-email', password: 'a-long-enough-password' }, /valid email/],
+    ['a short password', { email: 'a@example.com', password: 'short' }, /at least 10/],
+    ['no password', { email: 'a@example.com' }, /at least 10/],
+    ['a password that is not text', { email: 'a@example.com', password: 12345678901 }, /at least 10/],
+    ['a name that is not text', { email: 'a@example.com', password: 'a-long-enough-password', displayName: 5 }, /text/],
+    ['a very long name', { email: 'a@example.com', password: 'a-long-enough-password', displayName: 'x'.repeat(101) }, /100/],
+    ['an enormous password', { email: 'a@example.com', password: 'x'.repeat(2000) }, /too long/],
+  ])('refuses %s', async (_what, body, message) => {
+    const res = await signup(body);
+    expect(res.status).toBe(422);
+    expect(res.text).toMatch(message);
+    expect(await provider.countUsers()).toBe(1);
+  });
+
+  it('never makes an admin or an active account, whatever the request says', async () => {
+    await signup({ ...good, role: 'ADMIN', status: 'ACTIVE', approvedAt: new Date().toISOString() });
+    expect(await provider.getUserByEmail('new.person@example.com')).toMatchObject({ role: 'USER', status: 'PENDING', approvedAt: null });
+  });
+
+  it('leaves the new person unable to sign in until approved', async () => {
+    await signup(good);
+    const res = await request(app).post('/api/auth/login').send({ email: good.email, password: good.password });
+    expect(res.status).toBe(403);
+    expect(res.body.code).toBe('pending');
+  });
+});
+
+describe('POST /api/auth/password', () => {
+  const NEW_PASSWORD = 'a-brand-new-password';
+
+  async function signedIn() {
+    const res = await request(app).post('/api/auth/login').send({ email: 'admin@example.com', password: PASSWORD });
+    return setCookie(res).split(';')[0];
+  }
+
+  it('changes the password, which then works for the next sign-in and the old one no longer does', async () => {
+    const cookie = await signedIn();
+    const res = await request(app).post('/api/auth/password').set('Cookie', cookie).send({ currentPassword: PASSWORD, newPassword: NEW_PASSWORD });
+    expect(res.status).toBe(204);
+    expect((await request(app).post('/api/auth/login').send({ email: 'admin@example.com', password: NEW_PASSWORD })).status).toBe(200);
+    expect((await request(app).post('/api/auth/login').send({ email: 'admin@example.com', password: PASSWORD })).status).toBe(401);
+  });
+
+  it('keeps this browser signed in and signs the others out', async () => {
+    const mine = await signedIn();
+    const other = await signedIn();
+    await request(app).post('/api/auth/password').set('Cookie', mine).send({ currentPassword: PASSWORD, newPassword: NEW_PASSWORD });
+    expect((await request(app).get('/api/auth/me').set('Cookie', mine)).status).toBe(200);
+    expect((await request(app).get('/api/auth/me').set('Cookie', other)).status).toBe(401);
+  });
+
+  it('leaves other people\'s sessions alone', async () => {
+    const someone = await addUser(provider, { email: 'other@example.com', role: 'USER' });
+    const theirs = await sessionCookieFor(provider, someone);
+    const mine = await signedIn();
+    await request(app).post('/api/auth/password').set('Cookie', mine).send({ currentPassword: PASSWORD, newPassword: NEW_PASSWORD });
+    expect((await request(app).get('/api/auth/me').set('Cookie', theirs)).status).toBe(200);
+  });
+
+  it('refuses a wrong current password with a 403, not a 401 that would end the session', async () => {
+    const cookie = await signedIn();
+    const res = await request(app).post('/api/auth/password').set('Cookie', cookie).send({ currentPassword: 'wrong', newPassword: NEW_PASSWORD });
+    expect(res.status).toBe(403);
+    expect(res.text).toMatch(/current password/);
+    expect((await request(app).post('/api/auth/login').send({ email: 'admin@example.com', password: PASSWORD })).status).toBe(200);
+  });
+
+  it.each([
+    ['no current password', { newPassword: 'a-brand-new-password' }, /current password/],
+    ['a short new password', { currentPassword: PASSWORD, newPassword: 'short' }, /at least 10/],
+    ['an enormous new password', { currentPassword: PASSWORD, newPassword: 'x'.repeat(2000) }, /too long/],
+  ])('refuses %s', async (_what, body, message) => {
+    const cookie = await signedIn();
+    const res = await request(app).post('/api/auth/password').set('Cookie', cookie).send(body);
+    expect(res.status).toBe(422);
+    expect(res.text).toMatch(message);
+  });
+
+  it('needs a session', async () => {
+    const res = await request(app).post('/api/auth/password').send({ currentPassword: PASSWORD, newPassword: NEW_PASSWORD });
+    expect(res.status).toBe(401);
+  });
+});

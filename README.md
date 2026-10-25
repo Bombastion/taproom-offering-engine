@@ -154,6 +154,24 @@ secret is stored, signing out ends the session on the server, and a disabled acc
 on its next request. A normal sign-in lasts a day (and ends when the browser closes); "Keep me
 signed in" lasts 30 days. Failed sign-ins are limited to 30 per 10 minutes per IP address.
 
+### Requesting and approving accounts
+
+Anyone can ask for an account from the sign-in screen ("Request one"): name (optional), email and
+a password of at least 10 characters. That creates a **pending** account, which can't sign in. An
+admin approves or rejects it on the **Users** screen (More menu → Users; a dot on the menu button
+shows when requests are waiting). There is no email: the applicant just finds out by trying to
+sign in again, and is told their account is waiting. The signup form answers the same whether or
+not the email already has an account, and an existing account is never changed by it. Requests
+are limited to 5 per hour per IP address.
+
+Admins can also disable and re-enable accounts (which signs the person out and keeps their data),
+and make people admins or regular users. Nothing is ever deleted. Rejecting a request disables
+it, which keeps the email taken. You can't disable or demote yourself, and the last active admin
+can't be removed. Admins manage accounts, nothing more: they see only their own menus and items,
+like everyone. Everyone can change their own password on the Account screen (More menu →
+Account); that signs their other browsers out. There is no "forgot password" email: until the
+reset command lands, an admin who is locked out has to edit the database.
+
 The first admin is created at startup, from `TOE_ADMIN_EMAIL` and `TOE_ADMIN_PASSWORD`, but only
 while there are no users at all. After that the accounts live in the database: changing
 `TOE_ADMIN_PASSWORD` later does **not** change an existing account's password.

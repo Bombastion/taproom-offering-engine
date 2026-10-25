@@ -115,7 +115,35 @@ describe('signing in', () => {
     expect((await agent.get('/api/menus')).status).toBe(401);
   });
 
-  it('lets anyone reach the sign-in route, and no other part of /api/auth', async () => {
+  it('works end to end for a new person: request an account, wait, get approved, start with nothing', async () => {
+    const ip = '203.0.113.50';
+    const signup = await request(app).post('/api/auth/signup').set('X-Forwarded-For', ip).send({ email: 'newbie@example.com', password: 'a-good-password', displayName: 'Newbie' });
+    expect(signup.status).toBe(202);
+
+    // Waiting: can't sign in, and has no access to anything
+    const waiting = await request(app).post('/api/auth/login').set('X-Forwarded-For', ip).send({ email: 'newbie@example.com', password: 'a-good-password' });
+    expect(waiting.status).toBe(403);
+    expect(waiting.body.code).toBe('pending');
+    expect((await request(app).get('/api/menus')).status).toBe(401);
+
+    // The admin sees the request and approves it
+    const users = (await request(app).get('/api/admin/users').set('Cookie', admin)).body;
+    expect(users.counts.PENDING).toBe(1);
+    const pending = users.users.find((u: { email: string }) => u.email === 'newbie@example.com');
+    expect((await request(app).post(`/api/admin/users/${pending.id}/approve`).set('Cookie', admin)).status).toBe(200);
+
+    // Now they can sign in, and see none of the admin's data
+    const agent = request.agent(app);
+    expect((await agent.post('/api/auth/login').set('X-Forwarded-For', ip).send({ email: 'newbie@example.com', password: 'a-good-password' })).status).toBe(200);
+    expect((await agent.get('/api/menus')).body).toEqual([]);
+    expect((await agent.get(`/api/menus/${data.menu.id}`)).status).toBe(404);
+    // ...nor the admin's user list
+    expect((await agent.get('/api/admin/users')).status).toBe(403);
+    // The admin's menu is still published by its link
+    expect((await agent.get(`/menus/${data.menu.id}?format=widget`)).status).toBe(200);
+  });
+
+  it('lets anyone reach the sign-in and signup routes, and no other part of /api/auth', async () => {
     expect((await request(app).post('/api/auth/login').send({ email: 'x', password: 'y' })).status).toBe(401);
     expect((await request(app).get('/api/auth/me')).status).toBe(401);
     expect((await request(app).get('/api/auth/nope')).status).toBe(401);

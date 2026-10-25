@@ -130,11 +130,13 @@ type ConfirmSheetProps = {
   title: string;
   message: ReactNode;
   confirmLabel: string;
+  // Red by default, for things that take something away
+  tone?: 'danger' | 'primary';
   onClose: () => void;
   onConfirm: () => Promise<unknown>;
 };
 
-export function ConfirmSheet({ title, message, confirmLabel, onClose, onConfirm }: ConfirmSheetProps) {
+export function ConfirmSheet({ title, message, confirmLabel, tone = 'danger', onClose, onConfirm }: ConfirmSheetProps) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -158,7 +160,7 @@ export function ConfirmSheet({ title, message, confirmLabel, onClose, onConfirm 
           <button type="button" className="btn-secondary" onClick={onClose} data-autofocus>
             Cancel
           </button>
-          <button type="button" className="btn-danger" onClick={confirm} disabled={busy}>
+          <button type="button" className={tone === 'danger' ? 'btn-danger' : 'btn-primary'} onClick={confirm} disabled={busy}>
             {busy ? 'Working…' : confirmLabel}
           </button>
         </div>

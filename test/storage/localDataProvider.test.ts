@@ -353,6 +353,22 @@ describe('users and sessions', () => {
     await provider.deleteSession('hash');
   });
 
+  it('signs a user out everywhere, optionally keeping one session', async () => {
+    const provider = memoryProvider();
+    const now = new Date();
+    const make = (id: string, userId: string) => provider.createSession({ id, userId, createdAt: now, expiresAt: new Date(now.getTime() + 1000) });
+    await make('a1', 'alice');
+    await make('a2', 'alice');
+    await make('b1', 'bob');
+    await provider.deleteSessionsForUser('alice', 'a2');
+    expect(await provider.getSession('a1')).toBeNull();
+    expect(await provider.getSession('a2')).not.toBeNull();
+    expect(await provider.getSession('b1')).not.toBeNull();
+    await provider.deleteSessionsForUser('alice');
+    expect(await provider.getSession('a2')).toBeNull();
+    expect(await provider.getSession('b1')).not.toBeNull();
+  });
+
   it('removes only the expired sessions', async () => {
     const provider = memoryProvider();
     const now = new Date('2026-10-16T12:00:00Z');

@@ -22,9 +22,9 @@ export function isApiPath(req: Request): boolean {
   return req.path === '/api' || req.path.startsWith('/api/');
 }
 
-// The only /api routes that work without a session: signing in, and signing out (which should
-// still clear the cookie even if the session has already expired).
-const PUBLIC_AUTH_PATHS = new Set(['/api/auth/login', '/api/auth/logout']);
+// The only /api routes that work without a session: signing in, requesting an account, and
+// signing out (which should still clear the cookie even if the session has already expired).
+const PUBLIC_AUTH_PATHS = new Set(['/api/auth/login', '/api/auth/logout', '/api/auth/signup']);
 
 export function requiresAuth(req: Request): boolean {
   if (PUBLIC_AUTH_PATHS.has(req.path)) {
@@ -67,6 +67,20 @@ export function requireSession(req: Request, res: Response, next: NextFunction):
   // No WWW-Authenticate header: the admin client has its own sign-in screen, and a challenge
   // would make browsers pop up their own login dialog.
   res.status(401).send('Authentication required.');
+}
+
+// For the user-management routes: only admins. Checked against the account as it is now (the
+// role comes from the database on every request), so demoting someone takes effect immediately.
+export function requireAdmin(req: Request, res: Response, next: NextFunction): void {
+  if (!req.user) {
+    res.status(401).send('Authentication required.');
+    return;
+  }
+  if (req.user.role !== 'ADMIN') {
+    res.status(403).send('Only admins can do that.');
+    return;
+  }
+  next();
 }
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);

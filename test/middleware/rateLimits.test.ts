@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import express from 'express';
 import request from 'supertest';
-import { expensiveFormatLimiter, generalLimiter, loginLimiter } from '../../middleware/rateLimits';
+import { expensiveFormatLimiter, generalLimiter, loginLimiter, passwordLimiter, signupLimiter } from '../../middleware/rateLimits';
 
 // Each limiter keeps its counts in memory for the life of the module. Vitest gives every test
 // file a fresh module graph, and each test below uses its own client IP (via X-Forwarded-For
@@ -21,6 +21,13 @@ function makeApp() {
   // Stands in for the real login route: the body picks the status code
   app.post('/api/auth/login', loginLimiter, (req, res) => {
     res.status(req.body?.status ?? 401).send('login');
+  });
+  // Stand-ins for signing up and changing a password: the body picks the status code
+  app.post('/api/auth/signup', signupLimiter, (req, res) => {
+    res.status(req.body?.status ?? 202).send('signup');
+  });
+  app.post('/api/auth/password', passwordLimiter, (req, res) => {
+    res.status(req.body?.status ?? 204).send('password');
   });
   app.all('/{*rest}', (_req, res) => {
     res.send('ok');
@@ -74,6 +81,38 @@ describe('rate limits', () => {
         await request(app).post('/menus').set('X-Forwarded-For', ip);
       }
       expect((await login(ip, 200)).status).toBe(200);
+    });
+  });
+
+  describe('signupLimiter', () => {
+    const signup = (ip: string) => request(app).post('/api/auth/signup').set('X-Forwarded-For', ip).send({});
+
+    it('allows 5 requests per address per hour, however they went, and blocks the sixth', async () => {
+      const ip = nextIp();
+      for (let i = 0; i < 5; i++) expect((await signup(ip)).status).toBe(202);
+      expect((await signup(ip)).status).toBe(429);
+    });
+
+    it('counts each address separately', async () => {
+      const busy = nextIp();
+      for (let i = 0; i < 6; i++) await signup(busy);
+      expect((await signup(nextIp())).status).toBe(202);
+    });
+  });
+
+  describe('passwordLimiter', () => {
+    const change = (ip: string, status: number) => request(app).post('/api/auth/password').set('X-Forwarded-For', ip).send({ status });
+
+    it('blocks an address after 10 wrong current passwords', async () => {
+      const ip = nextIp();
+      for (let i = 0; i < 10; i++) expect((await change(ip, 403)).status).toBe(403);
+      expect((await change(ip, 403)).status).toBe(429);
+    });
+
+    it('does not count successful changes or validation errors', async () => {
+      const ip = nextIp();
+      for (let i = 0; i < 15; i++) expect((await change(ip, i % 2 ? 204 : 422)).status).toBe(i % 2 ? 204 : 422);
+      expect((await change(ip, 403)).status).toBe(403);
     });
   });
 

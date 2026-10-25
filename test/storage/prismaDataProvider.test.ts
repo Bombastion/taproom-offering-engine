@@ -426,6 +426,13 @@ describe('users and sessions', () => {
     expect(prisma.session.deleteMany).toHaveBeenCalledWith({ where: { id: 'hash' } });
   });
 
+  it('deletes all of a user\'s sessions, or all but one', async () => {
+    await provider.deleteSessionsForUser('u1');
+    expect(prisma.session.deleteMany).toHaveBeenLastCalledWith({ where: { userId: 'u1' } });
+    await provider.deleteSessionsForUser('u1', 'keep');
+    expect(prisma.session.deleteMany).toHaveBeenLastCalledWith({ where: { userId: 'u1', id: { not: 'keep' } } });
+  });
+
   it('deletes sessions that expired before now and reports how many', async () => {
     const now = new Date();
     prisma.session.deleteMany.mockResolvedValueOnce({ count: 4 });

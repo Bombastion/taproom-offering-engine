@@ -48,6 +48,25 @@ export interface PublicUser {
     role: UserRole;
 }
 
+// What an admin sees of an account on the Users screen: no password hash
+export interface AdminUser extends PublicUser {
+    status: UserStatus;
+    createdAt: Date;
+    approvedAt: Date | null;
+}
+
+export function toAdminUser(user: User): AdminUser {
+    return {
+        id: user.id,
+        email: user.email,
+        displayName: user.displayName,
+        role: user.role,
+        status: user.status,
+        createdAt: user.createdAt,
+        approvedAt: user.approvedAt,
+    };
+}
+
 export function toPublicUser(user: User): PublicUser {
     return { id: user.id, email: user.email, displayName: user.displayName, role: user.role };
 }

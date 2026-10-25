@@ -3,10 +3,11 @@ import path from 'path';
 import { DataProvider } from './storage/providers';
 import { MenusRoutes } from './routes/menus';
 import { ApiRoutes } from './routes/api';
+import { AdminRoutes } from './routes/admin';
 import { AuthRoutes } from './routes/auth';
-import { isApiPath, requireSession, sameOriginWrites, sessionMiddleware } from './middleware/auth';
+import { isApiPath, requireAdmin, requireSession, sameOriginWrites, sessionMiddleware } from './middleware/auth';
 import helmet from 'helmet';
-import { generalLimiter, loginLimiter, expensiveFormatLimiter } from './middleware/rateLimits';
+import { generalLimiter, loginLimiter, expensiveFormatLimiter, passwordLimiter, signupLimiter } from './middleware/rateLimits';
 
 // Builds the Express app (middleware, views and routes) around the given data provider, without
 // starting to listen. server.ts wires it to Postgres and starts it; the tests build it around an
@@ -81,7 +82,13 @@ export function createApp(dataProvider: DataProvider): Express {
   });
   // Failed sign-ins are throttled per IP so passwords can't be guessed at speed
   app.use('/api/auth/login', loginLimiter);
+  // Requesting an account is open to anyone, so it has its own tight limit; so does guessing at
+  // the current password when changing it
+  app.use('/api/auth/signup', signupLimiter);
+  app.use('/api/auth/password', passwordLimiter);
   app.use('/api/auth', new AuthRoutes(dataProvider).router);
+  // User management; admins only. Before ApiRoutes, whose catch-all would answer these with a 404.
+  app.use('/api/admin', requireAdmin, new AdminRoutes(dataProvider).router);
   app.use('/api', new ApiRoutes(dataProvider).router);
 
   // Last-resort error handler: anything that reaches here escaped a route's own try/catch (or

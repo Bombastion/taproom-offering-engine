@@ -73,3 +73,4 @@ export const UploadIcon = (p: IconProps) => (
 export const ImageIcon = (p: IconProps) => (
   <Svg size={28} strokeWidth={1.6} {...p}><rect x="3" y="4" width="18" height="16" rx="2" /><circle cx="9" cy="10" r="2" /><path d="M21 16l-5-5-9 9" /></Svg>
 );
+export const UserIcon = (p: IconProps) => <Svg {...p}><circle cx="12" cy="8" r="4" /><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6" /></Svg>;

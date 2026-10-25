@@ -1,5 +1,5 @@
 import { FormEvent, useState } from 'react';
-import { Navigate, useLocation, useNavigate } from 'react-router';
+import { Link, Navigate, useLocation, useNavigate } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../api';
 import { setSignedIn } from '../auth';
@@ -74,6 +74,9 @@ export function LoginPage() {
             {busy ? 'Signing in…' : 'Sign in'}
           </button>
         </form>
+        <p className="muted login-alt">
+          Don't have an account? <Link to="/signup">Request one</Link>
+        </p>
       </div>
     </div>
   );

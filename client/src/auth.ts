@@ -9,6 +9,9 @@ the sign-in screen and what each screen shows.
 This file is only the state. Asking the server (GET /api/auth/me) is in session.ts.
 */
 
+// The shortest password the server accepts for a new account or a changed password
+export const MIN_PASSWORD_LENGTH = 10;
+
 export type SessionUser = {
   id: string;
   email: string;
