@@ -33,7 +33,12 @@ request with a 599 and is listed in `unhandled`, so a test notices calls it didn
 export function mockApi(handlers: Record<string, Handler>) {
   // Admins' screens ask for the user list to show the "waiting for approval" badge; most tests
   // aren't about that, so by default nobody is waiting
-  handlers = { 'GET /api/admin/users': json({ users: [], counts: { PENDING: 0, ACTIVE: 0, DISABLED: 0 } }), ...handlers };
+  handlers = {
+    'GET /api/admin/users': json({ users: [], counts: { PENDING: 0, ACTIVE: 0, DISABLED: 0 } }),
+    // The sign-in screens ask whether to offer "Request an account"
+    'GET /api/auth/config': json({ signupEnabled: true }),
+    ...handlers,
+  };
   const requests: RecordedRequest[] = [];
   const unhandled: string[] = [];
 

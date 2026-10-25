@@ -11,6 +11,7 @@ import {
   sessionIdForToken,
   setSessionCookie,
 } from '../auth/sessions';
+import { signupEnabled } from '../auth/config';
 import { DataProviderError } from '../storage/providers';
 import { normalizeEmail, toPublicUser } from '../models/users';
 
@@ -83,11 +84,18 @@ export class AuthRoutes extends Routes {
       res.json({ user: toPublicUser(user) });
     }));
 
+    // What the sign-in screen needs to know before anyone is signed in: whether to offer "Request an
+    // account" (TOE_SIGNUP_ENABLED, see auth/config.ts)
+    this.router.get('/config', handle(async (_req, res) => {
+      res.json({ signupEnabled: signupEnabled() });
+    }));
+
     // Body: { email, password, displayName? }. Makes a PENDING account for an admin to approve; it
     // can't sign in until then. The answer is the same whether or not the email already has an
     // account (and the password is hashed either way), so this can't be used to find out which
     // emails do, and an existing account is never changed by it.
     this.router.post('/signup', handle(async (req, res) => {
+      if (!signupEnabled()) throw new DataProviderError('Account requests are turned off.', 403);
       const email = typeof req.body?.email === 'string' ? normalizeEmail(req.body.email) : '';
       const password = typeof req.body?.password === 'string' ? req.body.password : '';
       const rawName = req.body?.displayName;

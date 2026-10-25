@@ -199,6 +199,8 @@ export const api = {
   login: (email: string, password: string, remember: boolean) =>
     request<{ user: SessionUser }>('POST', '/auth/login', { email, password, remember }),
   logout: () => request<void>('POST', '/auth/logout'),
+  // Settings the sign-in screens need before anyone is signed in
+  authConfig: () => request<{ signupEnabled: boolean }>('GET', '/auth/config'),
   // Asks for an account; an admin has to approve it before it can sign in. The answer is the same
   // whether or not the email already has one.
   signup: (email: string, password: string, displayName: string | null) =>

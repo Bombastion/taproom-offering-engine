@@ -35,6 +35,7 @@ describe('requiresAuth', () => {
   it('leaves signing in and out open, but not the rest of /api/auth', () => {
     expect(requiresAuth(fakeRequest('POST', '/api/auth/login'))).toBe(false);
     expect(requiresAuth(fakeRequest('POST', '/api/auth/signup'))).toBe(false);
+    expect(requiresAuth(fakeRequest('GET', '/api/auth/config'))).toBe(false);
     expect(requiresAuth(fakeRequest('POST', '/api/auth/password'))).toBe(true);
     expect(requiresAuth(fakeRequest('GET', '/api/admin/users'))).toBe(true);
     expect(requiresAuth(fakeRequest('POST', '/api/auth/logout'))).toBe(false);

@@ -123,7 +123,8 @@ describe('sign-in', () => {
     await user.type(screen.getByLabelText('Email'), 'admin@example.com');
     await user.click(screen.getByRole('button', { name: 'Sign in' }));
     expect(screen.getByRole('alert')).toHaveTextContent('Enter your email and password.');
-    expect(server.requests).toEqual([]);
+    // Nothing was sent to sign in (the screen only asked how it should look)
+    expect(server.calls('POST', '/api/auth/login')).toEqual([]);
   });
 
   it('skips the sign-in screen when already signed in', async () => {

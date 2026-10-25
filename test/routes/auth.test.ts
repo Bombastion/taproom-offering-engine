@@ -299,6 +299,40 @@ describe('POST /api/auth/signup', () => {
   });
 });
 
+describe('turning signup off (TOE_SIGNUP_ENABLED=false)', () => {
+  it('reports whether signup is on, to anyone', async () => {
+    expect((await request(app).get('/api/auth/config')).body).toEqual({ signupEnabled: true });
+    vi.stubEnv('TOE_SIGNUP_ENABLED', 'false');
+    expect((await request(app).get('/api/auth/config')).body).toEqual({ signupEnabled: false });
+  });
+
+  it('refuses new requests, creating nothing', async () => {
+    vi.stubEnv('TOE_SIGNUP_ENABLED', 'false');
+    const res = await request(app).post('/api/auth/signup').send({ email: 'new@example.com', password: 'a-long-enough-password' });
+    expect(res.status).toBe(403);
+    expect(res.text).toMatch(/turned off/);
+    expect(await provider.getUserByEmail('new@example.com')).toBeNull();
+  });
+
+  it('refuses even before looking at the request, so it says the same thing whatever was sent', async () => {
+    vi.stubEnv('TOE_SIGNUP_ENABLED', 'false');
+    expect((await request(app).post('/api/auth/signup').send({})).status).toBe(403);
+  });
+
+  it('leaves existing accounts alone: they can still sign in', async () => {
+    vi.stubEnv('TOE_SIGNUP_ENABLED', 'false');
+    const res = await request(app).post('/api/auth/login').send({ email: 'admin@example.com', password: PASSWORD });
+    expect(res.status).toBe(200);
+  });
+
+  it('does not stop an admin approving a request made earlier', async () => {
+    vi.stubEnv('TOE_SIGNUP_ENABLED', 'false');
+    const waiting = await provider.createUser({ email: 'early@example.com', role: 'USER', status: 'PENDING' });
+    await provider.updateUser(waiting.id, { status: 'ACTIVE' });
+    expect((await provider.getUser(waiting.id))!.status).toBe('ACTIVE');
+  });
+});
+
 describe('POST /api/auth/password', () => {
   const NEW_PASSWORD = 'a-brand-new-password';
 

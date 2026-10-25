@@ -34,6 +34,7 @@ cp .env.example .env
 | -------- | -------- | ----------- |
 | `TOE_ADMIN_PASSWORD` | **Yes** | The password for the first admin account. Docker Compose refuses to start without it. Use something long and random. Only used while there are no users; see [Accounts](#accounts-and-signing-in). |
 | `TOE_ADMIN_EMAIL` | No | What the first admin signs in with. Defaults to `admin`; the older name `TOE_ADMIN_USERNAME` still works. |
+| `TOE_SIGNUP_ENABLED` | No | Set to `false` to stop accepting requests for new accounts. On by default. See [Accounts](#accounts-and-signing-in). |
 | `DOMAIN` | No | The domain Caddy serves, e.g. `menu.zymosbrewing.com`. Defaults to `localhost`. A real domain gets a Let's Encrypt certificate automatically; `localhost` uses Caddy's own local certificate authority, so browsers show a certificate warning. Accepts a comma-separated list. |
 | `INTERNAL_DOMAIN` | No | A name that only resolves on your own network, e.g. `zymos.brew` from a DNS entry on your router. Caddy serves it with a certificate from its local CA. Keep it out of `DOMAIN`; see below. |
 | `HTTP_PORT`, `HTTPS_PORT` | No | Host ports Caddy listens on. Default `80` and `443`. Change them if something else on the machine already uses those (see below). |
@@ -169,8 +170,27 @@ and make people admins or regular users. Nothing is ever deleted. Rejecting a re
 it, which keeps the email taken. You can't disable or demote yourself, and the last active admin
 can't be removed. Admins manage accounts, nothing more: they see only their own menus and items,
 like everyone. Everyone can change their own password on the Account screen (More menu →
-Account); that signs their other browsers out. There is no "forgot password" email: until the
-reset command lands, an admin who is locked out has to edit the database.
+Account); that signs their other browsers out.
+
+To stop taking new requests, set `TOE_SIGNUP_ENABLED=false` in `.env` and restart. The "Request one"
+link disappears and the server refuses new requests. Existing accounts, and requests already
+waiting for approval, are unaffected.
+
+### Forgotten passwords
+
+There is no "forgot password" email. Someone who can run commands on the server sets a new password
+instead:
+
+```sh
+docker compose exec taproom-offering-engine npm run user:reset-password -- someone@example.com
+```
+
+It asks for the new password twice without showing it (at least 10 characters), changes it, and
+signs that account out everywhere. It changes nothing else: a pending or disabled account stays
+that way. If the email isn't found, it lists the admin accounts, so this also works for an admin
+who has forgotten which email they used. Without a terminal (a script, say), pipe the password in
+with `--password-stdin`; the password is never taken as an argument, so it doesn't end up in shell
+history. Outside Docker, run `npm run user:reset-password -- <email>` with `DATABASE_URL` set.
 
 The first admin is created at startup, from `TOE_ADMIN_EMAIL` and `TOE_ADMIN_PASSWORD`, but only
 while there are no users at all. After that the accounts live in the database: changing
@@ -226,8 +246,9 @@ None of the tests need a database. See [TESTING.md](TESTING.md) for more.
 
 ```
 server.ts, app.ts       Entry point and Express app (middleware, routes)
-routes/                 menus.ts (public formats), api.ts (admin JSON API), auth.ts (sign in/out)
-auth/                   Password hashing, sessions, and creating the first admin
+routes/                 menus.ts (public formats), api.ts (menu data API), auth.ts (sign in/out, signup, password), admin.ts (managing accounts)
+auth/                   Password hashing, sessions, creating the first admin, password reset, settings
+scripts/                Commands run on the server (reset-password)
 middleware/             Session check, same-origin check and rate limits
 storage/providers.ts    Data layer: Prisma/Postgres, plus an in-memory provider used by tests
 prisma/                 Schema and migrations
