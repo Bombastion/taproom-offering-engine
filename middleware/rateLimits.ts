@@ -28,6 +28,28 @@ export const loginLimiter = rateLimit({
   requestWasSuccessful: (_req: Request, res: Response) => res.statusCode !== 401,
 });
 
+// Requesting an account is open to anyone, and every request adds a row an admin has to look at,
+// so it's tight: 5 requests per hour per IP, successful or not.
+export const signupLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: 'Too many account requests from this address. Please try again later.',
+});
+
+// Changing a password asks for the current one, so someone on a stolen session could otherwise
+// guess at it. Wrong current passwords (403) are capped per IP; successful changes don't count.
+export const passwordLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: 'Too many incorrect passwords from this address. Please wait a while and try again.',
+  skipSuccessfulRequests: true,
+  requestWasSuccessful: (_req: Request, res: Response) => res.statusCode !== 403,
+});
+
 // PDF generation (?format=digital and ?format=print) is meaningfully more CPU-intensive than
 // the other public menu formats, and — unlike the admin routes — it's reachable with no auth
 // at all. Give it its own tight limit so it can't be used to tie up the server.

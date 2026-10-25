@@ -1368,3 +1368,72 @@ textarea.field {
   flex: 1;
   min-width: 0;
 }
+
+/* ---------- Accounts ---------- */
+
+.login-alt {
+  text-align: center;
+  font-size: 14px;
+}
+
+.login-alt a {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* A dot on the More button when accounts are waiting for approval */
+.icon-btn {
+  position: relative;
+}
+
+.more-dot {
+  position: absolute;
+  top: 9px;
+  right: 9px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--hop);
+  border: 2px solid var(--surface);
+}
+
+.count-pill,
+.badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.count-pill {
+  background: var(--hop);
+  color: #fff;
+}
+
+.badge-quiet {
+  background: var(--line-soft);
+  color: var(--muted);
+}
+
+.user-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.account-row {
+  justify-content: space-between;
+}
+
+.section-title {
+  font-size: 17px;
+  font-weight: 700;
+  margin: 0;
+}

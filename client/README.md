@@ -47,7 +47,10 @@ test:watch` re-runs them as you edit. See `TESTING.md` at the repo root for runn
   - `/admin/breweries` and `/admin/breweries/:breweryId` (details and logo)
   - `/admin/items` the item library, and `/admin/items/:itemId` to edit one (`/new` to create)
   - `/admin/pour-sizes` pour sizes (added, renamed, reordered and deleted in place)
-- `src/api.ts`: typed API calls. `src/auth.ts`: the stored sign-in.
+- `src/api.ts`: typed API calls. `src/auth.ts`: the stored sign-in. `src/usePendingUsers.ts`: the
+  admin user list that the Users screen and the "waiting for approval" dot share.
+- Accounts: `/signup` (request an account), `/account` (change password, sign out) and `/users`
+  (admins only: approve, reject, disable, change roles). Regular users get "not found" for `/users`.
 - `src/components/Screen.tsx`: the shared shell (top bar with Back and Home, breadcrumbs, tab bar).
 - `docker/`: nginx config used by the image.
 

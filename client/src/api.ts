@@ -128,6 +128,12 @@ export type ItemInput = {
 
 export type PourInput = { containerId: string; price: number };
 
+// An account as an admin sees it on the Users screen
+export type UserStatus = 'PENDING' | 'ACTIVE' | 'DISABLED';
+export type AdminUser = SessionUser & { status: UserStatus; createdAt: string; approvedAt: string | null };
+export type UserCounts = Record<UserStatus, number>;
+export type UserList = { users: AdminUser[]; counts: UserCounts };
+
 // ---- Requests ----
 
 export class ApiError extends Error {
@@ -193,6 +199,21 @@ export const api = {
   login: (email: string, password: string, remember: boolean) =>
     request<{ user: SessionUser }>('POST', '/auth/login', { email, password, remember }),
   logout: () => request<void>('POST', '/auth/logout'),
+  // Asks for an account; an admin has to approve it before it can sign in. The answer is the same
+  // whether or not the email already has one.
+  signup: (email: string, password: string, displayName: string | null) =>
+    request<{ status: 'pending' }>('POST', '/auth/signup', { email, password, displayName }),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<void>('POST', '/auth/password', { currentPassword, newPassword }),
+
+  // Admins only
+  adminUsers: () => request<UserList>('GET', '/admin/users'),
+  approveUser: (userId: string) => request<AdminUser>('POST', `/admin/users/${encodeURIComponent(userId)}/approve`),
+  rejectUser: (userId: string) => request<AdminUser>('POST', `/admin/users/${encodeURIComponent(userId)}/reject`),
+  disableUser: (userId: string) => request<AdminUser>('POST', `/admin/users/${encodeURIComponent(userId)}/disable`),
+  enableUser: (userId: string) => request<AdminUser>('POST', `/admin/users/${encodeURIComponent(userId)}/enable`),
+  setUserRole: (userId: string, role: 'USER' | 'ADMIN') =>
+    request<AdminUser>('PATCH', `/admin/users/${encodeURIComponent(userId)}/role`, { role }),
   // Who the browser's session cookie belongs to; a 401 means nobody
   me: () => request<{ user: SessionUser }>('GET', '/auth/me'),
 

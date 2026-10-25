@@ -1,9 +1,9 @@
 import { ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router';
-import { setSignedOut } from '../auth';
-import { api, errorMessage } from '../api';
+import { errorMessage } from '../api';
+import { useSignOut } from '../useSignOut';
+import { useIsAdmin, usePendingCount } from '../usePendingUsers';
 import { useToast } from './Toast';
-import { useQueryClient } from '@tanstack/react-query';
 import { BackIcon, BreweryIcon, ChevronRight, GlassIcon, HomeIcon, ListIcon, MoreIcon, MugIcon, PourIcon } from './Icons';
 
 export type Crumb = { label: string; to: string };
@@ -119,8 +119,10 @@ function TabBar() {
 function MoreMenu() {
   const [open, setOpen] = useState(false);
   const wrapper = useRef<HTMLDivElement>(null);
-  const queryClient = useQueryClient();
   const toast = useToast();
+  const signOut = useSignOut();
+  const isAdmin = useIsAdmin();
+  const pending = usePendingCount();
 
   useEffect(() => {
     if (!open) return;
@@ -140,26 +142,38 @@ function MoreMenu() {
 
   return (
     <div className="more" ref={wrapper}>
-      <button type="button" className="icon-btn" aria-label="More options" aria-expanded={open} aria-haspopup="true" onClick={() => setOpen((o) => !o)}>
+      <button
+        type="button"
+        className="icon-btn"
+        aria-label={pending > 0 ? `More options (${pending} waiting for approval)` : 'More options'}
+        aria-expanded={open}
+        aria-haspopup="true"
+        onClick={() => setOpen((o) => !o)}
+      >
         <MoreIcon />
+        {pending > 0 && <span className="more-dot" aria-hidden="true" />}
       </button>
       {open && (
         <div className="more-menu">
+          <Link to="/account" className="more-item" onClick={() => setOpen(false)}>
+            Account
+          </Link>
+          {isAdmin && (
+            <Link to="/users" className="more-item" onClick={() => setOpen(false)}>
+              Users
+              {pending > 0 && <span className="count-pill">{pending} waiting</span>}
+            </Link>
+          )}
           <button
             type="button"
             className="more-item"
             onClick={async () => {
               setOpen(false);
               try {
-                // Ends the session on the server too, rather than just forgetting it here
-                await api.logout();
+                await signOut();
               } catch (e) {
                 toast(errorMessage(e), 'error');
-                return;
               }
-              // Nothing from this session should linger for whoever signs in next
-              queryClient.clear();
-              setSignedOut();
             }}
           >
             Sign out

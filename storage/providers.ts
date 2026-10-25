@@ -124,6 +124,8 @@ export abstract class DataProvider {
     abstract getSession(id: string): Promise<Session | null>;
     // Does nothing if the session is already gone
     abstract deleteSession(id: string): Promise<void>;
+    // Signs a user out everywhere, except (optionally) the session making the request
+    abstract deleteSessionsForUser(userId: string, exceptSessionId?: string): Promise<void>;
     // Clears out sessions that have run out. Returns how many were removed.
     abstract deleteExpiredSessions(now: Date): Promise<number>;
 }
@@ -711,6 +713,11 @@ export class PrismaDataProvider extends DataProvider {
     async deleteSession(id: string): Promise<void> {
         await this.prismaClient.session.deleteMany({ where: { id: id } });
     }
+    async deleteSessionsForUser(userId: string, exceptSessionId?: string): Promise<void> {
+        await this.prismaClient.session.deleteMany({
+            where: { userId: userId, ...(exceptSessionId ? { id: { not: exceptSessionId } } : {}) },
+        });
+    }
 
     async deleteExpiredSessions(now: Date): Promise<number> {
         const result = await this.prismaClient.session.deleteMany({ where: { expiresAt: { lt: now } } });
@@ -1287,6 +1294,14 @@ export class LocalDataProvider extends DataProvider {
 
     async deleteSession(id: string): Promise<void> {
         this._cache.get(this.SESSIONS_KEY)!.delete(id);
+    }
+    async deleteSessionsForUser(userId: string, exceptSessionId?: string): Promise<void> {
+        const sessions = this._cache.get(this.SESSIONS_KEY)!;
+        for (const [id, session] of [...sessions.entries()]) {
+            if (session.userId === userId && id !== exceptSessionId) {
+                sessions.delete(id);
+            }
+        }
     }
 
     async deleteExpiredSessions(now: Date): Promise<number> {

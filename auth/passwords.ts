@@ -26,6 +26,9 @@ export const DEFAULT_COST: ScryptCost = { logN: 15, r: 8, p: 1 };
 const KEY_LENGTH = 64;
 const SALT_LENGTH = 16;
 
+// The shortest password a new account (or a changed password) may have
+export const MIN_PASSWORD_LENGTH = 10;
+
 // Login forms accept long passphrases, but not unbounded input to a deliberately slow function
 export const MAX_PASSWORD_LENGTH = 1024;
 
