@@ -22,9 +22,9 @@ export function isApiPath(req: Request): boolean {
   return req.path === '/api' || req.path.startsWith('/api/');
 }
 
-// The only /api routes that work without a session: signing in, requesting an account, and
-// signing out (which should still clear the cookie even if the session has already expired).
-const PUBLIC_AUTH_PATHS = new Set(['/api/auth/login', '/api/auth/logout', '/api/auth/signup']);
+// The only /api routes that work without a session: signing in, requesting an account, the
+// settings the sign-in screen needs, and signing out (which should still clear the cookie even if the session has already expired).
+const PUBLIC_AUTH_PATHS = new Set(['/api/auth/login', '/api/auth/logout', '/api/auth/signup', '/api/auth/config']);
 
 export function requiresAuth(req: Request): boolean {
   if (PUBLIC_AUTH_PATHS.has(req.path)) {

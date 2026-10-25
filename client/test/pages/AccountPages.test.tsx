@@ -47,6 +47,32 @@ describe('requesting an account', () => {
     expect(screen.getByRole('heading', { name: 'Request an account' })).toBeInTheDocument();
   });
 
+  it('is not offered when the server has requests turned off, and the screen explains', async () => {
+    mockApi({ 'GET /api/auth/config': json({ signupEnabled: false }) });
+    const login = renderApp('/login', { signedIn: false });
+    await waitFor(() => expect(screen.queryByRole('link', { name: 'Request one' })).not.toBeInTheDocument());
+    login.unmount();
+
+    renderApp('/signup', { signedIn: false });
+    expect(await screen.findByRole('heading', { name: 'Requests are closed' })).toBeInTheDocument();
+    expect(screen.queryByLabelText('Email')).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Back to sign in' })).toHaveAttribute('href', '/login');
+  });
+
+  it('is still offered when the setting cannot be loaded', async () => {
+    mockApi({ 'GET /api/auth/config': status(500) });
+    renderApp('/login', { signedIn: false });
+    expect(await screen.findByRole('link', { name: 'Request one' })).toBeInTheDocument();
+  });
+
+  it('shows the server\'s message if it refuses a request that was made anyway', async () => {
+    mockApi({ 'POST /api/auth/signup': { status: 403, text: 'Account requests are turned off.' } });
+    const { user } = renderApp('/signup', { signedIn: false });
+    await fill(user);
+    await user.click(screen.getByRole('button', { name: 'Request account' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Account requests are turned off.');
+  });
+
   it('sends the request and says an admin has to approve it, without signing in', async () => {
     const server = mockApi({ 'POST /api/auth/signup': json({ status: 'pending' }, 202) });
     const { user } = renderApp('/signup', { signedIn: false });
@@ -82,7 +108,7 @@ describe('requesting an account', () => {
     await user.type(screen.getByLabelText('Confirm password'), confirm);
     await user.click(screen.getByRole('button', { name: 'Request account' }));
     expect(screen.getByRole('alert')).toHaveTextContent(message);
-    expect(server.requests).toEqual([]);
+    expect(server.calls('POST', '/api/auth/signup')).toEqual([]);
   });
 
   it("shows the server's reason when it refuses, and lets the person try again", async () => {

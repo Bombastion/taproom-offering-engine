@@ -4,11 +4,13 @@ import { useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../api';
 import { setSignedIn } from '../auth';
 import { useSession } from '../session';
+import { useSignupEnabled } from '../useAuthConfig';
 import { MugIcon } from '../components/Icons';
 import { Loading } from '../components/QueryState';
 
 export function LoginPage() {
   const session = useSession();
+  const signupEnabled = useSignupEnabled();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const location = useLocation();
@@ -74,9 +76,11 @@ export function LoginPage() {
             {busy ? 'Signing in…' : 'Sign in'}
           </button>
         </form>
-        <p className="muted login-alt">
-          Don't have an account? <Link to="/signup">Request one</Link>
-        </p>
+        {signupEnabled && (
+          <p className="muted login-alt">
+            Don't have an account? <Link to="/signup">Request one</Link>
+          </p>
+        )}
       </div>
     </div>
   );

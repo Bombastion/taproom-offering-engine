@@ -4,7 +4,7 @@ Unit tests use [Vitest](https://vitest.dev) for both halves of the project:
 
 | Suite  | Where          | What it covers |
 | ------ | -------------- | -------------- |
-| Server | `test/`        | Passwords, sessions and the first-admin bootstrap, the sign-in, signup and password routes, the admin user-management routes, session/same-origin/rate-limit middleware, the admin JSON API (`routes/api.ts`), the public menu formats (`?format=json/widget/print/digital`), the shared route helpers, both data providers (including their per-account scoping), whose data belongs to whom (`test/tenancy.test.ts`: two accounts trying everything on each other's data), and the full middleware stack in `app.ts` |
+| Server | `test/`        | Passwords, sessions and the first-admin bootstrap, the sign-in, signup and password routes, the password-reset logic and the signup switch, the admin user-management routes, session/same-origin/rate-limit middleware, the admin JSON API (`routes/api.ts`), the public menu formats (`?format=json/widget/print/digital`), the shared route helpers, both data providers (including their per-account scoping), whose data belongs to whom (`test/tenancy.test.ts`: two accounts trying everything on each other's data), and the full middleware stack in `app.ts` |
 | Client | `client/test/` | The API client and session state, shared components (sheets, toasts, reordering, logo editor) and each screen, rendered in jsdom against a mocked API |
 
 Nothing needs a database: server tests run against the in-memory `LocalDataProvider` (or a mocked

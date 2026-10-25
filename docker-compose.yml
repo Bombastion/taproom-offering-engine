@@ -37,6 +37,8 @@ services:
       - TOE_ADMIN_EMAIL=${TOE_ADMIN_EMAIL:-}
       - TOE_ADMIN_USERNAME=${TOE_ADMIN_USERNAME:-}
       - TOE_ADMIN_PASSWORD=${TOE_ADMIN_PASSWORD:?TOE_ADMIN_PASSWORD must be set before starting this service}
+      # Set to false to stop accepting requests for new accounts (existing accounts are unaffected)
+      - TOE_SIGNUP_ENABLED=${TOE_SIGNUP_ENABLED:-true}
   admin-client:
     # The mobile-friendly admin app in client/: a React build served by nginx. Not published on
     # any host port; Caddy below routes https://$DOMAIN/admin/ to it, and the app talks to the

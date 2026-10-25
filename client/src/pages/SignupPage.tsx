@@ -3,6 +3,7 @@ import { Link, Navigate } from 'react-router';
 import { api, errorMessage } from '../api';
 import { MIN_PASSWORD_LENGTH } from '../auth';
 import { useSession } from '../session';
+import { useSignupEnabled } from '../useAuthConfig';
 import { MugIcon } from '../components/Icons';
 import { Loading } from '../components/QueryState';
 
@@ -10,6 +11,7 @@ import { Loading } from '../components/QueryState';
 // request first, and there's no email, so the person finds out by trying to sign in later.
 export function SignupPage() {
   const session = useSession();
+  const signupEnabled = useSignupEnabled();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -50,7 +52,16 @@ export function SignupPage() {
     <div className="login">
       <div className="login-card">
         <div className="brand-mark brand-mark-lg" aria-hidden="true"><MugIcon /></div>
-        {sent ? (
+        {!signupEnabled && !sent ? (
+          <>
+            <div className="page-header">
+              <div className="eyebrow">Taproom Offering Engine</div>
+              <h1 className="page-title">Requests are closed</h1>
+              <p className="muted">New accounts aren't being accepted right now. If you already have an account, you can sign in.</p>
+            </div>
+            <Link to="/login" className="btn-primary">Back to sign in</Link>
+          </>
+        ) : sent ? (
           <>
             <div className="page-header">
               <div className="eyebrow">Taproom Offering Engine</div>

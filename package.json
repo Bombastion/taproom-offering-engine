@@ -5,6 +5,7 @@
   "scripts": {
     "build": "yarn copy-files",
     "start": "tsx server.ts",
+    "user:reset-password": "tsx scripts/reset-password.ts",
     "generate": "prisma generate",
     "postinstall": "prisma generate",
     "test": "vitest run",
