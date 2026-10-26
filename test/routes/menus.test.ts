@@ -217,6 +217,93 @@ describe('?format=print', () => {
   });
 });
 
+// The menu board code loads its font from dist/public/fonts relative to the working directory
+// (that's where `npm run build` puts it). Call this inside a describe to point a scratch working
+// directory at the repo's public/ folder for each test instead of requiring a build.
+function inBoardWorkingDirectory() {
+  let originalCwd: string;
+  let scratch: string;
+
+  beforeEach(() => {
+    originalCwd = process.cwd();
+    scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'toe-board-'));
+    fs.mkdirSync(path.join(scratch, 'dist'));
+    fs.symlinkSync(path.join(repoRoot, 'public'), path.join(scratch, 'dist/public'));
+    process.chdir(scratch);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    process.chdir(originalCwd);
+    fs.rmSync(scratch, { recursive: true, force: true });
+  });
+}
+
+// Requests the menu board and returns every string drawn on it, in order
+async function textDrawnOnBoard() {
+  const text = vi.spyOn(pdfkit.prototype, 'text');
+  const res = await request(app).get(`/menus/${data.menu.id}?format=digital`).buffer(true).parse((response, callback) => {
+    response.on('data', () => {});
+    response.on('end', () => callback(null, null));
+  });
+  expect(res.status).toBe(200);
+  return text.mock.calls.map(([drawn]) => drawn);
+}
+
+describe('items missing a style or an ABV', () => {
+  // Added to the end of Drafts, all at Zymos
+  async function addDrafts(...items: Array<[string, string | null, number | null]>) {
+    for (const [i, [name, style, abv]] of items.entries()) {
+      const item = await provider.addItem(new Item(null, `extra-${i}`, name, data.breweries.zymos.id, style, abv, null, 'beer'));
+      await provider.addMenuItem(new MenuItem(null, data.menu.id, item.id, data.sections.drafts.id, null, 10 + i));
+    }
+  }
+  const descriptions = (html: string) => [...html.matchAll(/<td class="descriptionCell">(.*?)<\/td>/g)].map((m) => m[1]);
+  const ITEMS: Array<[string, string | null, number | null]> = [
+    ['Style Only', 'Stout', null],
+    ['ABV Only', null, 4.8],
+    ['Bare', null, null],
+    ['Zero', 'NA Lager', 0],
+  ];
+
+  it('leaves out a missing ABV or style on the print view, with no blank or stray bullet', async () => {
+    await addDrafts(...ITEMS);
+    const lines = descriptions((await request(app).get(`/menus/${data.menu.id}?format=print`)).text);
+    expect(lines).toContain('Zymos Brewing &bull; <b>Style Only</b> &bull; Stout');
+    expect(lines).toContain('Zymos Brewing &bull; <b>ABV Only</b> &bull; 4.8% ABV');
+    expect(lines).toContain('Zymos Brewing &bull; <b>Bare</b>');
+    // A beer with no ABV set isn't the same as 0%
+    expect(lines).toContain('Zymos Brewing &bull; <b>Zero</b> &bull; NA Lager &bull; 0% ABV');
+    expect(lines).toContain('Zymos Brewing &bull; <b>Hazy Sequence</b> &bull; NEIPA &bull; 6.5% ABV');
+    expect(lines.filter((line) => /null|undefined|% ABV$/.test(line) && !/\d% ABV$/.test(line))).toEqual([]);
+  });
+
+  describe('on the menu board', () => {
+    inBoardWorkingDirectory();
+
+    it('leaves out a missing ABV or style, and shows an ABV of 0', async () => {
+      await addDrafts(...ITEMS);
+      const drawn = await textDrawnOnBoard();
+      // The name is drawn first, then its details in a second colour
+      const detailsOf = (name: string) => drawn[drawn.indexOf(`Zymos Brewing ${name}`) + 1];
+      expect(detailsOf('Hazy Sequence')).toBe('  NEIPA  6.5%');
+      expect(detailsOf('Style Only')).toBe('  Stout');
+      expect(detailsOf('ABV Only')).toBe('  4.8%');
+      expect(detailsOf('Bare')).toBe('');
+      expect(detailsOf('Zero')).toBe('  NA Lager  0%');
+      expect(drawn.filter((text) => /null|undefined/.test(String(text)))).toEqual([]);
+    });
+
+    it('shows no "null" for an item with no brewery, style or ABV at all', async () => {
+      const item = await provider.addItem(new Item(null, 'plain', 'Pretzel', null, null, null, null, 'snacks'));
+      await provider.addMenuItem(new MenuItem(null, data.menu.id, item.id, data.sections.drafts.id, null, 10));
+      const drawn = await textDrawnOnBoard();
+      expect(drawn).toContain('Pretzel');
+      expect(drawn.filter((text) => /null|undefined/.test(String(text)))).toEqual([]);
+    });
+  });
+});
+
 describe('sections hidden from some views', () => {
   const hide = (hiddenOn: string[]) => provider.updateSubMenu(data.sections.guestTaps.id!, new SubMenu(null, null, null, null, null, hiddenOn));
   const sectionNames = async (format: string) => {
@@ -259,45 +346,18 @@ describe('sections hidden from some views', () => {
   });
 
   describe('on the menu board', () => {
-    // The menu board code loads its font from dist/public/fonts relative to the working directory
-    let originalCwd: string;
-    let scratch: string;
-
-    beforeEach(() => {
-      originalCwd = process.cwd();
-      scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'toe-hidden-sections-'));
-      fs.mkdirSync(path.join(scratch, 'dist'));
-      fs.symlinkSync(path.join(repoRoot, 'public'), path.join(scratch, 'dist/public'));
-      process.chdir(scratch);
-    });
-
-    afterEach(() => {
-      vi.restoreAllMocks();
-      process.chdir(originalCwd);
-      fs.rmSync(scratch, { recursive: true, force: true });
-    });
-
-    // Every string drawn on the board
-    const textDrawn = async () => {
-      const text = vi.spyOn(pdfkit.prototype, 'text');
-      const res = await request(app).get(`/menus/${data.menu.id}?format=digital`).buffer(true).parse((response, callback) => {
-        response.on('data', () => {});
-        response.on('end', () => callback(null, null));
-      });
-      expect(res.status).toBe(200);
-      return text.mock.calls.map(([drawn]) => drawn);
-    };
+    inBoardWorkingDirectory();
 
     it('still draws a section that is only hidden from the print view', async () => {
       await hide(['print', 'widget']);
-      const drawn = await textDrawn();
+      const drawn = await textDrawnOnBoard();
       expect(drawn).toContain('Guest Taps');
       expect(drawn).toContain('Guest Co Guest Sour');
     });
 
     it('leaves a hidden section and its items off', async () => {
       await hide(['board']);
-      const drawn = await textDrawn();
+      const drawn = await textDrawnOnBoard();
       expect(drawn).toContain('Drafts');
       expect(drawn).not.toContain('Guest Taps');
       expect(drawn.filter((text) => String(text).includes('Guest'))).toEqual([]);
@@ -339,37 +399,10 @@ describe('the default brewery', () => {
   });
 
   describe('on the menu board', () => {
-    // The menu board code loads its font from dist/public/fonts relative to the working directory
-    let originalCwd: string;
-    let scratch: string;
-
-    beforeEach(() => {
-      originalCwd = process.cwd();
-      scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'toe-default-brewery-'));
-      fs.mkdirSync(path.join(scratch, 'dist'));
-      fs.symlinkSync(path.join(repoRoot, 'public'), path.join(scratch, 'dist/public'));
-      process.chdir(scratch);
-    });
-
-    afterEach(() => {
-      vi.restoreAllMocks();
-      process.chdir(originalCwd);
-      fs.rmSync(scratch, { recursive: true, force: true });
-    });
-
-    // Every string drawn on the board
-    const textDrawn = async () => {
-      const text = vi.spyOn(pdfkit.prototype, 'text');
-      const res = await request(app).get(`/menus/${data.menu.id}?format=digital`).buffer(true).parse((response, callback) => {
-        response.on('data', () => {});
-        response.on('end', () => callback(null, null));
-      });
-      expect(res.status).toBe(200);
-      return text.mock.calls.map(([drawn]) => drawn);
-    };
+    inBoardWorkingDirectory();
 
     it('names every brewery when the menu has no default brewery', async () => {
-      const drawn = await textDrawn();
+      const drawn = await textDrawnOnBoard();
       expect(drawn).toContain('Zymos Brewing Pils');
       expect(drawn).toContain('Zymos Brewing Hazy Sequence');
       expect(drawn).toContain('Guest Co Guest Sour');
@@ -377,7 +410,7 @@ describe('the default brewery', () => {
 
     it("leaves the default brewery's name off but keeps other breweries", async () => {
       await setDefault(data.breweries.zymos.id!);
-      const drawn = await textDrawn();
+      const drawn = await textDrawnOnBoard();
       expect(drawn).toContain('Pils');
       expect(drawn).toContain('Hazy Sequence');
       expect(drawn).toContain('Guest Co Guest Sour');

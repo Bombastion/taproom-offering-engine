@@ -65,9 +65,17 @@ export class MenusRoutes extends Routes {
       return breweryName ? `${breweryName} ${item?.displayName}` : `${item?.displayName}`;
     }
 
-    // What follows the name, in a quieter colour
+    // What follows the name, in a quieter colour: the style and ABV, whichever the item has. A
+    // missing one is left out entirely; an ABV of 0 is a real value and is shown.
     const getItemDetailText = (item: Item | undefined | null) => {
-      return `  ${item?.style}  ${item?.abv}%`;
+      const details: string[] = [];
+      if (item?.style) {
+        details.push(item.style);
+      }
+      if (item?.abv !== null && item?.abv !== undefined) {
+        details.push(`${item.abv}%`);
+      }
+      return details.map((detail) => `  ${detail}`).join('');
     }
 
     const getItemFullLineText = (item: Item | undefined | null, breweryName: string | null) => {
