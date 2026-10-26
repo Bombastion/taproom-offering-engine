@@ -48,13 +48,27 @@ export class MenusRoutes extends Routes {
         doc.image(menuLogo, BOARD_WIDTH/2 - imageWidth/2, BOARD_SAFE_MARGIN, {width: imageWidth, height: imageHeight});
     }
 
-    const getItemFullLineText = (item: Item | undefined | null, breweryName: String | undefined | null) => {
-      const itemName = `${breweryName} ${item?.displayName}`;
-      const itemStyle = item?.style;
-      const itemAbv = item?.abv;
-      const itemDisplay = `${itemName}  ${itemStyle}  ${itemAbv}%`;
+    // The brewery's name as it should be shown on this menu: not at all for the menu's default
+    // brewery (see Menu.defaultBreweryId) or for an item with no brewery
+    const breweryNameToShow = (menu: Menu, brewery: Brewery | null | undefined): string | null => {
+      if (!brewery || (menu.defaultBreweryId && brewery.id === menu.defaultBreweryId)) {
+        return null;
+      }
+      return brewery.name;
+    }
 
-      return itemDisplay;
+    // "Brewery Item", or just "Item" when the brewery isn't named
+    const getItemNameText = (item: Item | undefined | null, breweryName: string | null) => {
+      return breweryName ? `${breweryName} ${item?.displayName}` : `${item?.displayName}`;
+    }
+
+    // What follows the name, in a quieter colour
+    const getItemDetailText = (item: Item | undefined | null) => {
+      return `  ${item?.style}  ${item?.abv}%`;
+    }
+
+    const getItemFullLineText = (item: Item | undefined | null, breweryName: string | null) => {
+      return getItemNameText(item, breweryName) + getItemDetailText(item);
     }
 
     // Lays the menu board out as a PDF (one page per screenful) and renders each page to a PNG,
@@ -125,7 +139,7 @@ export class MenusRoutes extends Routes {
         const firstItem = menuItemsForSubmenu[0]
         const firstItemDetails = await dataProvider.getItem(firstItem.itemId!!)
         const breweryForItem = await dataProvider.getBrewery(firstItemDetails?.breweryId!!);
-        const firstItemDisplayText = getItemFullLineText(firstItemDetails, breweryForItem?.name);
+        const firstItemDisplayText = getItemFullLineText(firstItemDetails, breweryNameToShow(mainMenu, breweryForItem));
         const firstItemDisplayHeight = heightOfItemText(firstItemDisplayText);
         // A section that follows another one on the same page starts a little lower, to set it
         // apart from the items above it. A section at the top of a page needs no gap.
@@ -164,7 +178,7 @@ export class MenusRoutes extends Routes {
           const breweryForItem = await dataProvider.getBrewery(itemDetails?.breweryId!!);
 
           // Precalculate the height of the text and determine if we need to start a new page
-          const itemFullText = getItemFullLineText(itemDetails, breweryForItem?.name);
+          const itemFullText = getItemFullLineText(itemDetails, breweryNameToShow(mainMenu, breweryForItem));
           const nextHeight = heightOfItemText(itemFullText);
           if (totalHeightSoFar + nextHeight + endOfPageSafetyBuffer > contentBottom) {
             doc.addPage({ size: [docWidth, docHeight], margin: 0 })
@@ -192,10 +206,10 @@ export class MenusRoutes extends Routes {
           doc.font(`${fontFolderRoot}/FiraSans-Regular.ttf`).
             fontSize(itemLogoDimensions).
             fillColor(submenuItemFontColor).
-            text(`${breweryForItem?.name} ${itemDetails?.displayName}`, itemTextLeft, nextHeightStart, { continued: true, width: itemTextWidth });
+            text(getItemNameText(itemDetails, breweryNameToShow(mainMenu, breweryForItem)), itemTextLeft, nextHeightStart, { continued: true, width: itemTextWidth });
           doc.
             fillColor(submenuItemStyleFontColor).
-            text("  " + itemDetails?.style + "  " + itemDetails?.abv + "%", { width: itemTextWidth });
+            text(getItemDetailText(itemDetails), { width: itemTextWidth });
           doc.restore();
 
           totalHeightSoFar = totalHeightSoFar + nextHeight + standardBuffer
@@ -351,7 +365,7 @@ export class MenusRoutes extends Routes {
             }
           };
 
-          const displayItem = new DisplayItem(brewery ? brewery!.name : null, item.displayName!, item.style, item.abv, item.description, menuItem.order, containerDisplayNameToPrice);
+          const displayItem = new DisplayItem(breweryNameToShow(result, brewery), item.displayName!, item.style, item.abv, item.description, menuItem.order, containerDisplayNameToPrice);
           if (menuItem.subMenuId) {
             subMenuToItemMap.get(menuItem.subMenuId)?.push(displayItem);
           } 

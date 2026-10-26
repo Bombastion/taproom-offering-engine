@@ -72,6 +72,7 @@ describe('menus', () => {
       internalName: 'on-tap',
       hasLogo: true,
       logo: `data:image/png;base64,${TINY_PNG}`,
+      defaultBreweryId: null,
       sections: [
         { id: data.sections.drafts.id, displayName: 'Drafts', internalName: 'on-tap-drafts', order: 1, itemCount: 2, inactiveCount: 0, itemNames: ['Hazy Sequence', 'Pils'] },
         { id: data.sections.guestTaps.id, displayName: 'Guest Taps', internalName: 'on-tap-guest', order: 2, itemCount: 1, inactiveCount: 0, itemNames: ['Guest Sour'] },
@@ -108,7 +109,7 @@ describe('menus', () => {
   it('renames a menu', async () => {
     const res = await request(app).patch(`/api/menus/${data.menu.id}`).send({ displayName: 'On Tap Now' });
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ id: data.menu.id, displayName: 'On Tap Now', internalName: 'on-tap' });
+    expect(res.body).toEqual({ id: data.menu.id, displayName: 'On Tap Now', internalName: 'on-tap', defaultBreweryId: null });
     // The logo isn't touched by a rename
     expect((await provider.getMenu(data.menu.id!))?.logo).toBe(TINY_PNG);
   });
@@ -116,6 +117,63 @@ describe('menus', () => {
   it('404s when renaming an unknown menu', async () => {
     const res = await request(app).patch('/api/menus/nope').send({ displayName: 'x' });
     expect(res.status).toBe(404);
+  });
+
+  describe('default brewery', () => {
+    const zymos = () => data.breweries.zymos.id;
+    const defaultOf = async () => (await request(app).get(`/api/menus/${data.menu.id}`)).body.defaultBreweryId;
+
+    it('is set, shown, and cleared again with null', async () => {
+      const set = await request(app).patch(`/api/menus/${data.menu.id}`).send({ defaultBreweryId: zymos() });
+      expect(set.status).toBe(200);
+      expect(set.body).toEqual({ id: data.menu.id, displayName: 'Currently On Tap', internalName: 'on-tap', defaultBreweryId: zymos() });
+      expect(await defaultOf()).toBe(zymos());
+
+      const cleared = await request(app).patch(`/api/menus/${data.menu.id}`).send({ defaultBreweryId: null });
+      expect(cleared.status).toBe(200);
+      expect(cleared.body.defaultBreweryId).toBeNull();
+      expect(await defaultOf()).toBeNull();
+    });
+
+    it('is left alone by a rename, and a rename by setting it', async () => {
+      await request(app).patch(`/api/menus/${data.menu.id}`).send({ defaultBreweryId: zymos() });
+      const renamed = await request(app).patch(`/api/menus/${data.menu.id}`).send({ displayName: 'On Tap Now' });
+      expect(renamed.body.defaultBreweryId).toBe(zymos());
+      expect(await defaultOf()).toBe(zymos());
+
+      const both = await request(app).patch(`/api/menus/${data.menu.id}`).send({ displayName: 'Taps', defaultBreweryId: null });
+      expect(both.body).toEqual({ id: data.menu.id, displayName: 'Taps', internalName: 'on-tap', defaultBreweryId: null });
+      // The logo survives all of it
+      expect((await provider.getMenu(data.menu.id!))?.logo).toBe(TINY_PNG);
+    });
+
+    it('is left alone when uploading or removing the logo', async () => {
+      await request(app).patch(`/api/menus/${data.menu.id}`).send({ defaultBreweryId: zymos() });
+      expect((await request(app).put(`/api/menus/${data.menu.id}/logo`).send({ logo: TINY_PNG })).status).toBe(200);
+      expect(await defaultOf()).toBe(zymos());
+      expect((await request(app).delete(`/api/menus/${data.menu.id}/logo`)).status).toBe(204);
+      expect(await defaultOf()).toBe(zymos());
+    });
+
+    it('404s for a brewery that does not exist, and changes nothing', async () => {
+      await request(app).patch(`/api/menus/${data.menu.id}`).send({ defaultBreweryId: zymos() });
+      const res = await request(app).patch(`/api/menus/${data.menu.id}`).send({ displayName: 'Nope', defaultBreweryId: 'nope' });
+      expect(res.status).toBe(404);
+      expect(res.text).toBe('Brewery not found');
+      expect(await defaultOf()).toBe(zymos());
+      expect((await provider.getMenu(data.menu.id!))?.displayName).toBe('Currently On Tap');
+    });
+
+    it('must be a brewery ID or null', async () => {
+      const res = await request(app).patch(`/api/menus/${data.menu.id}`).send({ defaultBreweryId: 5 });
+      expect(res.status).toBe(400);
+    });
+
+    it('treats an empty ID as none', async () => {
+      await request(app).patch(`/api/menus/${data.menu.id}`).send({ defaultBreweryId: zymos() });
+      expect((await request(app).patch(`/api/menus/${data.menu.id}`).send({ defaultBreweryId: '' })).status).toBe(200);
+      expect(await defaultOf()).toBeNull();
+    });
   });
 });
 

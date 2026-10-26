@@ -18,6 +18,8 @@ export function MenuPage() {
   const toast = useToast();
   const [sheet, setSheet] = useState<'rename' | 'add' | null>(null);
   const [reordering, setReordering] = useState(false);
+  const [savingDefaultBrewery, setSavingDefaultBrewery] = useState(false);
+  const breweries = useQuery({ queryKey: ['breweries'], queryFn: api.breweries });
 
   const name = menu.data?.displayName ?? 'Menu';
 
@@ -31,6 +33,20 @@ export function MenuPage() {
     } catch (e) {
       queryClient.setQueryData(queryKey, current);
       toast(`Couldn't reorder: ${errorMessage(e)}`, 'error');
+    }
+  };
+
+  const changeDefaultBrewery = async (breweryId: string | null) => {
+    setSavingDefaultBrewery(true);
+    try {
+      await api.setMenuDefaultBrewery(menuId, breweryId);
+      await queryClient.invalidateQueries({ queryKey });
+      const brewery = breweries.data?.find((b) => b.id === breweryId);
+      toast(brewery ? `${brewery.name} is now the default brewery` : 'No default brewery');
+    } catch (e) {
+      toast(`Couldn't save the default brewery: ${errorMessage(e)}`, 'error');
+    } finally {
+      setSavingDefaultBrewery(false);
     }
   };
 
@@ -78,6 +94,28 @@ export function MenuPage() {
                 toast('Menu logo removed');
               }}
             />
+
+            <section className="panel stack-sm" aria-label="Default brewery">
+              <label className="field-label">
+                Default brewery
+                <select
+                  className="field"
+                  value={menu.data.defaultBreweryId ?? ''}
+                  disabled={savingDefaultBrewery || breweries.isPending}
+                  onChange={(e) => changeDefaultBrewery(e.target.value || null)}
+                >
+                  <option value="">None — name every brewery</option>
+                  {breweries.data?.map((brewery) => (
+                    <option key={brewery.id} value={brewery.id}>{brewery.name}</option>
+                  ))}
+                </select>
+              </label>
+              <div className="muted-sm">
+                {breweries.isError
+                  ? "Couldn't load your breweries to choose from."
+                  : "Its name is left off the print view and menu board. Other breweries are still named."}
+              </div>
+            </section>
 
             <div className="section-head">
               <h2>Sections</h2>

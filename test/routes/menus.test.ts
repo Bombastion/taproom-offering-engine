@@ -5,11 +5,12 @@ import path from 'path';
 import request from 'supertest';
 import express, { Express } from 'express';
 import { LocalDataProvider } from '../../storage/providers';
+import pdfkit from 'pdfkit';
 import { unzipSync } from 'fflate';
 import * as mupdf from 'mupdf';
 import { BOARD_SAFE_MARGIN, BOARD_SECTION_GAP, BOARD_SIZE_SCALE, MenusRoutes } from '../../routes/menus';
 import { Item } from '../../models/items';
-import { MenuItem } from '../../models/menus';
+import { Menu, MenuItem } from '../../models/menus';
 import { Fixture, memoryProvider, seed, TINY_PNG } from '../helpers';
 
 // The public, read-only menu formats: the JSON the Wix widget polls (?format=widget), the
@@ -213,6 +214,87 @@ describe('?format=print', () => {
     expect(drafts.indexOf('Taster')).toBeLessThan(drafts.indexOf('Full Pour'));
     expect(drafts).not.toContain('Crowler');
     expect(html).toContain(TINY_PNG);
+  });
+});
+
+describe('the default brewery', () => {
+  const setDefault = (breweryId: string | null) =>
+    provider.replaceMenu(data.menu.id!, new Menu(null, data.menu.internalName, data.menu.displayName, data.menu.logo, breweryId));
+  const descriptions = (html: string) => [...html.matchAll(/<td class="descriptionCell">(.*?)<\/td>/g)].map((m) => m[1]);
+
+  it('is named on the print view when the menu has no default brewery', async () => {
+    const html = (await request(app).get(`/menus/${data.menu.id}?format=print`)).text;
+    expect(descriptions(html).filter(Boolean)).toEqual([
+      expect.stringMatching(/^Zymos Brewing &bull; <b>Hazy Sequence<\/b>/),
+      expect.stringMatching(/^Zymos Brewing &bull; <b>Pils<\/b>/),
+      expect.stringMatching(/^Guest Co &bull; <b>Guest Sour<\/b>/),
+    ]);
+  });
+
+  it("is left off the print view, with no stray bullet, while other breweries stay", async () => {
+    await setDefault(data.breweries.zymos.id!);
+    const html = (await request(app).get(`/menus/${data.menu.id}?format=print`)).text;
+    const lines = descriptions(html).filter(Boolean);
+    expect(lines).toEqual([
+      expect.stringMatching(/^<b>Hazy Sequence<\/b> &bull; NEIPA &bull; 6.5% ABV/),
+      expect.stringMatching(/^<b>Pils<\/b> &bull; Pilsner &bull; 4.8% ABV/),
+      expect.stringMatching(/^Guest Co &bull; <b>Guest Sour<\/b>/),
+    ]);
+    // Only the footer's WiFi name still says Zymos
+    expect(html.match(/Zymos Brewing/g)).toHaveLength(1);
+  });
+
+  it('is still named in the widget, which has its own brewery field', async () => {
+    await setDefault(data.breweries.zymos.id!);
+    const res = await request(app).get(`/menus/${data.menu.id}?format=widget`);
+    expect(res.body.sections[0].items.map((item: { breweryName: string }) => item.breweryName)).toEqual(['Zymos Brewing', 'Zymos Brewing']);
+  });
+
+  describe('on the menu board', () => {
+    // The menu board code loads its font from dist/public/fonts relative to the working directory
+    let originalCwd: string;
+    let scratch: string;
+
+    beforeEach(() => {
+      originalCwd = process.cwd();
+      scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'toe-default-brewery-'));
+      fs.mkdirSync(path.join(scratch, 'dist'));
+      fs.symlinkSync(path.join(repoRoot, 'public'), path.join(scratch, 'dist/public'));
+      process.chdir(scratch);
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+      process.chdir(originalCwd);
+      fs.rmSync(scratch, { recursive: true, force: true });
+    });
+
+    // Every string drawn on the board
+    const textDrawn = async () => {
+      const text = vi.spyOn(pdfkit.prototype, 'text');
+      const res = await request(app).get(`/menus/${data.menu.id}?format=digital`).buffer(true).parse((response, callback) => {
+        response.on('data', () => {});
+        response.on('end', () => callback(null, null));
+      });
+      expect(res.status).toBe(200);
+      return text.mock.calls.map(([drawn]) => drawn);
+    };
+
+    it('names every brewery when the menu has no default brewery', async () => {
+      const drawn = await textDrawn();
+      expect(drawn).toContain('Zymos Brewing Pils');
+      expect(drawn).toContain('Zymos Brewing Hazy Sequence');
+      expect(drawn).toContain('Guest Co Guest Sour');
+    });
+
+    it("leaves the default brewery's name off but keeps other breweries", async () => {
+      await setDefault(data.breweries.zymos.id!);
+      const drawn = await textDrawn();
+      expect(drawn).toContain('Pils');
+      expect(drawn).toContain('Hazy Sequence');
+      expect(drawn).toContain('Guest Co Guest Sour');
+      expect(drawn.filter((text) => String(text).includes('Zymos'))).toEqual([]);
+    });
   });
 });
 

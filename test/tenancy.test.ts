@@ -141,6 +141,7 @@ describe("someone else's data", () => {
       ['an item moved to their brewery', 'put', `/api/items/${b.items.hazy.id}`, { displayName: 'Hazy', breweryId: a.breweries.zymos.id }],
       ['their item on my menu', 'post', `/api/sections/${b.sections.drafts.id}/items`, { itemId: a.items.hazy.id, pours: [] }],
       ['a price in their pour size', 'post', `/api/sections/${b.sections.drafts.id}/items`, { item: { displayName: 'Mine' }, pours: [{ containerId: a.containers.taster.id, price: 3 }] }],
+      ['their brewery as my menu\'s default brewery', 'patch', `/api/menus/${b.menu.id}`, { defaultBreweryId: a.breweries.zymos.id }],
       ['a menu item priced in their pour size', 'put', `/api/menu-items/${b.menuItems.hazyOnDrafts.id}`, { pours: [{ containerId: a.containers.taster.id, price: 3 }] }],
     ];
     for (const [what, method, url, body] of attempts) {

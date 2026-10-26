@@ -30,6 +30,8 @@ export type MenuDetail = {
   hasLogo: boolean;
   // A data: URL ready for <img src>, or null
   logo: string | null;
+  // The brewery whose name the print view and menu board leave off, or null to name them all
+  defaultBreweryId: string | null;
   sections: SectionSummary[];
 };
 
@@ -224,6 +226,8 @@ export const api = {
   menu: (menuId: string) => request<MenuDetail>('GET', `/menus/${encodeURIComponent(menuId)}`),
   renameMenu: (menuId: string, displayName: string) =>
     request<MenuSummary>('PATCH', `/menus/${encodeURIComponent(menuId)}`, { displayName }),
+  setMenuDefaultBrewery: (menuId: string, breweryId: string | null) =>
+    request<{ id: string; defaultBreweryId: string | null }>('PATCH', `/menus/${encodeURIComponent(menuId)}`, { defaultBreweryId: breweryId }),
   setMenuLogo: (menuId: string, logo: string) =>
     request<{ logo: string }>('PUT', `/menus/${encodeURIComponent(menuId)}/logo`, { logo }),
   removeMenuLogo: (menuId: string) => request<void>('DELETE', `/menus/${encodeURIComponent(menuId)}/logo`),

@@ -5,16 +5,20 @@ export class Menu {
     displayName: string | null;
     // A b64 string representing the logo
     logo: string | null;
+    // The brewery this menu is mostly about. Its name is left off the print view and menu board
+    // (other breweries are still named). Null names every brewery.
+    defaultBreweryId: string | null;
 
-    constructor(id: string | null, internalName: string | null, displayName: string | null, logo: string | null) {
+    constructor(id: string | null, internalName: string | null, displayName: string | null, logo: string | null, defaultBreweryId: string | null = null) {
         this.id = id;
         this.internalName = internalName;
         this.displayName = displayName;
         this.logo = logo;
+        this.defaultBreweryId = defaultBreweryId;
     }
 
     static fromJsonEntry(entry: any): Menu {
-        return new Menu(entry.id, entry.internalName, entry.displayName, entry.logo);
+        return new Menu(entry.id, entry.internalName, entry.displayName, entry.logo, entry.defaultBreweryId ?? null);
     }
 }
 

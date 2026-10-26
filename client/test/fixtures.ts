@@ -13,6 +13,7 @@ export const menu: MenuDetail = {
   internalName: 'on-tap',
   hasLogo: true,
   logo: 'data:image/png;base64,abc',
+  defaultBreweryId: null,
   sections: [
     { id: 's1', displayName: 'Drafts', internalName: 'on-tap-drafts', order: 1, itemCount: 2, inactiveCount: 0, itemNames: ['Hazy Sequence', 'Pils'] },
     { id: 's2', displayName: 'Guest Taps', internalName: 'on-tap-guest', order: 2, itemCount: 1, inactiveCount: 0, itemNames: ['Guest Sour'] },

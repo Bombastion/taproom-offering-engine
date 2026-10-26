@@ -72,6 +72,8 @@ model Menu {
   internalName String
   displayName String
   logo String?
+  // The brewery whose name the print view and menu board leave off. Null shows every brewery's name.
+  defaultBreweryId String?
   // Whose this is. Everything the admin app shows or changes is limited to its owner.
   ownerId String
   owner User @relation(fields: [ownerId], references: [id])

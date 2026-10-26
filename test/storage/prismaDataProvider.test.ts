@@ -241,7 +241,31 @@ describe('menus', () => {
   it('replace can remove the logo', async () => {
     prisma.menu.findFirst.mockResolvedValue(original);
     await provider.replaceMenu('m1', new Menu(null, 'on-tap', 'On Tap', null));
-    expect(prisma.menu.update).toHaveBeenCalledWith({ where: { ownerId: OWNER, id: 'm1' }, data: { internalName: 'on-tap', displayName: 'On Tap', logo: null } });
+    expect(prisma.menu.update).toHaveBeenCalledWith({ where: { ownerId: OWNER, id: 'm1' }, data: { internalName: 'on-tap', displayName: 'On Tap', logo: null, defaultBreweryId: null } });
+  });
+
+  it('replace sets, and can clear, the default brewery', async () => {
+    prisma.menu.findFirst.mockResolvedValue({ ...original, defaultBreweryId: 'b1' });
+    prisma.brewery.findFirst.mockResolvedValue({ id: 'b2' });
+    await provider.replaceMenu('m1', new Menu(null, 'on-tap', 'On Tap', 'logo', 'b2'));
+    expect(prisma.menu.update).toHaveBeenLastCalledWith({ where: { ownerId: OWNER, id: 'm1' }, data: { internalName: 'on-tap', displayName: 'On Tap', logo: 'logo', defaultBreweryId: 'b2' } });
+    await provider.replaceMenu('m1', new Menu(null, 'on-tap', 'On Tap', 'logo', null));
+    expect(prisma.menu.update).toHaveBeenLastCalledWith({ where: { ownerId: OWNER, id: 'm1' }, data: { internalName: 'on-tap', displayName: 'On Tap', logo: 'logo', defaultBreweryId: null } });
+  });
+
+  it('update keeps the default brewery unless a new one is given', async () => {
+    prisma.menu.findFirst.mockResolvedValue({ ...original, defaultBreweryId: 'b1' });
+    await provider.updateMenu('m1', new Menu(null, null, 'Now Pouring', null));
+    expect(prisma.menu.update).toHaveBeenLastCalledWith({ where: { ownerId: OWNER, id: 'm1' }, data: expect.objectContaining({ defaultBreweryId: 'b1' }) });
+  });
+
+  it('checks the default brewery exists (for this owner) when adding, updating or replacing', async () => {
+    prisma.menu.findFirst.mockResolvedValue(original);
+    await expectProviderError(provider.addMenu(new Menu(null, 'a', 'A', null, 'nope')), 404, /Brewery with ID nope/);
+    await expectProviderError(provider.updateMenu('m1', new Menu(null, null, null, null, 'nope')), 404, /Brewery with ID nope/);
+    await expectProviderError(provider.replaceMenu('m1', new Menu(null, 'a', 'A', null, 'nope')), 404, /Brewery with ID nope/);
+    expect(prisma.menu.create).not.toHaveBeenCalled();
+    expect(prisma.menu.update).not.toHaveBeenCalled();
   });
 
   it('replace validates names and existence', async () => {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
 import { json, mockApi, renderApp, status } from '../utils';
-import { menu } from '../fixtures';
+import { breweries, menu } from '../fixtures';
 
 function sectionTitles() {
   return [...document.querySelectorAll('.card-title')].map((el) => el.textContent);
@@ -126,5 +126,64 @@ describe('MenuPage', () => {
     await user.click(screen.getByRole('button', { name: 'Remove logo' }));
     expect(await screen.findByText('Menu logo removed')).toBeInTheDocument();
     expect(server.calls('DELETE', '/api/menus/m1/logo')).toHaveLength(1);
+  });
+
+  describe('default brewery', () => {
+    it('offers the breweries, with none chosen by default', async () => {
+      mockApi({ 'GET /api/menus/m1': json(menu), 'GET /api/breweries': json(breweries) });
+      renderApp('/menus/m1');
+      const select = await screen.findByRole('combobox', { name: 'Default brewery' });
+      await waitFor(() => expect(select).toBeEnabled());
+      expect(select).toHaveValue('');
+      expect([...select.querySelectorAll('option')].map((o) => o.textContent)).toEqual(['None — name every brewery', 'Zymos Brewing', 'Guest Co']);
+      expect(screen.getByText(/left off the print view and menu board/)).toBeInTheDocument();
+    });
+
+    it("shows the menu's default brewery as chosen", async () => {
+      mockApi({ 'GET /api/menus/m1': json({ ...menu, defaultBreweryId: 'b1' }), 'GET /api/breweries': json(breweries) });
+      renderApp('/menus/m1');
+      const select = await screen.findByRole('combobox', { name: 'Default brewery' });
+      await waitFor(() => expect(select).toHaveValue('b1'));
+    });
+
+    it('saves a new default brewery, and None to go back to naming every brewery', async () => {
+      let current = menu;
+      const server = mockApi({
+        'GET /api/menus/m1': () => json(current),
+        'GET /api/breweries': json(breweries),
+        'PATCH /api/menus/m1': ({ body }) => {
+          const defaultBreweryId = (body as { defaultBreweryId: string | null }).defaultBreweryId;
+          current = { ...menu, defaultBreweryId };
+          return json({ id: 'm1', defaultBreweryId });
+        },
+      });
+      const { user } = renderApp('/menus/m1');
+      const select = await screen.findByRole('combobox', { name: 'Default brewery' });
+      await waitFor(() => expect(select).toBeEnabled());
+
+      await user.selectOptions(select, 'Zymos Brewing');
+      expect(await screen.findByText('Zymos Brewing is now the default brewery')).toBeInTheDocument();
+      expect(server.calls('PATCH', '/api/menus/m1')[0].body).toEqual({ defaultBreweryId: 'b1' });
+      await waitFor(() => expect(select).toHaveValue('b1'));
+
+      await user.selectOptions(select, 'None — name every brewery');
+      expect(await screen.findByText('No default brewery')).toBeInTheDocument();
+      expect(server.calls('PATCH', '/api/menus/m1')[1].body).toEqual({ defaultBreweryId: null });
+      await waitFor(() => expect(select).toHaveValue(''));
+    });
+
+    it('says so, and keeps the old choice, when saving fails', async () => {
+      mockApi({
+        'GET /api/menus/m1': json({ ...menu, defaultBreweryId: 'b1' }),
+        'GET /api/breweries': json(breweries),
+        'PATCH /api/menus/m1': status(404, 'Brewery not found'),
+      });
+      const { user } = renderApp('/menus/m1');
+      const select = await screen.findByRole('combobox', { name: 'Default brewery' });
+      await waitFor(() => expect(select).toBeEnabled());
+      await user.selectOptions(select, 'Guest Co');
+      expect(await screen.findByText(/Couldn't save the default brewery/)).toBeInTheDocument();
+      expect(select).toHaveValue('b1');
+    });
   });
 });

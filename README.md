@@ -221,6 +221,10 @@ Menu IDs are visible in the admin app's URLs (`/admin/menus/<menuId>`).
 | `/menus/<menuId>?format=digital` | Menu board for the TV: a ZIP of PNG images, one per page (1080×1920) |
 | `/menus/<menuId>?format=digital&page=<n>` | Just page `n` (starting at 1) of the menu board, as a PNG |
 
+A menu can have a **default brewery** (set on its screen in the admin app). The print view and menu
+board leave that brewery's name off its beers and still name every other brewery. The widget and JSON
+formats are unaffected.
+
 These are public and need no login. The menu board and print formats are rate limited (10 requests per minute per IP).
 The admin API under `/api` always requires a signed-in user.
 

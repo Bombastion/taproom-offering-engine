@@ -24,7 +24,11 @@ html
               each item in items
                 tbody(class='itemGroup')
                   tr
-                    td(class='descriptionCell') #{item.breweryName} &bull; <b>#{item.displayName}</b> &bull; #{item.style} &bull; #{item.abv}% ABV
+                    td(class='descriptionCell')
+                      //- No brewery name for the menu's default brewery (or an item with no brewery), so no leading bullet either
+                      if item.breweryName
+                        | #{item.breweryName} &bull; 
+                      | <b>#{item.displayName}</b> &bull; #{item.style} &bull; #{item.abv}% ABV
                     td
                       table(class='containerPrices')
                         tr

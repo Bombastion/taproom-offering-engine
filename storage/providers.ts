@@ -79,7 +79,8 @@ export abstract class DataProvider {
     abstract getMenu(id: string): Promise<Menu | null>;
     abstract getMenus(): Promise<Array<Menu>>;
     abstract updateMenu(id: string, menu: Menu): Promise<Menu>;
-    // Like updateMenu, but sets every field exactly as given (so the logo can be removed)
+    // Like updateMenu, but sets every field exactly as given (so the logo or default brewery can be
+    // removed), which also means callers have to pass along the fields they aren't changing
     abstract replaceMenu(id: string, menu: Menu): Promise<Menu>;
     
     abstract addSubMenu(menu: SubMenu): Promise<SubMenu>;
@@ -390,13 +391,21 @@ export class PrismaDataProvider extends DataProvider {
         });
     }
 
+    async validateMenu(menu: Menu) {
+        if (menu.defaultBreweryId && !(await this.getBrewery(menu.defaultBreweryId))) {
+            throw new DataProviderError(`Brewery with ID ${menu.defaultBreweryId} does not exist when modifying menu`, 404);
+        }
+    }
+
     async addMenu(menu: Menu): Promise<Menu> {
+        await this.validateMenu(menu);
         return await this.prismaClient.menu.create({
             data: {
                 ownerId: this.owner(),
                 internalName: menu.internalName!!,
                 displayName: menu.displayName!!,
                 logo: menu.logo,
+                defaultBreweryId: menu.defaultBreweryId,
             }
         });
     }
@@ -410,6 +419,7 @@ export class PrismaDataProvider extends DataProvider {
     }
 
     async updateMenu(id: string, menu: Menu): Promise<Menu> {
+        await this.validateMenu(menu);
         const original = await this.getMenu(id);
         if (!original) {
             throw new DataProviderError(`Menu with ID ${id} does not exist`, 404);
@@ -422,6 +432,7 @@ export class PrismaDataProvider extends DataProvider {
                 internalName: menu.internalName? menu.internalName : original.internalName!!,
                 displayName: menu.displayName? menu.displayName : original.displayName!!,
                 logo: menu.logo? menu.logo : original.logo,
+                defaultBreweryId: menu.defaultBreweryId? menu.defaultBreweryId : original.defaultBreweryId,
             }
         });
     }
@@ -434,6 +445,7 @@ export class PrismaDataProvider extends DataProvider {
         if (!menu.internalName || !menu.displayName) {
             throw new DataProviderError(`Menus require both an internal name and a display name`, 422);
         }
+        await this.validateMenu(menu);
         return await this.prismaClient.menu.update({
             where: {
                 id: id, ...this.owned()
@@ -442,6 +454,7 @@ export class PrismaDataProvider extends DataProvider {
                 internalName: menu.internalName,
                 displayName: menu.displayName,
                 logo: menu.logo,
+                defaultBreweryId: menu.defaultBreweryId,
             }
         });
     }
@@ -1053,7 +1066,14 @@ export class LocalDataProvider extends DataProvider {
         return this.removeGeneric(id, this.ITEMS_KEY);
     }
 
+    validateMenu(menu: Menu) {
+        if (menu.defaultBreweryId && !this.idExists(menu.defaultBreweryId, this.BREWERIES_KEY)) {
+            this.missingReference('Brewery', menu.defaultBreweryId, `TODO: Do an error here because ID ${menu.defaultBreweryId} does not exist for breweries when modifying menu ${menu.id}`);
+        }
+    }
+
     async addMenu(menu: Menu): Promise<Menu> {
+        this.validateMenu(menu);
         return this.addGeneric(menu, this.MENUS_KEY);
     }
 
@@ -1066,6 +1086,7 @@ export class LocalDataProvider extends DataProvider {
     }
 
     async updateMenu(id: string, menu: Menu): Promise<Menu> {
+        this.validateMenu(menu);
         return this.updateGeneric(id, this.MENUS_KEY, menu, Menu, ['id']);
     }
 
@@ -1073,7 +1094,8 @@ export class LocalDataProvider extends DataProvider {
         if (!this.idExists(id, this.MENUS_KEY)) {
             throw new DataProviderError(`${id} not found`, 404);
         }
-        const replacement = new Menu(id, menu.internalName, menu.displayName, menu.logo);
+        this.validateMenu(menu);
+        const replacement = new Menu(id, menu.internalName, menu.displayName, menu.logo, menu.defaultBreweryId);
         this._cache.get(this.MENUS_KEY)!.set(id, replacement);
         return replacement;
     }

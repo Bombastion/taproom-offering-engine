@@ -233,15 +233,31 @@ export class ApiRoutes extends Routes {
         internalName: menu.internalName,
         hasLogo: Boolean(menu.logo),
         logo: logoDataUrl(menu.logo),
+        defaultBreweryId: menu.defaultBreweryId ?? null,
         sections: sectionResults,
       });
     }));
 
+    // Renames a menu and/or sets its default brewery, whose name the print view and menu board
+    // leave off. `defaultBreweryId` is a brewery ID, or null to name every brewery again; leave it
+    // out to keep what's there.
     this.router.patch('/menus/:menuId', handle(async (req, res) => {
       const displayName = optionalString(req.body, 'displayName', 200);
       const internalName = optionalString(req.body, 'internalName', 200);
-      const menu = await this.data.updateMenu(req.params.menuId as string, new Menu(null, internalName, displayName, null));
-      res.json({ id: menu.id, displayName: menu.displayName, internalName: menu.internalName });
+      const settingDefaultBrewery = Object.prototype.hasOwnProperty.call(req.body ?? {}, 'defaultBreweryId');
+      let defaultBreweryId: string | null = null;
+      if (settingDefaultBrewery) {
+        const value = req.body.defaultBreweryId;
+        if (value !== null && typeof value !== 'string') throw badRequest('defaultBreweryId must be a brewery ID, or null for none');
+        defaultBreweryId = value || null;
+        if (defaultBreweryId && !(await this.data.getBrewery(defaultBreweryId))) throw notFound('Brewery');
+      }
+      let menu = await this.data.updateMenu(req.params.menuId as string, new Menu(null, internalName, displayName, null));
+      if (settingDefaultBrewery) {
+        // updateMenu keeps what's there when given nothing, so clearing takes a full replace
+        menu = await this.data.replaceMenu(menu.id!, new Menu(null, menu.internalName, menu.displayName, menu.logo, defaultBreweryId));
+      }
+      res.json({ id: menu.id, displayName: menu.displayName, internalName: menu.internalName, defaultBreweryId: menu.defaultBreweryId ?? null });
     }));
 
     // Sets or replaces a menu's logo (shown on the print view, the menu board images and the widget)
@@ -249,14 +265,14 @@ export class ApiRoutes extends Routes {
       const menu = await this.data.getMenu(req.params.menuId as string);
       if (!menu) throw notFound('Menu');
       const logo = parseLogo(req.body);
-      await this.data.replaceMenu(menu.id!, new Menu(null, menu.internalName, menu.displayName, logo));
+      await this.data.replaceMenu(menu.id!, new Menu(null, menu.internalName, menu.displayName, logo, menu.defaultBreweryId));
       res.json({ logo: logoDataUrl(logo) });
     }));
 
     this.router.delete('/menus/:menuId/logo', handle(async (req, res) => {
       const menu = await this.data.getMenu(req.params.menuId as string);
       if (!menu) throw notFound('Menu');
-      await this.data.replaceMenu(menu.id!, new Menu(null, menu.internalName, menu.displayName, null));
+      await this.data.replaceMenu(menu.id!, new Menu(null, menu.internalName, menu.displayName, null, menu.defaultBreweryId));
       res.sendStatus(204);
     }));
 
