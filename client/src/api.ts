@@ -10,11 +10,30 @@ export type MenuSummary = {
   itemCount: number;
 };
 
+// The public views a section can be left off of
+export type MenuView = 'print' | 'board' | 'widget';
+
+// In the order they're listed on screen
+export const MENU_VIEWS: { view: MenuView; label: string; short: string }[] = [
+  { view: 'print', label: 'Print menu', short: 'print menu' },
+  { view: 'board', label: 'Menu board', short: 'menu board' },
+  { view: 'widget', label: 'Website widget', short: 'website' },
+];
+
+// "Not on the print menu and website", or '' for a section that shows everywhere
+export function hiddenOnText(hiddenOn: MenuView[]): string {
+  const names = MENU_VIEWS.filter(({ view }) => hiddenOn.includes(view)).map(({ short }) => short);
+  if (names.length === 0) return '';
+  return `Not on the ${names.length > 1 ? `${names.slice(0, -1).join(', ')} or ${names[names.length - 1]}` : names[0]}`;
+}
+
 export type SectionSummary = {
   id: string;
   displayName: string;
   internalName: string;
   order: number | null;
+  // The views this section is left off of; empty shows it everywhere
+  hiddenOn: MenuView[];
   // Every item on the section, active or not
   itemCount: number;
   // How many of those are inactive (left off the published menus)
@@ -67,6 +86,8 @@ export type SectionDetail = {
   id: string;
   displayName: string;
   internalName: string;
+  // The views this section is left off of; empty shows it everywhere
+  hiddenOn: MenuView[];
   menu: { id: string; displayName: string };
   items: SectionEntry[];
 };
@@ -239,6 +260,8 @@ export const api = {
   section: (sectionId: string) => request<SectionDetail>('GET', `/sections/${encodeURIComponent(sectionId)}`),
   renameSection: (sectionId: string, displayName: string) =>
     request<void>('PATCH', `/sections/${encodeURIComponent(sectionId)}`, { displayName }),
+  setSectionHiddenOn: (sectionId: string, hiddenOn: MenuView[]) =>
+    request<{ id: string; hiddenOn: MenuView[] }>('PATCH', `/sections/${encodeURIComponent(sectionId)}`, { hiddenOn }),
   deleteSection: (sectionId: string) => request<void>('DELETE', `/sections/${encodeURIComponent(sectionId)}`),
   addExistingItem: (sectionId: string, itemId: string) =>
     request<{ menuItemId: string }>('POST', `/sections/${encodeURIComponent(sectionId)}/items`, { itemId }),

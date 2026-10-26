@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import Routes from './common';
 import {v4 as uuidv4} from 'uuid';
 import { Item } from '../models/items';
-import { DisplayItem, DisplaySubMenu, Menu, MenuItem, SubMenu } from '../models/menus';
+import { DisplayItem, DisplaySubMenu, Menu, MenuItem, MenuView, SubMenu } from '../models/menus';
 import { Brewery } from '../models/breweries';
 import pdfkit from 'pdfkit';
 import fs from 'fs';
@@ -18,6 +18,9 @@ function byOrder(a: { order: number | null }, b: { order: number | null }): numb
   if (b.order === null) return -1;
   return a.order - b.order;
 }
+
+// For filtering a menu's sections down to the ones that show on a view (see SubMenu.hiddenOn)
+const subMenuShownOn = (view: MenuView) => (subMenu: SubMenu) => SubMenu.isShownOn(subMenu, view);
 
 // The menu board is a portrait 1080x1920 picture, one image per page.
 const BOARD_WIDTH = 1080;
@@ -76,7 +79,7 @@ export class MenusRoutes extends Routes {
     // the background colour.
     const generateMenuBoardImages = async (dataProvider: DataProvider, mainMenu: Menu): Promise<Uint8Array[]> => {
       // Get all the sub-menus for this menu
-      const allSubMenus = (await dataProvider.getSubMenusForMenu(mainMenu.id!!)).sort(byOrder);
+      const allSubMenus = (await dataProvider.getSubMenusForMenu(mainMenu.id!!)).filter(subMenuShownOn('board')).sort(byOrder);
 
       // Create a document, collecting what it writes so it can be rendered once it's complete
       const docWidth = BOARD_WIDTH
@@ -271,7 +274,7 @@ export class MenusRoutes extends Routes {
         // sizes or prices), suitable for a lightweight external display like the Wix "currently on tap"
         // embed. This mirrors the same data the print/digital views build, just as JSON instead
         // of a rendered document.
-        const allSubMenus = (await this.dataProvider.getSubMenusForMenu(result.id!)).sort(byOrder);
+        const allSubMenus = (await this.dataProvider.getSubMenusForMenu(result.id!)).filter(subMenuShownOn('widget')).sort(byOrder);
 
         const sections = [];
         for (const subMenu of allSubMenus) {
@@ -319,7 +322,7 @@ export class MenusRoutes extends Routes {
       }
       if (req.query.format === "print") {
         // Get all the sub-menus for this menu
-        const allSubMenus = (await this.dataProvider.getSubMenusForMenu(result.id!)).sort(byOrder);
+        const allSubMenus = (await this.dataProvider.getSubMenusForMenu(result.id!)).filter(subMenuShownOn('print')).sort(byOrder);
 
         // Initialize a map we can add things to
         const subMenuToItemMap: Map<string, Array<DisplayItem>> = new Map();
@@ -334,6 +337,10 @@ export class MenusRoutes extends Routes {
         // Sorted up front so each section's list below ends up in its configured order
         const allItemsForMenu = (await this.dataProvider.getMenuItemsForMenu(result.id!)).filter(MenuItem.isActive).sort(byOrder);
         for (const menuItem of allItemsForMenu) {
+          // Items on a section that's left off the print view aren't needed
+          if (!menuItem.subMenuId || !subMenuToItemMap.has(menuItem.subMenuId)) {
+            continue;
+          }
           const item = (await this.dataProvider.getItem(menuItem.itemId!))!;
 
           // Not all items are associated with a brewery

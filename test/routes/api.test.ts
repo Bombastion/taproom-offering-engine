@@ -74,9 +74,9 @@ describe('menus', () => {
       logo: `data:image/png;base64,${TINY_PNG}`,
       defaultBreweryId: null,
       sections: [
-        { id: data.sections.drafts.id, displayName: 'Drafts', internalName: 'on-tap-drafts', order: 1, itemCount: 2, inactiveCount: 0, itemNames: ['Hazy Sequence', 'Pils'] },
-        { id: data.sections.guestTaps.id, displayName: 'Guest Taps', internalName: 'on-tap-guest', order: 2, itemCount: 1, inactiveCount: 0, itemNames: ['Guest Sour'] },
-        { id: data.sections.empty.id, displayName: 'Empty', internalName: 'on-tap-empty', order: 3, itemCount: 0, inactiveCount: 0, itemNames: [] },
+        { id: data.sections.drafts.id, displayName: 'Drafts', internalName: 'on-tap-drafts', order: 1, hiddenOn: [], itemCount: 2, inactiveCount: 0, itemNames: ['Hazy Sequence', 'Pils'] },
+        { id: data.sections.guestTaps.id, displayName: 'Guest Taps', internalName: 'on-tap-guest', order: 2, hiddenOn: [], itemCount: 1, inactiveCount: 0, itemNames: ['Guest Sour'] },
+        { id: data.sections.empty.id, displayName: 'Empty', internalName: 'on-tap-empty', order: 3, hiddenOn: [], itemCount: 0, inactiveCount: 0, itemNames: [] },
       ],
     });
   });
@@ -246,6 +246,59 @@ describe('sections', () => {
     expect(res.body.order).toBe(1);
   });
 
+  describe('hiding a section from some views', () => {
+    const guestTaps = () => data.sections.guestTaps.id;
+    const hiddenOnOf = async () => (await request(app).get(`/api/sections/${guestTaps()}`)).body.hiddenOn;
+
+    it('shows a section everywhere by default', async () => {
+      expect(await hiddenOnOf()).toEqual([]);
+      const menu = (await request(app).get(`/api/menus/${data.menu.id}`)).body;
+      expect(menu.sections.map((s: { hiddenOn: string[] }) => s.hiddenOn)).toEqual([[], [], []]);
+    });
+
+    it('sets, shows and clears the views a section is left off', async () => {
+      const set = await request(app).patch(`/api/sections/${guestTaps()}`).send({ hiddenOn: ['widget', 'print'] });
+      expect(set.status).toBe(200);
+      // Always in the same order, whatever order they were sent in
+      expect(set.body.hiddenOn).toEqual(['print', 'widget']);
+      expect(await hiddenOnOf()).toEqual(['print', 'widget']);
+      const menu = (await request(app).get(`/api/menus/${data.menu.id}`)).body;
+      expect(menu.sections.map((s: { hiddenOn: string[] }) => s.hiddenOn)).toEqual([[], ['print', 'widget'], []]);
+
+      const cleared = await request(app).patch(`/api/sections/${guestTaps()}`).send({ hiddenOn: [] });
+      expect(cleared.body.hiddenOn).toEqual([]);
+      expect(await hiddenOnOf()).toEqual([]);
+    });
+
+    it('ignores repeats', async () => {
+      const res = await request(app).patch(`/api/sections/${guestTaps()}`).send({ hiddenOn: ['board', 'board'] });
+      expect(res.body.hiddenOn).toEqual(['board']);
+    });
+
+    it('is kept when the section is renamed or reordered, and a rename is kept when it is changed', async () => {
+      await request(app).patch(`/api/sections/${guestTaps()}`).send({ hiddenOn: ['print'] });
+      const renamed = await request(app).patch(`/api/sections/${guestTaps()}`).send({ displayName: 'Guests' });
+      expect(renamed.body).toMatchObject({ displayName: 'Guests', hiddenOn: ['print'] });
+      const { drafts, guestTaps: guests, empty } = data.sections;
+      await request(app).put(`/api/menus/${data.menu.id}/sections/order`).send({ sectionIds: [guests.id, drafts.id, empty.id] });
+      expect(await hiddenOnOf()).toEqual(['print']);
+      await request(app).patch(`/api/sections/${guestTaps()}`).send({ hiddenOn: ['board'] });
+      expect((await provider.getSubMenu(guestTaps()!))?.displayName).toBe('Guests');
+    });
+
+    it.each([
+      ['a string', 'print'],
+      ['an unknown view', ['print', 'tv']],
+      ['a non-string', [1]],
+    ])('rejects hiddenOn that is %s', async (_label, hiddenOn) => {
+      await request(app).patch(`/api/sections/${guestTaps()}`).send({ hiddenOn: ['board'] });
+      const res = await request(app).patch(`/api/sections/${guestTaps()}`).send({ hiddenOn });
+      expect(res.status).toBe(400);
+      expect(res.text).toBe('hiddenOn must be a list of any of: print, board, widget');
+      expect(await hiddenOnOf()).toEqual(['board']);
+    });
+  });
+
   it('validates new sections', async () => {
     expect((await request(app).post(`/api/menus/${data.menu.id}/sections`).send({})).status).toBe(422);
     expect((await request(app).post('/api/menus/nope/sections').send({ displayName: 'x' })).status).toBe(404);
@@ -281,6 +334,7 @@ describe('sections', () => {
       id: data.sections.drafts.id,
       displayName: 'Drafts',
       internalName: 'on-tap-drafts',
+      hiddenOn: [],
       menu: { id: data.menu.id, displayName: 'Currently On Tap' },
       items: [
         {

@@ -475,6 +475,7 @@ export class PrismaDataProvider extends DataProvider {
                 displayName: menu.displayName!!,
                 menuId: menu.menuId!!,
                 order: menu.order,
+                hiddenOn: menu.hiddenOn ?? [],
             }
         })
     }
@@ -508,6 +509,7 @@ export class PrismaDataProvider extends DataProvider {
                 displayName: subMenu.displayName? subMenu.displayName : original.displayName!!,
                 menuId: subMenu.menuId? subMenu.menuId : original.menuId!!,
                 order: subMenu.order? subMenu.order : original.order,
+                hiddenOn: subMenu.hiddenOn? subMenu.hiddenOn : original.hiddenOn,
             }
         });
     }

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { api, errorMessage, MenuDetail, plural } from '../api';
+import { api, errorMessage, hiddenOnText, MenuDetail, plural } from '../api';
 import { PageHeader, Screen } from '../components/Screen';
 import { ChevronRight, PencilIcon, PlusIcon, PrintIcon, ReorderIcon, ScreenIcon } from '../components/Icons';
 import { Loading, LoadError } from '../components/QueryState';
@@ -154,6 +154,7 @@ export function MenuPage() {
                               .filter(Boolean)
                               .join(' · ')}
                       </div>
+                      {section.hiddenOn.length > 0 && <div className="card-meta hidden-note">{hiddenOnText(section.hiddenOn)}</div>}
                     </div>
                     <span className="card-chevron"><ChevronRight /></span>
                   </Link>

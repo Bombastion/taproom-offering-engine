@@ -22,6 +22,11 @@ export class Menu {
     }
 }
 
+// The public views of a menu that a section can be left off of: the printable menu, the menu
+// board images and the website widget
+export const MENU_VIEWS = ['print', 'board', 'widget'] as const;
+export type MenuView = typeof MENU_VIEWS[number];
+
 // A particular sub-heading on a menu. Used to organize items within a menu
 export class SubMenu {
     id: string | null;
@@ -29,17 +34,26 @@ export class SubMenu {
     displayName: string | null;
     menuId: string | null;
     order: number | null;
+    // The views this section is left off of (see MENU_VIEWS). Empty (or null) shows it on all of
+    // them. In an update, null means "leave it alone" and a list replaces what's there.
+    hiddenOn: string[] | null;
     
-    constructor(id: string | null, internalName: string | null, displayName: string | null, menuId: string | null, order: number | null) {
+    constructor(id: string | null, internalName: string | null, displayName: string | null, menuId: string | null, order: number | null, hiddenOn: string[] | null = null) {
         this.id = id;
         this.internalName = internalName;
         this.displayName = displayName;
         this.menuId = menuId;
         this.order = order;
+        this.hiddenOn = hiddenOn;
     }
 
     static fromJsonEntry(entry: any): SubMenu {
-        return new SubMenu(entry.id, entry.internalName, entry.displayName, entry.menuId, entry.order);
+        return new SubMenu(entry.id, entry.internalName, entry.displayName, entry.menuId, entry.order, entry.hiddenOn ?? []);
+    }
+
+    // Whether this section shows up on the given public view
+    static isShownOn(subMenu: { hiddenOn?: string[] | null }, view: MenuView): boolean {
+        return !(subMenu.hiddenOn ?? []).includes(view);
     }
 }
 

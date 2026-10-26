@@ -36,6 +36,15 @@ describe('MenuPage', () => {
     expect(screen.getByRole('link', { name: /Guest Taps/ })).not.toHaveTextContent('Empty');
   });
 
+  it('notes which views a section is left off of', async () => {
+    const sections = [{ ...menu.sections[0], hiddenOn: ['print'] }, { ...menu.sections[1], hiddenOn: ['print', 'board', 'widget'] }, menu.sections[2]];
+    mockApi({ 'GET /api/menus/m1': json({ ...menu, sections }) });
+    renderApp('/menus/m1');
+    expect(await screen.findByRole('link', { name: /Drafts/ })).toHaveTextContent('Not on the print menu');
+    expect(screen.getByRole('link', { name: /Guest Taps/ })).toHaveTextContent('Not on the print menu, menu board or website');
+    expect(screen.getByRole('link', { name: /Empty/ })).not.toHaveTextContent('Not on');
+  });
+
   it('only offers the menu board images when there is a logo to put on it', async () => {
     mockApi({ 'GET /api/menus/m1': json({ ...menu, hasLogo: false, logo: null }) });
     renderApp('/menus/m1');

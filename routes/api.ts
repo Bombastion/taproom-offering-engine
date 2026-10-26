@@ -2,7 +2,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { Request, Response } from 'express';
 import Routes from './common';
 import { DataProvider, DataProviderError } from '../storage/providers';
-import { Menu, MenuItem, SubMenu } from '../models/menus';
+import { Menu, MENU_VIEWS, MenuItem, SubMenu } from '../models/menus';
 import { Item } from '../models/items';
 import { Brewery } from '../models/breweries';
 import { ItemContainer, SaleContainer } from '../models/containers';
@@ -119,6 +119,17 @@ function parseLogo(body: any): string {
   return value;
 }
 
+// Reads the optional list of views a section is hidden on (see SubMenu.hiddenOn). Null means the
+// request didn't mention it, so what's there stays; an empty list shows the section everywhere.
+function parseHiddenOn(body: any): string[] | null {
+  const value = body?.hiddenOn;
+  if (value === undefined || value === null) return null;
+  if (!Array.isArray(value) || value.some((view) => !(MENU_VIEWS as readonly string[]).includes(view))) {
+    throw badRequest(`hiddenOn must be a list of any of: ${MENU_VIEWS.join(', ')}`);
+  }
+  return MENU_VIEWS.filter((view) => value.includes(view));
+}
+
 type PourInput = { containerId: string; price: number };
 
 function parsePours(body: any): PourInput[] | null {
@@ -222,6 +233,7 @@ export class ApiRoutes extends Routes {
           displayName: section.displayName,
           internalName: section.internalName,
           order: section.order,
+          hiddenOn: section.hiddenOn ?? [],
           itemCount: menuItems.length,
           inactiveCount,
           itemNames: names,
@@ -379,6 +391,7 @@ export class ApiRoutes extends Routes {
         id: section.id,
         displayName: section.displayName,
         internalName: section.internalName,
+        hiddenOn: section.hiddenOn ?? [],
         menu: { id: menu.id, displayName: menu.displayName },
         items: entries,
       });
@@ -387,13 +400,15 @@ export class ApiRoutes extends Routes {
     this.router.patch('/sections/:sectionId', handle(async (req, res) => {
       const displayName = optionalString(req.body, 'displayName', 200);
       const internalName = optionalString(req.body, 'internalName', 200);
-      const section = await this.data.updateSubMenu(req.params.sectionId as string, new SubMenu(null, internalName, displayName, null, null));
+      const hiddenOn = parseHiddenOn(req.body);
+      const section = await this.data.updateSubMenu(req.params.sectionId as string, new SubMenu(null, internalName, displayName, null, null, hiddenOn));
       res.json({
         id: section.id,
         menuId: section.menuId,
         internalName: section.internalName,
         displayName: section.displayName,
         order: section.order,
+        hiddenOn: section.hiddenOn ?? [],
       });
     }));
 

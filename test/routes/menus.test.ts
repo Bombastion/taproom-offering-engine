@@ -10,7 +10,7 @@ import { unzipSync } from 'fflate';
 import * as mupdf from 'mupdf';
 import { BOARD_SAFE_MARGIN, BOARD_SECTION_GAP, BOARD_SIZE_SCALE, MenusRoutes } from '../../routes/menus';
 import { Item } from '../../models/items';
-import { Menu, MenuItem } from '../../models/menus';
+import { Menu, MenuItem, SubMenu } from '../../models/menus';
 import { Fixture, memoryProvider, seed, TINY_PNG } from '../helpers';
 
 // The public, read-only menu formats: the JSON the Wix widget polls (?format=widget), the
@@ -214,6 +214,94 @@ describe('?format=print', () => {
     expect(drafts.indexOf('Taster')).toBeLessThan(drafts.indexOf('Full Pour'));
     expect(drafts).not.toContain('Crowler');
     expect(html).toContain(TINY_PNG);
+  });
+});
+
+describe('sections hidden from some views', () => {
+  const hide = (hiddenOn: string[]) => provider.updateSubMenu(data.sections.guestTaps.id!, new SubMenu(null, null, null, null, null, hiddenOn));
+  const sectionNames = async (format: string) => {
+    const res = await request(app).get(`/menus/${data.menu.id}?format=${format}`);
+    return format === 'widget' ? res.body.sections.map((s: { displayName: string }) => s.displayName) : res.text;
+  };
+
+  it('shows every section on every view by default', async () => {
+    expect(await sectionNames('widget')).toEqual(['Drafts', 'Guest Taps']);
+    const html = await sectionNames('print');
+    expect(html).toContain('Guest Taps');
+    expect(html).toContain('Guest Sour');
+  });
+
+  it('leaves a section, its heading and its items off the print view only', async () => {
+    await hide(['print']);
+    const html = await sectionNames('print');
+    expect(html).toContain('Drafts');
+    expect(html).toContain('Hazy Sequence');
+    expect(html).not.toContain('Guest Taps');
+    expect(html).not.toContain('Guest Sour');
+    expect(html).not.toContain('Guest Co');
+    // Still on the widget
+    expect(await sectionNames('widget')).toEqual(['Drafts', 'Guest Taps']);
+  });
+
+  it('leaves a section off the widget only', async () => {
+    await hide(['widget']);
+    expect(await sectionNames('widget')).toEqual(['Drafts']);
+    expect(await sectionNames('print')).toContain('Guest Sour');
+  });
+
+  it('copes with every section being hidden from the print view', async () => {
+    await provider.updateSubMenu(data.sections.drafts.id!, new SubMenu(null, null, null, null, null, ['print']));
+    await hide(['print']);
+    const res = await request(app).get(`/menus/${data.menu.id}?format=print`);
+    expect(res.status).toBe(200);
+    expect(res.text).not.toContain('Hazy Sequence');
+    expect(res.text).not.toContain('Guest Sour');
+  });
+
+  describe('on the menu board', () => {
+    // The menu board code loads its font from dist/public/fonts relative to the working directory
+    let originalCwd: string;
+    let scratch: string;
+
+    beforeEach(() => {
+      originalCwd = process.cwd();
+      scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'toe-hidden-sections-'));
+      fs.mkdirSync(path.join(scratch, 'dist'));
+      fs.symlinkSync(path.join(repoRoot, 'public'), path.join(scratch, 'dist/public'));
+      process.chdir(scratch);
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+      process.chdir(originalCwd);
+      fs.rmSync(scratch, { recursive: true, force: true });
+    });
+
+    // Every string drawn on the board
+    const textDrawn = async () => {
+      const text = vi.spyOn(pdfkit.prototype, 'text');
+      const res = await request(app).get(`/menus/${data.menu.id}?format=digital`).buffer(true).parse((response, callback) => {
+        response.on('data', () => {});
+        response.on('end', () => callback(null, null));
+      });
+      expect(res.status).toBe(200);
+      return text.mock.calls.map(([drawn]) => drawn);
+    };
+
+    it('still draws a section that is only hidden from the print view', async () => {
+      await hide(['print', 'widget']);
+      const drawn = await textDrawn();
+      expect(drawn).toContain('Guest Taps');
+      expect(drawn).toContain('Guest Co Guest Sour');
+    });
+
+    it('leaves a hidden section and its items off', async () => {
+      await hide(['board']);
+      const drawn = await textDrawn();
+      expect(drawn).toContain('Drafts');
+      expect(drawn).not.toContain('Guest Taps');
+      expect(drawn.filter((text) => String(text).includes('Guest'))).toEqual([]);
+    });
   });
 });
 

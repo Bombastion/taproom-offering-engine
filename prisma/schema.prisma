@@ -87,6 +87,9 @@ model SubMenu {
   displayName String
   menuId String
   order Int?
+  // The public views this section is left off of: any of "print", "board" (the menu board) and
+  // "widget". Empty shows it everywhere.
+  hiddenOn String[] @default([])
   // Whose this is. Everything the admin app shows or changes is limited to its owner.
   ownerId String
   owner User @relation(fields: [ownerId], references: [id])

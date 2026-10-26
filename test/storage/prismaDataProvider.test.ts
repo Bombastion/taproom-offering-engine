@@ -284,7 +284,22 @@ describe('sub-menus', () => {
     await expectProviderError(provider.addSubMenu(new SubMenu(null, 'drafts', 'Drafts', 'nope', 1)), 404, /Menu with ID nope/);
     prisma.menu.findFirst.mockResolvedValue({ id: 'm1' });
     await provider.addSubMenu(new SubMenu(null, 'drafts', 'Drafts', 'm1', 1));
-    expect(prisma.subMenu.create).toHaveBeenCalledWith({ data: { ownerId: OWNER, internalName: 'drafts', displayName: 'Drafts', menuId: 'm1', order: 1 } });
+    expect(prisma.subMenu.create).toHaveBeenCalledWith({ data: { ownerId: OWNER, internalName: 'drafts', displayName: 'Drafts', menuId: 'm1', order: 1, hiddenOn: [] } });
+  });
+
+  it('stores the views a section is hidden on, replaces them on update, and keeps them when not given', async () => {
+    prisma.menu.findFirst.mockResolvedValue({ id: 'm1' });
+    await provider.addSubMenu(new SubMenu(null, 'drafts', 'Drafts', 'm1', 1, ['print']));
+    expect(prisma.subMenu.create).toHaveBeenCalledWith({ data: expect.objectContaining({ hiddenOn: ['print'] }) });
+
+    prisma.subMenu.findFirst.mockResolvedValue({ id: 's1', internalName: 'drafts', displayName: 'Drafts', menuId: 'm1', order: 3, hiddenOn: ['print'] });
+    await provider.updateSubMenu('s1', new SubMenu(null, null, null, null, null));
+    expect(prisma.subMenu.update).toHaveBeenLastCalledWith({ where: { ownerId: OWNER, id: 's1' }, data: expect.objectContaining({ hiddenOn: ['print'] }) });
+    await provider.updateSubMenu('s1', new SubMenu(null, null, null, null, null, ['board', 'widget']));
+    expect(prisma.subMenu.update).toHaveBeenLastCalledWith({ where: { ownerId: OWNER, id: 's1' }, data: expect.objectContaining({ hiddenOn: ['board', 'widget'] }) });
+    // An empty list is a real answer: show it everywhere again
+    await provider.updateSubMenu('s1', new SubMenu(null, null, null, null, null, []));
+    expect(prisma.subMenu.update).toHaveBeenLastCalledWith({ where: { ownerId: OWNER, id: 's1' }, data: expect.objectContaining({ hiddenOn: [] }) });
   });
 
   it('update keeps the original for empty fields', async () => {

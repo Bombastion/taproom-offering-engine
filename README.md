@@ -221,6 +221,10 @@ Menu IDs are visible in the admin app's URLs (`/admin/menus/<menuId>`).
 | `/menus/<menuId>?format=digital` | Menu board for the TV: a ZIP of PNG images, one per page (1080×1920) |
 | `/menus/<menuId>?format=digital&page=<n>` | Just page `n` (starting at 1) of the menu board, as a PNG |
 
+Each section can be left off any of the print view, the menu board and the website widget (on the
+section's screen in the admin app), for example a "Non-Alcoholic Beers" section that only goes on the
+menu board. A section left off a view disappears from it entirely, heading and items.
+
 A menu can have a **default brewery** (set on its screen in the admin app). The print view and menu
 board leave that brewery's name off its beers and still name every other brewery. The widget and JSON
 formats are unaffected.
