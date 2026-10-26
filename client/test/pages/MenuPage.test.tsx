@@ -19,7 +19,7 @@ describe('MenuPage', () => {
     expect(screen.getByRole('link', { name: /Empty/ })).toHaveTextContent('Empty — tap to add items');
     expect(screen.getByText('3 sections')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Print view' })).toHaveAttribute('href', '/menus/m1?format=print');
-    expect(screen.getByRole('link', { name: 'Menu board PDF' })).toHaveAttribute('href', '/menus/m1?format=digital');
+    expect(screen.getByRole('link', { name: 'Menu board images' })).toHaveAttribute('href', '/menus/m1?format=digital');
     expect(screen.getByRole('navigation', { name: 'Breadcrumb' })).toHaveTextContent('Menus');
   });
 
@@ -36,11 +36,11 @@ describe('MenuPage', () => {
     expect(screen.getByRole('link', { name: /Guest Taps/ })).not.toHaveTextContent('Empty');
   });
 
-  it('only offers the menu board PDF when there is a logo to put on it', async () => {
+  it('only offers the menu board images when there is a logo to put on it', async () => {
     mockApi({ 'GET /api/menus/m1': json({ ...menu, hasLogo: false, logo: null }) });
     renderApp('/menus/m1');
     await screen.findByRole('heading', { name: 'Currently On Tap' });
-    expect(screen.queryByRole('link', { name: 'Menu board PDF' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Menu board images' })).not.toBeInTheDocument();
     expect(screen.getByText('No logo yet')).toBeInTheDocument();
   });
 

@@ -29,12 +29,12 @@ export function createApp(dataProvider: DataProvider): Express {
 
   // A generous, app-wide rate limit as a backstop against scripted abuse (see
   // middleware/rateLimits.ts for the specifics and the tighter limits layered on top of it for
-  // admin routes and PDF generation).
+  // admin routes and menu board generation).
   app.use(generalLimiter);
 
   app.use(express.json({ limit: '5mb' }));
 
-  // PDF generation (?format=digital / ?format=print) is public and CPU-heavy; keep it from being
+  // Menu board and print-view generation (?format=digital / ?format=print) is public and CPU-heavy; keep it from being
   // used to tie up the server.
   app.use(expensiveFormatLimiter);
 
@@ -72,7 +72,7 @@ export function createApp(dataProvider: DataProvider): Express {
   app.use(express.static(path.join(import.meta.dirname, 'public', 'css')));
 
   // Register routers
-  // Public menu formats (JSON, widget, print, PDF)
+  // Public menu formats (JSON, widget, print, menu board images)
   app.use('/menus', new MenusRoutes(dataProvider).router);
   // JSON API for the admin client app (/client). Behind a login (except for signing in and out),
   // and never cached, since it serves the editing surface rather than public menu data.

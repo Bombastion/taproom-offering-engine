@@ -6,7 +6,7 @@ pour sizes and prices) and publishing them in a few public formats:
 - **JSON**, for anything that wants the raw menu
 - **Widget JSON**, a nested menu that the Wix "Currently On Tap" embed polls
 - **Print**, a printable HTML menu
-- **Digital**, a PDF menu board
+- **Digital**, menu board images for the TV (PNG, one per page)
 
 | Piece | Where | What it is |
 | ----- | ----- | ---------- |
@@ -218,9 +218,10 @@ Menu IDs are visible in the admin app's URLs (`/admin/menus/<menuId>`).
 | `/menus/<menuId>` or `?format=json` | The menu as JSON |
 | `/menus/<menuId>?format=widget` | Nested JSON (sections and items, with no pour sizes or prices) for the Wix widget |
 | `/menus/<menuId>?format=print` | Printable HTML menu |
-| `/menus/<menuId>?format=digital` | PDF menu board |
+| `/menus/<menuId>?format=digital` | Menu board for the TV: a ZIP of PNG images, one per page (1080×1920) |
+| `/menus/<menuId>?format=digital&page=<n>` | Just page `n` (starting at 1) of the menu board, as a PNG |
 
-These are public and need no login. The PDF format is rate limited (10 requests per minute per IP).
+These are public and need no login. The menu board and print formats are rate limited (10 requests per minute per IP).
 The admin API under `/api` always requires a signed-in user.
 
 ## Wix "Currently On Tap" widget

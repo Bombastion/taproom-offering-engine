@@ -4,7 +4,7 @@ import { ImageIcon, TrashIcon, UploadIcon } from './Icons';
 import { ConfirmSheet } from './Sheet';
 
 // Logos are stored as PNG no larger than this on their longest side. That's plenty for the
-// menu board PDF, the print view and the widget, and keeps uploads small on a phone connection.
+// menu board images, the print view and the widget, and keeps uploads small on a phone connection.
 const MAX_LOGO_SIZE = 600;
 const MAX_FILE_BYTES = 20 * 1024 * 1024;
 
@@ -19,7 +19,7 @@ function readAsDataUrl(file: File): Promise<string> {
 
 // Converts any image the browser can open (PNG, JPEG, WebP, SVG, HEIC on iPhones…) into a
 // downscaled PNG, returned as bare base64. The server only accepts PNG/JPEG because that's
-// what the PDF menu board can draw.
+// what the menu board can draw.
 export async function imageFileToPngBase64(file: File): Promise<string> {
   if (!file.type.startsWith('image/')) throw new Error('Choose an image file, like a PNG or JPEG.');
   if (file.size > MAX_FILE_BYTES) throw new Error('That image is over 20 MB. Choose a smaller one.');

@@ -83,8 +83,8 @@ function slugify(text: string): string {
 }
 
 // ---- Logos ----
-// Menus and breweries store their logo as a bare base64 string (no "data:" prefix). The PDF
-// menu board renders them with pdfkit, which only understands PNG and JPEG, so uploads are
+// Menus and breweries store their logo as a bare base64 string (no "data:" prefix). The menu
+// board images are drawn with pdfkit, which only understands PNG and JPEG, so uploads are
 // limited to those (the admin client converts whatever image is picked to a PNG first).
 
 const MAX_LOGO_BYTES = 3 * 1024 * 1024;
@@ -244,7 +244,7 @@ export class ApiRoutes extends Routes {
       res.json({ id: menu.id, displayName: menu.displayName, internalName: menu.internalName });
     }));
 
-    // Sets or replaces a menu's logo (shown on the print view, the menu board PDF and the widget)
+    // Sets or replaces a menu's logo (shown on the print view, the menu board images and the widget)
     this.router.put('/menus/:menuId/logo', handle(async (req, res) => {
       const menu = await this.data.getMenu(req.params.menuId as string);
       if (!menu) throw notFound('Menu');
@@ -482,7 +482,7 @@ export class ApiRoutes extends Routes {
       const placements = await this.data.getMenuItemsForItem(menuItem.itemId!);
       const itemRecord = await this.data.getItem(menuItem.itemId!);
       // What the widget shows for this item when it has no image of its own, in the same order
-      // as the widget format in routes/menus.ts (the PDF skips the brewery step)
+      // as the widget format in routes/menus.ts (the menu board skips the brewery step)
       const brewery = itemRecord?.breweryId ? await this.data.getBrewery(itemRecord.breweryId) : null;
       const logoFallback = brewery?.defaultLogo ? 'brewery' : menu.logo ? 'menu' : 'none';
       res.json({
@@ -520,7 +520,7 @@ export class ApiRoutes extends Routes {
     /*
     Marks a placement active or inactive: { active: boolean }. An inactive item stays on its
     section, keeping its place in the order and its prices, but is left off the published menu
-    views (print, menu board PDF and widget) until it's marked active again.
+    views (print, menu board images and widget) until it's marked active again.
     */
     this.router.put('/menu-items/:menuItemId/active', handle(async (req, res) => {
       const active = req.body?.active;
@@ -533,8 +533,8 @@ export class ApiRoutes extends Routes {
 
     /*
     Sets or replaces this item's own image: { logo: base64 }. The website widget and menu board
-    PDF show it for the item. Without one, the widget falls back to the brewery's logo, then the
-    menu's, and the PDF to the menu's.
+    menu board show it for the item. Without one, the widget falls back to the brewery's logo, then the
+    menu's, and the menu board to the menu's.
     */
     this.router.put('/menu-items/:menuItemId/logo', handle(async (req, res) => {
       const menuItem = await this.data.getMenuItem(req.params.menuItemId as string);

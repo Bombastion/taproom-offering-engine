@@ -50,7 +50,7 @@ export const passwordLimiter = rateLimit({
   requestWasSuccessful: (_req: Request, res: Response) => res.statusCode !== 403,
 });
 
-// PDF generation (?format=digital and ?format=print) is meaningfully more CPU-intensive than
+// Menu board image and print-view generation (?format=digital and ?format=print) is meaningfully more CPU-intensive than
 // the other public menu formats, and — unlike the admin routes — it's reachable with no auth
 // at all. Give it its own tight limit so it can't be used to tie up the server.
 export const expensiveFormatLimiter = rateLimit({

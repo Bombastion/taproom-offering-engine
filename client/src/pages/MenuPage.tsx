@@ -57,7 +57,7 @@ export function MenuPage() {
               </a>
               {menu.data.hasLogo && (
                 <a className="chip" href={`/menus/${menuId}?format=digital`} target="_blank" rel="noopener">
-                  <ScreenIcon />Menu board PDF
+                  <ScreenIcon />Menu board images
                 </a>
               )}
             </div>
@@ -65,8 +65,8 @@ export function MenuPage() {
             <LogoEditor
               label="Menu logo"
               logo={menu.data.logo}
-              hint="Shown on the print view, menu board PDF and website widget"
-              removeWarning="The print view and website widget will show no logo, and the menu board PDF won't be available until you upload a new one."
+              hint="Shown on the print view, menu board images and website widget"
+              removeWarning="The print view and website widget will show no logo, and the menu board images won't be available until you upload a new one."
               onUpload={async (logo) => {
                 await api.setMenuLogo(menuId, logo);
                 await queryClient.invalidateQueries({ queryKey });
