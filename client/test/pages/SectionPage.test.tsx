@@ -142,4 +142,60 @@ describe('SectionPage', () => {
     expect(server.calls('DELETE', '/api/sections/s1')).toHaveLength(1);
     expect(await screen.findByText('Deleted Drafts')).toBeInTheDocument();
   });
+
+  describe('showing the section on each view', () => {
+    const switches = () => ['Print menu', 'Menu board', 'Website widget'].map((name) => screen.getByRole('switch', { name }));
+
+    it('shows every view switched on for a section that shows everywhere', async () => {
+      mockApi({ 'GET /api/sections/s1': json(section) });
+      renderApp(base);
+      await screen.findByRole('link', { name: /Hazy Sequence/ });
+      expect(switches().map((s) => (s as HTMLInputElement).checked)).toEqual([true, true, true]);
+      expect(screen.getByText(/Everywhere/)).toBeInTheDocument();
+    });
+
+    it('shows which views the section is left off of', async () => {
+      mockApi({ 'GET /api/sections/s1': json({ ...section, hiddenOn: ['print', 'widget'] }) });
+      renderApp(base);
+      await screen.findByRole('link', { name: /Hazy Sequence/ });
+      expect(switches().map((s) => (s as HTMLInputElement).checked)).toEqual([false, true, false]);
+      expect(screen.getByText('Not on the print menu or website.')).toBeInTheDocument();
+    });
+
+    it('leaves a section off a view, then puts it back, saving each change', async () => {
+      let current = section;
+      const server = mockApi({
+        'GET /api/sections/s1': () => json(current),
+        'GET /api/menus/m1': json({ id: 'm1', displayName: 'Currently On Tap', internalName: 'on-tap', hasLogo: false, logo: null, defaultBreweryId: null, sections: [] }),
+        'GET /api/menus': json([]),
+        'PATCH /api/sections/s1': ({ body }) => {
+          current = { ...section, hiddenOn: (body as { hiddenOn: typeof section.hiddenOn }).hiddenOn };
+          return json({ id: 's1', hiddenOn: current.hiddenOn });
+        },
+      });
+      const { user } = renderApp(base);
+      await screen.findByRole('link', { name: /Hazy Sequence/ });
+
+      await user.click(screen.getByRole('switch', { name: 'Print menu' }));
+      expect(await screen.findByText('Hidden from the print menu')).toBeInTheDocument();
+      expect(server.calls('PATCH', '/api/sections/s1')[0].body).toEqual({ hiddenOn: ['print'] });
+      await waitFor(() => expect(screen.getByRole('switch', { name: 'Print menu' })).not.toBeChecked());
+      // The menu board is untouched
+      expect(screen.getByRole('switch', { name: 'Menu board' })).toBeChecked();
+
+      await user.click(screen.getByRole('switch', { name: 'Print menu' }));
+      expect(await screen.findByText('Now showing on the print menu')).toBeInTheDocument();
+      expect(server.calls('PATCH', '/api/sections/s1')[1].body).toEqual({ hiddenOn: [] });
+      await waitFor(() => expect(screen.getByRole('switch', { name: 'Print menu' })).toBeChecked());
+    });
+
+    it('says so, and leaves the switch where it was, when saving fails', async () => {
+      mockApi({ 'GET /api/sections/s1': json(section), 'PATCH /api/sections/s1': status(500, 'Boom') });
+      const { user } = renderApp(base);
+      await screen.findByRole('link', { name: /Hazy Sequence/ });
+      await user.click(screen.getByRole('switch', { name: 'Menu board' }));
+      expect(await screen.findByText(/Couldn't save/)).toBeInTheDocument();
+      expect(screen.getByRole('switch', { name: 'Menu board' })).toBeChecked();
+    });
+  });
 });

@@ -4,13 +4,17 @@ import os from 'os';
 import path from 'path';
 import request from 'supertest';
 import express, { Express } from 'express';
-import { MenusRoutes } from '../../routes/menus';
 import { LocalDataProvider } from '../../storage/providers';
-import { MenuItem } from '../../models/menus';
+import pdfkit from 'pdfkit';
+import { unzipSync } from 'fflate';
+import * as mupdf from 'mupdf';
+import { BOARD_SAFE_MARGIN, BOARD_SECTION_GAP, BOARD_SIZE_SCALE, MenusRoutes } from '../../routes/menus';
+import { Item } from '../../models/items';
+import { Menu, MenuItem, SubMenu } from '../../models/menus';
 import { Fixture, memoryProvider, seed, TINY_PNG } from '../helpers';
 
 // The public, read-only menu formats: the JSON the Wix widget polls (?format=widget), the
-// printable HTML menu (?format=print) and the menu board PDF (?format=digital).
+// printable HTML menu (?format=print) and the menu board images (?format=digital).
 
 const repoRoot = path.resolve(import.meta.dirname, '../..');
 
@@ -213,8 +217,210 @@ describe('?format=print', () => {
   });
 });
 
+// The menu board code loads its font from dist/public/fonts relative to the working directory
+// (that's where `npm run build` puts it). Call this inside a describe to point a scratch working
+// directory at the repo's public/ folder for each test instead of requiring a build.
+function inBoardWorkingDirectory() {
+  let originalCwd: string;
+  let scratch: string;
+
+  beforeEach(() => {
+    originalCwd = process.cwd();
+    scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'toe-board-'));
+    fs.mkdirSync(path.join(scratch, 'dist'));
+    fs.symlinkSync(path.join(repoRoot, 'public'), path.join(scratch, 'dist/public'));
+    process.chdir(scratch);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    process.chdir(originalCwd);
+    fs.rmSync(scratch, { recursive: true, force: true });
+  });
+}
+
+// Requests the menu board and returns every string drawn on it, in order
+async function textDrawnOnBoard() {
+  const text = vi.spyOn(pdfkit.prototype, 'text');
+  const res = await request(app).get(`/menus/${data.menu.id}?format=digital`).buffer(true).parse((response, callback) => {
+    response.on('data', () => {});
+    response.on('end', () => callback(null, null));
+  });
+  expect(res.status).toBe(200);
+  return text.mock.calls.map(([drawn]) => drawn);
+}
+
+describe('items missing a style or an ABV', () => {
+  // Added to the end of Drafts, all at Zymos
+  async function addDrafts(...items: Array<[string, string | null, number | null]>) {
+    for (const [i, [name, style, abv]] of items.entries()) {
+      const item = await provider.addItem(new Item(null, `extra-${i}`, name, data.breweries.zymos.id, style, abv, null, 'beer'));
+      await provider.addMenuItem(new MenuItem(null, data.menu.id, item.id, data.sections.drafts.id, null, 10 + i));
+    }
+  }
+  const descriptions = (html: string) => [...html.matchAll(/<td class="descriptionCell">(.*?)<\/td>/g)].map((m) => m[1]);
+  const ITEMS: Array<[string, string | null, number | null]> = [
+    ['Style Only', 'Stout', null],
+    ['ABV Only', null, 4.8],
+    ['Bare', null, null],
+    ['Zero', 'NA Lager', 0],
+  ];
+
+  it('leaves out a missing ABV or style on the print view, with no blank or stray bullet', async () => {
+    await addDrafts(...ITEMS);
+    const lines = descriptions((await request(app).get(`/menus/${data.menu.id}?format=print`)).text);
+    expect(lines).toContain('Zymos Brewing &bull; <b>Style Only</b> &bull; Stout');
+    expect(lines).toContain('Zymos Brewing &bull; <b>ABV Only</b> &bull; 4.8% ABV');
+    expect(lines).toContain('Zymos Brewing &bull; <b>Bare</b>');
+    // A beer with no ABV set isn't the same as 0%
+    expect(lines).toContain('Zymos Brewing &bull; <b>Zero</b> &bull; NA Lager &bull; 0% ABV');
+    expect(lines).toContain('Zymos Brewing &bull; <b>Hazy Sequence</b> &bull; NEIPA &bull; 6.5% ABV');
+    expect(lines.filter((line) => /null|undefined|% ABV$/.test(line) && !/\d% ABV$/.test(line))).toEqual([]);
+  });
+
+  describe('on the menu board', () => {
+    inBoardWorkingDirectory();
+
+    it('leaves out a missing ABV or style, and shows an ABV of 0', async () => {
+      await addDrafts(...ITEMS);
+      const drawn = await textDrawnOnBoard();
+      // The name is drawn first, then its details in a second colour
+      const detailsOf = (name: string) => drawn[drawn.indexOf(`Zymos Brewing ${name}`) + 1];
+      expect(detailsOf('Hazy Sequence')).toBe('  NEIPA  6.5%');
+      expect(detailsOf('Style Only')).toBe('  Stout');
+      expect(detailsOf('ABV Only')).toBe('  4.8%');
+      expect(detailsOf('Bare')).toBe('');
+      expect(detailsOf('Zero')).toBe('  NA Lager  0%');
+      expect(drawn.filter((text) => /null|undefined/.test(String(text)))).toEqual([]);
+    });
+
+    it('shows no "null" for an item with no brewery, style or ABV at all', async () => {
+      const item = await provider.addItem(new Item(null, 'plain', 'Pretzel', null, null, null, null, 'snacks'));
+      await provider.addMenuItem(new MenuItem(null, data.menu.id, item.id, data.sections.drafts.id, null, 10));
+      const drawn = await textDrawnOnBoard();
+      expect(drawn).toContain('Pretzel');
+      expect(drawn.filter((text) => /null|undefined/.test(String(text)))).toEqual([]);
+    });
+  });
+});
+
+describe('sections hidden from some views', () => {
+  const hide = (hiddenOn: string[]) => provider.updateSubMenu(data.sections.guestTaps.id!, new SubMenu(null, null, null, null, null, hiddenOn));
+  const sectionNames = async (format: string) => {
+    const res = await request(app).get(`/menus/${data.menu.id}?format=${format}`);
+    return format === 'widget' ? res.body.sections.map((s: { displayName: string }) => s.displayName) : res.text;
+  };
+
+  it('shows every section on every view by default', async () => {
+    expect(await sectionNames('widget')).toEqual(['Drafts', 'Guest Taps']);
+    const html = await sectionNames('print');
+    expect(html).toContain('Guest Taps');
+    expect(html).toContain('Guest Sour');
+  });
+
+  it('leaves a section, its heading and its items off the print view only', async () => {
+    await hide(['print']);
+    const html = await sectionNames('print');
+    expect(html).toContain('Drafts');
+    expect(html).toContain('Hazy Sequence');
+    expect(html).not.toContain('Guest Taps');
+    expect(html).not.toContain('Guest Sour');
+    expect(html).not.toContain('Guest Co');
+    // Still on the widget
+    expect(await sectionNames('widget')).toEqual(['Drafts', 'Guest Taps']);
+  });
+
+  it('leaves a section off the widget only', async () => {
+    await hide(['widget']);
+    expect(await sectionNames('widget')).toEqual(['Drafts']);
+    expect(await sectionNames('print')).toContain('Guest Sour');
+  });
+
+  it('copes with every section being hidden from the print view', async () => {
+    await provider.updateSubMenu(data.sections.drafts.id!, new SubMenu(null, null, null, null, null, ['print']));
+    await hide(['print']);
+    const res = await request(app).get(`/menus/${data.menu.id}?format=print`);
+    expect(res.status).toBe(200);
+    expect(res.text).not.toContain('Hazy Sequence');
+    expect(res.text).not.toContain('Guest Sour');
+  });
+
+  describe('on the menu board', () => {
+    inBoardWorkingDirectory();
+
+    it('still draws a section that is only hidden from the print view', async () => {
+      await hide(['print', 'widget']);
+      const drawn = await textDrawnOnBoard();
+      expect(drawn).toContain('Guest Taps');
+      expect(drawn).toContain('Guest Co Guest Sour');
+    });
+
+    it('leaves a hidden section and its items off', async () => {
+      await hide(['board']);
+      const drawn = await textDrawnOnBoard();
+      expect(drawn).toContain('Drafts');
+      expect(drawn).not.toContain('Guest Taps');
+      expect(drawn.filter((text) => String(text).includes('Guest'))).toEqual([]);
+    });
+  });
+});
+
+describe('the default brewery', () => {
+  const setDefault = (breweryId: string | null) =>
+    provider.replaceMenu(data.menu.id!, new Menu(null, data.menu.internalName, data.menu.displayName, data.menu.logo, breweryId));
+  const descriptions = (html: string) => [...html.matchAll(/<td class="descriptionCell">(.*?)<\/td>/g)].map((m) => m[1]);
+
+  it('is named on the print view when the menu has no default brewery', async () => {
+    const html = (await request(app).get(`/menus/${data.menu.id}?format=print`)).text;
+    expect(descriptions(html).filter(Boolean)).toEqual([
+      expect.stringMatching(/^Zymos Brewing &bull; <b>Hazy Sequence<\/b>/),
+      expect.stringMatching(/^Zymos Brewing &bull; <b>Pils<\/b>/),
+      expect.stringMatching(/^Guest Co &bull; <b>Guest Sour<\/b>/),
+    ]);
+  });
+
+  it("is left off the print view, with no stray bullet, while other breweries stay", async () => {
+    await setDefault(data.breweries.zymos.id!);
+    const html = (await request(app).get(`/menus/${data.menu.id}?format=print`)).text;
+    const lines = descriptions(html).filter(Boolean);
+    expect(lines).toEqual([
+      expect.stringMatching(/^<b>Hazy Sequence<\/b> &bull; NEIPA &bull; 6.5% ABV/),
+      expect.stringMatching(/^<b>Pils<\/b> &bull; Pilsner &bull; 4.8% ABV/),
+      expect.stringMatching(/^Guest Co &bull; <b>Guest Sour<\/b>/),
+    ]);
+    // Only the footer's WiFi name still says Zymos
+    expect(html.match(/Zymos Brewing/g)).toHaveLength(1);
+  });
+
+  it('is still named in the widget, which has its own brewery field', async () => {
+    await setDefault(data.breweries.zymos.id!);
+    const res = await request(app).get(`/menus/${data.menu.id}?format=widget`);
+    expect(res.body.sections[0].items.map((item: { breweryName: string }) => item.breweryName)).toEqual(['Zymos Brewing', 'Zymos Brewing']);
+  });
+
+  describe('on the menu board', () => {
+    inBoardWorkingDirectory();
+
+    it('names every brewery when the menu has no default brewery', async () => {
+      const drawn = await textDrawnOnBoard();
+      expect(drawn).toContain('Zymos Brewing Pils');
+      expect(drawn).toContain('Zymos Brewing Hazy Sequence');
+      expect(drawn).toContain('Guest Co Guest Sour');
+    });
+
+    it("leaves the default brewery's name off but keeps other breweries", async () => {
+      await setDefault(data.breweries.zymos.id!);
+      const drawn = await textDrawnOnBoard();
+      expect(drawn).toContain('Pils');
+      expect(drawn).toContain('Hazy Sequence');
+      expect(drawn).toContain('Guest Co Guest Sour');
+      expect(drawn.filter((text) => String(text).includes('Zymos'))).toEqual([]);
+    });
+  });
+});
+
 describe('?format=digital', () => {
-  // The PDF code loads its font from dist/public/fonts relative to the working directory (that's
+  // The menu board code loads its font from dist/public/fonts relative to the working directory (that's
   // where `npm run build` puts it). Point a scratch working directory at the repo's public/
   // folder instead of requiring a build.
   let originalCwd: string;
@@ -246,20 +452,148 @@ describe('?format=digital', () => {
     expect(drawn).toEqual([data.items.pils.id, data.items.hazy.id, data.items.sour.id]);
   });
 
-  it('streams a PDF menu board as a download', async () => {
-    const res = await request(app)
-      .get(`/menus/${data.menu.id}?format=digital`)
-      .buffer(true)
-      .parse((response, callback) => {
-        const chunks: Buffer[] = [];
-        response.on('data', (chunk: Buffer) => chunks.push(chunk));
-        response.on('end', () => callback(null, Buffer.concat(chunks)));
-      });
+  // Fetches a response body as raw bytes
+  const binary = (url: string) =>
+    request(app).get(url).buffer(true).parse((response, callback) => {
+      const chunks: Buffer[] = [];
+      response.on('data', (chunk: Buffer) => chunks.push(chunk));
+      response.on('end', () => callback(null, Buffer.concat(chunks)));
+    });
+
+  const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+  const BOARD_BLUE = [0x17, 0x5a, 0x6c];
+  const SECTION_HEADER_GREY = [0x2b, 0x2b, 0x2b];
+
+  const decode = (png: Uint8Array) => {
+    const pixmap = new mupdf.Image(png).toPixmap();
+    const pixels = pixmap.getPixels();
+    const stride = pixmap.getStride();
+    const channels = pixmap.getNumberOfComponents();
+    return {
+      width: pixmap.getWidth(),
+      height: pixmap.getHeight(),
+      at: (x: number, y: number) => [...pixels.subarray(y * stride + x * channels, y * stride + x * channels + 3)],
+    };
+  };
+
+  // Every pixel within `margin` of an edge that isn't the background colour
+  const marginIntrusions = (image: ReturnType<typeof decode>, margin: number) => {
+    const bad: string[] = [];
+    for (let y = 0; y < image.height; y++) {
+      for (let x = 0; x < image.width; x++) {
+        const inMargin = x < margin || y < margin || x >= image.width - margin || y >= image.height - margin;
+        if (inMargin && image.at(x, y).join() !== BOARD_BLUE.join()) bad.push(`${x},${y}`);
+      }
+    }
+    return bad;
+  };
+
+  // Puts enough items on the Drafts section that the board needs more than one page. Some have
+  // names too long to fit on a line.
+  async function fillDrafts(count: number) {
+    for (let i = 0; i < count; i++) {
+      const long = i % 5 === 0 ? ' Barrel Aged Imperial Pastry Stout With Vanilla Cocoa Nibs And Toasted Coconut' : '';
+      const item = await provider.addItem(new Item(null, `extra-${i}`, `Extra ${i}${long}`, data.breweries.zymos.id, 'Stout', 7.1, null, 'beer'));
+      await provider.addMenuItem(new MenuItem(null, data.menu.id, item.id, data.sections.drafts.id, null, 10 + i));
+    }
+  }
+
+  it('returns the menu board as a ZIP of PNG images', async () => {
+    const res = await binary(`/menus/${data.menu.id}?format=digital`);
     expect(res.status).toBe(200);
-    expect(res.headers['content-type']).toBe('application/pdf');
-    expect(res.headers['content-disposition']).toMatch(/^attachment/);
-    const pdf = res.body as Buffer;
-    expect(pdf.subarray(0, 5).toString('latin1')).toBe('%PDF-');
-    expect(pdf.subarray(-6).toString('latin1')).toMatch(/%%EOF/);
+    expect(res.headers['content-type']).toBe('application/zip');
+    expect(res.headers['content-disposition']).toMatch(/^attachment; filename=menu-board\.zip$/);
+    const files = unzipSync(new Uint8Array(res.body as Buffer));
+    // The seeded menu fits on one page
+    expect(Object.keys(files)).toEqual(['menu-board-1.png']);
+    expect([...files['menu-board-1.png'].subarray(0, 8)]).toEqual(PNG_SIGNATURE);
+    const image = decode(files['menu-board-1.png']);
+    expect([image.width, image.height]).toEqual([1080, 1920]);
+  });
+
+  it('returns a single page as an image with &page=N', async () => {
+    await fillDrafts(40);
+    const zipped = unzipSync(new Uint8Array((await binary(`/menus/${data.menu.id}?format=digital`)).body as Buffer));
+    const pageCount = Object.keys(zipped).length;
+    expect(pageCount).toBeGreaterThan(1);
+    expect(Object.keys(zipped)).toEqual(Array.from({ length: pageCount }, (_, i) => `menu-board-${i + 1}.png`));
+
+    const second = await binary(`/menus/${data.menu.id}?format=digital&page=2`);
+    expect(second.status).toBe(200);
+    expect(second.headers['content-type']).toBe('image/png');
+    expect(second.headers['content-disposition']).toBe('inline; filename=menu-board-2.png');
+    expect(new Uint8Array(second.body as Buffer)).toEqual(zipped['menu-board-2.png']);
+  });
+
+  it('rejects a page that is not a positive whole number, and 404s one past the end', async () => {
+    for (const bad of ['0', '-1', 'two', '1.5', '', '1&page=2']) {
+      expect((await request(app).get(`/menus/${data.menu.id}?format=digital&page=${bad}`)).status).toBe(400);
+    }
+    expect((await request(app).get(`/menus/${data.menu.id}?format=digital&page=2`)).status).toBe(404);
+  });
+
+  it('leaves the margins on every side of every page as plain background', async () => {
+    await fillDrafts(40);
+    const files = unzipSync(new Uint8Array((await binary(`/menus/${data.menu.id}?format=digital`)).body as Buffer));
+    expect(Object.keys(files).length).toBeGreaterThan(1);
+    for (const [name, png] of Object.entries(files)) {
+      expect(marginIntrusions(decode(png), BOARD_SAFE_MARGIN), name).toEqual([]);
+    }
+  });
+
+  it('draws the section bars 5% bigger than the original 50px', async () => {
+    expect(BOARD_SIZE_SCALE).toBe(1.05);
+    const image = decode(unzipSync(new Uint8Array((await binary(`/menus/${data.menu.id}?format=digital`)).body as Buffer))['menu-board-1.png']);
+    const top = BOARD_SAFE_MARGIN + 150 + 10;
+    const x = BOARD_SAFE_MARGIN + 2;
+    // 50 * 1.05 = 52.5px tall: still grey at 51px down, background again by 54px
+    expect(image.at(x, top + 51)).toEqual(SECTION_HEADER_GREY);
+    expect(image.at(x, top + 54)).toEqual(BOARD_BLUE);
+  });
+
+  it('leaves extra room between the last item of a section and the next section header', async () => {
+    // Short names, so every item here takes one line and the spacing between rows is the same
+    for (let i = 0; i < 3; i++) {
+      const item = await provider.addItem(new Item(null, `short-${i}`, `S${i}`, data.breweries.zymos.id, 'Stout', 7.1, null, 'beer'));
+      await provider.addMenuItem(new MenuItem(null, data.menu.id, item.id, data.sections.drafts.id, null, 10 + i));
+    }
+    const image = decode(unzipSync(new Uint8Array((await binary(`/menus/${data.menu.id}?format=digital`)).body as Buffer))['menu-board-1.png']);
+
+    // Runs of rows (below the logo) down one column of the image where `matches` holds
+    const runsDown = (matches: (y: number) => boolean) => {
+      const found: { start: number; end: number }[] = [];
+      for (let y = BOARD_SAFE_MARGIN + 150; y < image.height; y++) {
+        if (!matches(y)) continue;
+        const last = found[found.length - 1];
+        if (last && y - last.end <= 1) last.end = y;
+        else found.push({ start: y, end: y });
+      }
+      return found;
+    };
+    // Header bars: grey down the right-hand side, clear of any text
+    const bars = runsDown((y) => image.at(1000, y).join() === SECTION_HEADER_GREY.join());
+    // Item thumbnails: down the middle of their circles, outside the bars (which have text in them).
+    // A thumbnail is about 50px tall; shorter runs are anti-aliased rows at the edges of the bars.
+    const inBar = (y: number) => bars.some((bar) => y >= bar.start && y <= bar.end);
+    const thumbs = runsDown((y) => !inBar(y) && image.at(BOARD_SAFE_MARGIN + 26, y).join() !== BOARD_BLUE.join())
+      .filter((run) => run.end - run.start > 40);
+
+    // Drafts (Hazy Sequence, Pils, S0, S1, S2), then Guest Taps (Guest Sour)
+    expect(bars).toHaveLength(2);
+    expect(thumbs).toHaveLength(6);
+    // Between two one-line items, and between the last of Drafts and the Guest Taps bar
+    const gapBetweenItems = thumbs[4].start - thumbs[3].end;
+    const gapBeforeNextSection = bars[1].start - thumbs[4].end;
+    expect(Math.abs(gapBeforeNextSection - gapBetweenItems - BOARD_SECTION_GAP)).toBeLessThanOrEqual(2);
+  });
+
+  it('starts the content right at the edge of the margin', async () => {
+    const image = decode(unzipSync(new Uint8Array((await binary(`/menus/${data.menu.id}?format=digital`)).body as Buffer))['menu-board-1.png']);
+    // The Drafts header bar sits just under the logo: 40px logo margin + 150px logo + 10px gap
+    const y = BOARD_SAFE_MARGIN + 150 + 10 + 25;
+    expect(image.at(BOARD_SAFE_MARGIN - 1, y)).toEqual(BOARD_BLUE);
+    expect(image.at(BOARD_SAFE_MARGIN, y)).toEqual(SECTION_HEADER_GREY);
+    expect(image.at(1080 - BOARD_SAFE_MARGIN - 1, y)).toEqual(SECTION_HEADER_GREY);
+    expect(image.at(1080 - BOARD_SAFE_MARGIN, y)).toEqual(BOARD_BLUE);
   });
 });

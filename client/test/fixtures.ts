@@ -13,10 +13,11 @@ export const menu: MenuDetail = {
   internalName: 'on-tap',
   hasLogo: true,
   logo: 'data:image/png;base64,abc',
+  defaultBreweryId: null,
   sections: [
-    { id: 's1', displayName: 'Drafts', internalName: 'on-tap-drafts', order: 1, itemCount: 2, inactiveCount: 0, itemNames: ['Hazy Sequence', 'Pils'] },
-    { id: 's2', displayName: 'Guest Taps', internalName: 'on-tap-guest', order: 2, itemCount: 1, inactiveCount: 0, itemNames: ['Guest Sour'] },
-    { id: 's3', displayName: 'Empty', internalName: 'on-tap-empty', order: 3, itemCount: 0, inactiveCount: 0, itemNames: [] },
+    { id: 's1', displayName: 'Drafts', internalName: 'on-tap-drafts', order: 1, hiddenOn: [], itemCount: 2, inactiveCount: 0, itemNames: ['Hazy Sequence', 'Pils'] },
+    { id: 's2', displayName: 'Guest Taps', internalName: 'on-tap-guest', order: 2, hiddenOn: [], itemCount: 1, inactiveCount: 0, itemNames: ['Guest Sour'] },
+    { id: 's3', displayName: 'Empty', internalName: 'on-tap-empty', order: 3, hiddenOn: [], itemCount: 0, inactiveCount: 0, itemNames: [] },
   ],
 };
 
@@ -46,6 +47,7 @@ export const section: SectionDetail = {
   id: 's1',
   displayName: 'Drafts',
   internalName: 'on-tap-drafts',
+  hiddenOn: [],
   menu: { id: 'm1', displayName: 'Currently On Tap' },
   items: [
     {

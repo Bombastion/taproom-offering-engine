@@ -24,7 +24,15 @@ html
               each item in items
                 tbody(class='itemGroup')
                   tr
-                    td(class='descriptionCell') #{item.breweryName} &bull; <b>#{item.displayName}</b> &bull; #{item.style} &bull; #{item.abv}% ABV
+                    td(class='descriptionCell')
+                      //- No brewery name for the menu's default brewery (or an item with no brewery), so no leading bullet either
+                      if item.breweryName
+                        | #{item.breweryName} &bull; 
+                      | <b>#{item.displayName}</b>
+                      //- The style and ABV, whichever the item has; a missing one leaves no blank or stray bullet (an ABV of 0 is shown)
+                      - var details = [item.style, (item.abv !== null && item.abv !== undefined) ? item.abv + '% ABV' : null].filter(function (detail) { return detail; })
+                      each detail in details
+                        |  &bull; #{detail}
                     td
                       table(class='containerPrices')
                         tr

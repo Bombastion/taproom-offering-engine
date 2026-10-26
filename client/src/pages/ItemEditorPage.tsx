@@ -232,7 +232,7 @@ function ItemForm({ menuId, sectionId, sectionName, existing, containers, brewer
         <LogoEditor
           label="Item image"
           logo={existing.logo}
-          hint="Shown for this item in the website widget and on the menu board PDF."
+          hint="Shown for this item in the website widget and on the menu board images."
           emptyHint={FALLBACK_HINT[existing.logoFallback]}
           removeWarning={FALLBACK_AFTER_REMOVE[existing.logoFallback]}
           onUpload={async (logo) => {

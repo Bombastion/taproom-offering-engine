@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { api, errorMessage, MenuDetail, plural } from '../api';
+import { api, errorMessage, hiddenOnText, MenuDetail, plural } from '../api';
 import { PageHeader, Screen } from '../components/Screen';
 import { ChevronRight, PencilIcon, PlusIcon, PrintIcon, ReorderIcon, ScreenIcon } from '../components/Icons';
 import { Loading, LoadError } from '../components/QueryState';
@@ -18,6 +18,8 @@ export function MenuPage() {
   const toast = useToast();
   const [sheet, setSheet] = useState<'rename' | 'add' | null>(null);
   const [reordering, setReordering] = useState(false);
+  const [savingDefaultBrewery, setSavingDefaultBrewery] = useState(false);
+  const breweries = useQuery({ queryKey: ['breweries'], queryFn: api.breweries });
 
   const name = menu.data?.displayName ?? 'Menu';
 
@@ -31,6 +33,20 @@ export function MenuPage() {
     } catch (e) {
       queryClient.setQueryData(queryKey, current);
       toast(`Couldn't reorder: ${errorMessage(e)}`, 'error');
+    }
+  };
+
+  const changeDefaultBrewery = async (breweryId: string | null) => {
+    setSavingDefaultBrewery(true);
+    try {
+      await api.setMenuDefaultBrewery(menuId, breweryId);
+      await queryClient.invalidateQueries({ queryKey });
+      const brewery = breweries.data?.find((b) => b.id === breweryId);
+      toast(brewery ? `${brewery.name} is now the default brewery` : 'No default brewery');
+    } catch (e) {
+      toast(`Couldn't save the default brewery: ${errorMessage(e)}`, 'error');
+    } finally {
+      setSavingDefaultBrewery(false);
     }
   };
 
@@ -57,7 +73,7 @@ export function MenuPage() {
               </a>
               {menu.data.hasLogo && (
                 <a className="chip" href={`/menus/${menuId}?format=digital`} target="_blank" rel="noopener">
-                  <ScreenIcon />Menu board PDF
+                  <ScreenIcon />Menu board images
                 </a>
               )}
             </div>
@@ -65,8 +81,8 @@ export function MenuPage() {
             <LogoEditor
               label="Menu logo"
               logo={menu.data.logo}
-              hint="Shown on the print view, menu board PDF and website widget"
-              removeWarning="The print view and website widget will show no logo, and the menu board PDF won't be available until you upload a new one."
+              hint="Shown on the print view, menu board images and website widget"
+              removeWarning="The print view and website widget will show no logo, and the menu board images won't be available until you upload a new one."
               onUpload={async (logo) => {
                 await api.setMenuLogo(menuId, logo);
                 await queryClient.invalidateQueries({ queryKey });
@@ -78,6 +94,28 @@ export function MenuPage() {
                 toast('Menu logo removed');
               }}
             />
+
+            <section className="panel stack-sm" aria-label="Default brewery">
+              <label className="field-label">
+                Default brewery
+                <select
+                  className="field"
+                  value={menu.data.defaultBreweryId ?? ''}
+                  disabled={savingDefaultBrewery || breweries.isPending}
+                  onChange={(e) => changeDefaultBrewery(e.target.value || null)}
+                >
+                  <option value="">None — name every brewery</option>
+                  {breweries.data?.map((brewery) => (
+                    <option key={brewery.id} value={brewery.id}>{brewery.name}</option>
+                  ))}
+                </select>
+              </label>
+              <div className="muted-sm">
+                {breweries.isError
+                  ? "Couldn't load your breweries to choose from."
+                  : "Its name is left off the print view and menu board. Other breweries are still named."}
+              </div>
+            </section>
 
             <div className="section-head">
               <h2>Sections</h2>
@@ -116,6 +154,7 @@ export function MenuPage() {
                               .filter(Boolean)
                               .join(' · ')}
                       </div>
+                      {section.hiddenOn.length > 0 && <div className="card-meta hidden-note">{hiddenOnText(section.hiddenOn)}</div>}
                     </div>
                     <span className="card-chevron"><ChevronRight /></span>
                   </Link>

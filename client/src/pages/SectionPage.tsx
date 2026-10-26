@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { api, errorMessage, formatPrice, plural, SectionDetail } from '../api';
+import { api, errorMessage, formatPrice, hiddenOnText, MENU_VIEWS, MenuView, plural, SectionDetail } from '../api';
 import { PageHeader, Screen, useGoBack } from '../components/Screen';
 import { CheckIcon, PencilIcon, PlusIcon, ReorderIcon, SearchIcon, TrashIcon } from '../components/Icons';
 import { Loading, LoadError } from '../components/QueryState';
@@ -20,6 +20,7 @@ export function SectionPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [sheet, setSheet] = useState<'rename' | 'delete' | null>(null);
   const [reordering, setReordering] = useState(false);
+  const [savingViews, setSavingViews] = useState(false);
   const goBackToMenu = useGoBack(`/menus/${menuId}`);
 
   const basePath = `/menus/${menuId}/sections/${sectionId}`;
@@ -53,6 +54,23 @@ export function SectionPage() {
     } catch (e) {
       queryClient.setQueryData(queryKey, current);
       toast(`Couldn't reorder: ${errorMessage(e)}`, 'error');
+    }
+  };
+
+  // Turns a view on or off for this section, saving straight away
+  const setShownOn = async (view: MenuView, shown: boolean) => {
+    const current = section.data?.hiddenOn ?? [];
+    const hiddenOn = shown ? current.filter((v) => v !== view) : [...current.filter((v) => v !== view), view];
+    setSavingViews(true);
+    try {
+      await api.setSectionHiddenOn(sectionId, hiddenOn);
+      await refreshAll();
+      const label = MENU_VIEWS.find((v) => v.view === view)!.short;
+      toast(shown ? `Now showing on the ${label}` : `Hidden from the ${label}`);
+    } catch (e) {
+      toast(`Couldn't save: ${errorMessage(e)}`, 'error');
+    } finally {
+      setSavingViews(false);
     }
   };
 
@@ -100,6 +118,29 @@ export function SectionPage() {
                 <TrashIcon />Delete section
               </button>
             </div>
+
+            <section className="panel views-panel" aria-label="Show this section on">
+              <div className="views-title">Show this section on</div>
+              <div className="muted-sm">
+                {section.data.hiddenOn.length > 0 ? `${hiddenOnText(section.data.hiddenOn)}.` : 'Everywhere. Turn one off to leave this section off that view.'}
+              </div>
+              {MENU_VIEWS.map(({ view, label }) => (
+                <div key={view} className="views-row">
+                  <span>{label}</span>
+                  <label className="switch">
+                    <input
+                      type="checkbox"
+                      role="switch"
+                      aria-label={label}
+                      checked={!section.data.hiddenOn.includes(view)}
+                      disabled={savingViews}
+                      onChange={(e) => setShownOn(view, e.target.checked)}
+                    />
+                    <span className="switch-track" aria-hidden="true" />
+                  </label>
+                </div>
+              ))}
+            </section>
 
             {itemCount === 0 && (
               <div className="empty">

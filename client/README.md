@@ -56,7 +56,7 @@ test:watch` re-runs them as you edit. See `TESTING.md` at the repo root for runn
 
 Menu and brewery logos can be uploaded, replaced and removed from the menu and brewery screens.
 Whatever image is picked is converted in the browser to a PNG of at most 600px on its longest
-side, since the menu board PDF can only draw PNG and JPEG.
+side, since the menu board can only draw PNG and JPEG.
 
 Items can be added to the library on their own from the Items screen, or straight onto a section
 from that section. Prices belong to an item's place on a section, so they're only set there.

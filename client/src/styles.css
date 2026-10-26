@@ -755,6 +755,32 @@ a.card:active {
   gap: 10px;
 }
 
+/* Which public views a section shows on (section screen) */
+
+.views-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.views-title {
+  font-weight: 700;
+  font-size: 16px;
+}
+
+.views-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding-top: 10px;
+  font-weight: 600;
+}
+
+.hidden-note {
+  color: var(--accent);
+}
+
 /* Active / inactive switch on the item editor */
 
 .active-panel {

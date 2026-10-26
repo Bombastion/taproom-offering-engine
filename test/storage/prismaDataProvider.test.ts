@@ -241,7 +241,31 @@ describe('menus', () => {
   it('replace can remove the logo', async () => {
     prisma.menu.findFirst.mockResolvedValue(original);
     await provider.replaceMenu('m1', new Menu(null, 'on-tap', 'On Tap', null));
-    expect(prisma.menu.update).toHaveBeenCalledWith({ where: { ownerId: OWNER, id: 'm1' }, data: { internalName: 'on-tap', displayName: 'On Tap', logo: null } });
+    expect(prisma.menu.update).toHaveBeenCalledWith({ where: { ownerId: OWNER, id: 'm1' }, data: { internalName: 'on-tap', displayName: 'On Tap', logo: null, defaultBreweryId: null } });
+  });
+
+  it('replace sets, and can clear, the default brewery', async () => {
+    prisma.menu.findFirst.mockResolvedValue({ ...original, defaultBreweryId: 'b1' });
+    prisma.brewery.findFirst.mockResolvedValue({ id: 'b2' });
+    await provider.replaceMenu('m1', new Menu(null, 'on-tap', 'On Tap', 'logo', 'b2'));
+    expect(prisma.menu.update).toHaveBeenLastCalledWith({ where: { ownerId: OWNER, id: 'm1' }, data: { internalName: 'on-tap', displayName: 'On Tap', logo: 'logo', defaultBreweryId: 'b2' } });
+    await provider.replaceMenu('m1', new Menu(null, 'on-tap', 'On Tap', 'logo', null));
+    expect(prisma.menu.update).toHaveBeenLastCalledWith({ where: { ownerId: OWNER, id: 'm1' }, data: { internalName: 'on-tap', displayName: 'On Tap', logo: 'logo', defaultBreweryId: null } });
+  });
+
+  it('update keeps the default brewery unless a new one is given', async () => {
+    prisma.menu.findFirst.mockResolvedValue({ ...original, defaultBreweryId: 'b1' });
+    await provider.updateMenu('m1', new Menu(null, null, 'Now Pouring', null));
+    expect(prisma.menu.update).toHaveBeenLastCalledWith({ where: { ownerId: OWNER, id: 'm1' }, data: expect.objectContaining({ defaultBreweryId: 'b1' }) });
+  });
+
+  it('checks the default brewery exists (for this owner) when adding, updating or replacing', async () => {
+    prisma.menu.findFirst.mockResolvedValue(original);
+    await expectProviderError(provider.addMenu(new Menu(null, 'a', 'A', null, 'nope')), 404, /Brewery with ID nope/);
+    await expectProviderError(provider.updateMenu('m1', new Menu(null, null, null, null, 'nope')), 404, /Brewery with ID nope/);
+    await expectProviderError(provider.replaceMenu('m1', new Menu(null, 'a', 'A', null, 'nope')), 404, /Brewery with ID nope/);
+    expect(prisma.menu.create).not.toHaveBeenCalled();
+    expect(prisma.menu.update).not.toHaveBeenCalled();
   });
 
   it('replace validates names and existence', async () => {
@@ -260,7 +284,22 @@ describe('sub-menus', () => {
     await expectProviderError(provider.addSubMenu(new SubMenu(null, 'drafts', 'Drafts', 'nope', 1)), 404, /Menu with ID nope/);
     prisma.menu.findFirst.mockResolvedValue({ id: 'm1' });
     await provider.addSubMenu(new SubMenu(null, 'drafts', 'Drafts', 'm1', 1));
-    expect(prisma.subMenu.create).toHaveBeenCalledWith({ data: { ownerId: OWNER, internalName: 'drafts', displayName: 'Drafts', menuId: 'm1', order: 1 } });
+    expect(prisma.subMenu.create).toHaveBeenCalledWith({ data: { ownerId: OWNER, internalName: 'drafts', displayName: 'Drafts', menuId: 'm1', order: 1, hiddenOn: [] } });
+  });
+
+  it('stores the views a section is hidden on, replaces them on update, and keeps them when not given', async () => {
+    prisma.menu.findFirst.mockResolvedValue({ id: 'm1' });
+    await provider.addSubMenu(new SubMenu(null, 'drafts', 'Drafts', 'm1', 1, ['print']));
+    expect(prisma.subMenu.create).toHaveBeenCalledWith({ data: expect.objectContaining({ hiddenOn: ['print'] }) });
+
+    prisma.subMenu.findFirst.mockResolvedValue({ id: 's1', internalName: 'drafts', displayName: 'Drafts', menuId: 'm1', order: 3, hiddenOn: ['print'] });
+    await provider.updateSubMenu('s1', new SubMenu(null, null, null, null, null));
+    expect(prisma.subMenu.update).toHaveBeenLastCalledWith({ where: { ownerId: OWNER, id: 's1' }, data: expect.objectContaining({ hiddenOn: ['print'] }) });
+    await provider.updateSubMenu('s1', new SubMenu(null, null, null, null, null, ['board', 'widget']));
+    expect(prisma.subMenu.update).toHaveBeenLastCalledWith({ where: { ownerId: OWNER, id: 's1' }, data: expect.objectContaining({ hiddenOn: ['board', 'widget'] }) });
+    // An empty list is a real answer: show it everywhere again
+    await provider.updateSubMenu('s1', new SubMenu(null, null, null, null, null, []));
+    expect(prisma.subMenu.update).toHaveBeenLastCalledWith({ where: { ownerId: OWNER, id: 's1' }, data: expect.objectContaining({ hiddenOn: [] }) });
   });
 
   it('update keeps the original for empty fields', async () => {

@@ -2,7 +2,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { Request, Response } from 'express';
 import Routes from './common';
 import { DataProvider, DataProviderError } from '../storage/providers';
-import { Menu, MenuItem, SubMenu } from '../models/menus';
+import { Menu, MENU_VIEWS, MenuItem, SubMenu } from '../models/menus';
 import { Item } from '../models/items';
 import { Brewery } from '../models/breweries';
 import { ItemContainer, SaleContainer } from '../models/containers';
@@ -83,8 +83,8 @@ function slugify(text: string): string {
 }
 
 // ---- Logos ----
-// Menus and breweries store their logo as a bare base64 string (no "data:" prefix). The PDF
-// menu board renders them with pdfkit, which only understands PNG and JPEG, so uploads are
+// Menus and breweries store their logo as a bare base64 string (no "data:" prefix). The menu
+// board images are drawn with pdfkit, which only understands PNG and JPEG, so uploads are
 // limited to those (the admin client converts whatever image is picked to a PNG first).
 
 const MAX_LOGO_BYTES = 3 * 1024 * 1024;
@@ -117,6 +117,17 @@ function parseLogo(body: any): string {
   const type = sniffImageType(bytes);
   if (type !== 'image/png' && type !== 'image/jpeg') throw badRequest('Logos must be PNG or JPEG images');
   return value;
+}
+
+// Reads the optional list of views a section is hidden on (see SubMenu.hiddenOn). Null means the
+// request didn't mention it, so what's there stays; an empty list shows the section everywhere.
+function parseHiddenOn(body: any): string[] | null {
+  const value = body?.hiddenOn;
+  if (value === undefined || value === null) return null;
+  if (!Array.isArray(value) || value.some((view) => !(MENU_VIEWS as readonly string[]).includes(view))) {
+    throw badRequest(`hiddenOn must be a list of any of: ${MENU_VIEWS.join(', ')}`);
+  }
+  return MENU_VIEWS.filter((view) => value.includes(view));
 }
 
 type PourInput = { containerId: string; price: number };
@@ -222,6 +233,7 @@ export class ApiRoutes extends Routes {
           displayName: section.displayName,
           internalName: section.internalName,
           order: section.order,
+          hiddenOn: section.hiddenOn ?? [],
           itemCount: menuItems.length,
           inactiveCount,
           itemNames: names,
@@ -233,30 +245,46 @@ export class ApiRoutes extends Routes {
         internalName: menu.internalName,
         hasLogo: Boolean(menu.logo),
         logo: logoDataUrl(menu.logo),
+        defaultBreweryId: menu.defaultBreweryId ?? null,
         sections: sectionResults,
       });
     }));
 
+    // Renames a menu and/or sets its default brewery, whose name the print view and menu board
+    // leave off. `defaultBreweryId` is a brewery ID, or null to name every brewery again; leave it
+    // out to keep what's there.
     this.router.patch('/menus/:menuId', handle(async (req, res) => {
       const displayName = optionalString(req.body, 'displayName', 200);
       const internalName = optionalString(req.body, 'internalName', 200);
-      const menu = await this.data.updateMenu(req.params.menuId as string, new Menu(null, internalName, displayName, null));
-      res.json({ id: menu.id, displayName: menu.displayName, internalName: menu.internalName });
+      const settingDefaultBrewery = Object.prototype.hasOwnProperty.call(req.body ?? {}, 'defaultBreweryId');
+      let defaultBreweryId: string | null = null;
+      if (settingDefaultBrewery) {
+        const value = req.body.defaultBreweryId;
+        if (value !== null && typeof value !== 'string') throw badRequest('defaultBreweryId must be a brewery ID, or null for none');
+        defaultBreweryId = value || null;
+        if (defaultBreweryId && !(await this.data.getBrewery(defaultBreweryId))) throw notFound('Brewery');
+      }
+      let menu = await this.data.updateMenu(req.params.menuId as string, new Menu(null, internalName, displayName, null));
+      if (settingDefaultBrewery) {
+        // updateMenu keeps what's there when given nothing, so clearing takes a full replace
+        menu = await this.data.replaceMenu(menu.id!, new Menu(null, menu.internalName, menu.displayName, menu.logo, defaultBreweryId));
+      }
+      res.json({ id: menu.id, displayName: menu.displayName, internalName: menu.internalName, defaultBreweryId: menu.defaultBreweryId ?? null });
     }));
 
-    // Sets or replaces a menu's logo (shown on the print view, the menu board PDF and the widget)
+    // Sets or replaces a menu's logo (shown on the print view, the menu board images and the widget)
     this.router.put('/menus/:menuId/logo', handle(async (req, res) => {
       const menu = await this.data.getMenu(req.params.menuId as string);
       if (!menu) throw notFound('Menu');
       const logo = parseLogo(req.body);
-      await this.data.replaceMenu(menu.id!, new Menu(null, menu.internalName, menu.displayName, logo));
+      await this.data.replaceMenu(menu.id!, new Menu(null, menu.internalName, menu.displayName, logo, menu.defaultBreweryId));
       res.json({ logo: logoDataUrl(logo) });
     }));
 
     this.router.delete('/menus/:menuId/logo', handle(async (req, res) => {
       const menu = await this.data.getMenu(req.params.menuId as string);
       if (!menu) throw notFound('Menu');
-      await this.data.replaceMenu(menu.id!, new Menu(null, menu.internalName, menu.displayName, null));
+      await this.data.replaceMenu(menu.id!, new Menu(null, menu.internalName, menu.displayName, null, menu.defaultBreweryId));
       res.sendStatus(204);
     }));
 
@@ -363,6 +391,7 @@ export class ApiRoutes extends Routes {
         id: section.id,
         displayName: section.displayName,
         internalName: section.internalName,
+        hiddenOn: section.hiddenOn ?? [],
         menu: { id: menu.id, displayName: menu.displayName },
         items: entries,
       });
@@ -371,13 +400,15 @@ export class ApiRoutes extends Routes {
     this.router.patch('/sections/:sectionId', handle(async (req, res) => {
       const displayName = optionalString(req.body, 'displayName', 200);
       const internalName = optionalString(req.body, 'internalName', 200);
-      const section = await this.data.updateSubMenu(req.params.sectionId as string, new SubMenu(null, internalName, displayName, null, null));
+      const hiddenOn = parseHiddenOn(req.body);
+      const section = await this.data.updateSubMenu(req.params.sectionId as string, new SubMenu(null, internalName, displayName, null, null, hiddenOn));
       res.json({
         id: section.id,
         menuId: section.menuId,
         internalName: section.internalName,
         displayName: section.displayName,
         order: section.order,
+        hiddenOn: section.hiddenOn ?? [],
       });
     }));
 
@@ -482,7 +513,7 @@ export class ApiRoutes extends Routes {
       const placements = await this.data.getMenuItemsForItem(menuItem.itemId!);
       const itemRecord = await this.data.getItem(menuItem.itemId!);
       // What the widget shows for this item when it has no image of its own, in the same order
-      // as the widget format in routes/menus.ts (the PDF skips the brewery step)
+      // as the widget format in routes/menus.ts (the menu board skips the brewery step)
       const brewery = itemRecord?.breweryId ? await this.data.getBrewery(itemRecord.breweryId) : null;
       const logoFallback = brewery?.defaultLogo ? 'brewery' : menu.logo ? 'menu' : 'none';
       res.json({
@@ -520,7 +551,7 @@ export class ApiRoutes extends Routes {
     /*
     Marks a placement active or inactive: { active: boolean }. An inactive item stays on its
     section, keeping its place in the order and its prices, but is left off the published menu
-    views (print, menu board PDF and widget) until it's marked active again.
+    views (print, menu board images and widget) until it's marked active again.
     */
     this.router.put('/menu-items/:menuItemId/active', handle(async (req, res) => {
       const active = req.body?.active;
@@ -533,8 +564,8 @@ export class ApiRoutes extends Routes {
 
     /*
     Sets or replaces this item's own image: { logo: base64 }. The website widget and menu board
-    PDF show it for the item. Without one, the widget falls back to the brewery's logo, then the
-    menu's, and the PDF to the menu's.
+    menu board show it for the item. Without one, the widget falls back to the brewery's logo, then the
+    menu's, and the menu board to the menu's.
     */
     this.router.put('/menu-items/:menuItemId/logo', handle(async (req, res) => {
       const menuItem = await this.data.getMenuItem(req.params.menuItemId as string);

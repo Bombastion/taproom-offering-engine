@@ -127,7 +127,7 @@ describe('rate limits', () => {
       expect(blocked.text).toMatch(/Too many menu-export requests/);
     });
 
-    it('shares one budget between the two PDF-ish formats', async () => {
+    it('shares one budget between the two expensive formats', async () => {
       const ip = nextIp();
       for (let i = 0; i < 5; i++) {
         await request(app).get('/menus/abc?format=digital').set('X-Forwarded-For', ip);
