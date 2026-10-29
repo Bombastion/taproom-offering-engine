@@ -473,6 +473,77 @@ describe('limited to one user (forOwner)', () => {
   });
 });
 
+describe('menu designs', () => {
+  let provider: LocalDataProvider;
+  let alice: string;
+  let bob: string;
+  let menuId: string;
+
+  beforeEach(async () => {
+    provider = memoryProvider();
+    alice = (await addUser(provider, { email: 'alice@example.com' })).id;
+    bob = (await addUser(provider, { email: 'bob@example.com' })).id;
+    menuId = (await provider.forOwner(alice).addMenu(new Menu(null, 'a', 'A', null))).id!;
+  });
+
+  it('has none until one is saved', async () => {
+    expect(await provider.forOwner(alice).getMenuDesign(menuId, 'print')).toBeNull();
+  });
+
+  it('keeps what is saved, for the menu and view it was saved for', async () => {
+    const mine = provider.forOwner(alice);
+    const saved = await mine.setMenuDesign(menuId, 'print', { version: 1, footer: { show: true } });
+    expect(saved).toMatchObject({ menuId, view: 'print', version: 1, spec: { version: 1, footer: { show: true } } });
+    expect(saved.updatedAt).toBeInstanceOf(Date);
+    expect(await mine.getMenuDesign(menuId, 'print')).toEqual(saved);
+    expect(await mine.getMenuDesign(menuId, 'board')).toBeNull();
+  });
+
+  it('replaces the design when saved again, rather than adding a second', async () => {
+    const mine = provider.forOwner(alice);
+    await mine.setMenuDesign(menuId, 'print', { version: 1, n: 1 });
+    await mine.setMenuDesign(menuId, 'print', { version: 1, n: 2 });
+    expect((await mine.getMenuDesign(menuId, 'print'))!.spec).toEqual({ version: 1, n: 2 });
+  });
+
+  it('keeps a copy, so changing what was passed in or handed back changes nothing stored', async () => {
+    const mine = provider.forOwner(alice);
+    const spec = { version: 1, nested: { a: 1 } };
+    const saved = await mine.setMenuDesign(menuId, 'print', spec);
+    spec.nested.a = 2;
+    saved.view = 'board';
+    const read = await mine.getMenuDesign(menuId, 'print');
+    expect(read!.spec).toEqual({ version: 1, nested: { a: 1 } });
+    expect(read!.view).toBe('print');
+  });
+
+  it('removes a design, saying whether there was one', async () => {
+    const mine = provider.forOwner(alice);
+    await mine.setMenuDesign(menuId, 'print', { version: 1 });
+    expect(await mine.deleteMenuDesign(menuId, 'print')).toBe(true);
+    expect(await mine.getMenuDesign(menuId, 'print')).toBeNull();
+    expect(await mine.deleteMenuDesign(menuId, 'print')).toBe(false);
+  });
+
+  it('will not put a design on a menu that does not exist', async () => {
+    await expect(provider.forOwner(alice).setMenuDesign('no-such-menu', 'print', {})).rejects.toMatchObject({ statusCode: 404 });
+  });
+
+  it('cannot be saved without an owner', async () => {
+    await expect(provider.setMenuDesign(menuId, 'print', {})).rejects.toThrow(/forOwner/);
+  });
+
+  it("keeps one user away from another's designs", async () => {
+    const mine = provider.forOwner(alice);
+    const theirs = provider.forOwner(bob);
+    await mine.setMenuDesign(menuId, 'print', { version: 1, secret: true });
+    expect(await theirs.getMenuDesign(menuId, 'print')).toBeNull();
+    await expect(theirs.setMenuDesign(menuId, 'print', { version: 1, hijacked: true })).rejects.toMatchObject({ statusCode: 404 });
+    expect(await theirs.deleteMenuDesign(menuId, 'print')).toBe(false);
+    expect((await mine.getMenuDesign(menuId, 'print'))!.spec).toEqual({ version: 1, secret: true });
+  });
+});
+
 describe('users', () => {
   it('lists them oldest first, as copies', async () => {
     const provider = memoryProvider();

@@ -1,26 +1,16 @@
 import { Request, Response } from 'express';
 import Routes from './common';
-import {v4 as uuidv4} from 'uuid';
 import { Item } from '../models/items';
-import { DisplayItem, DisplaySubMenu, Menu, MenuItem, MenuView, SubMenu } from '../models/menus';
+import { Menu, MenuItem } from '../models/menus';
 import { Brewery } from '../models/breweries';
 import pdfkit from 'pdfkit';
 import fs from 'fs';
 import { DataProvider } from '../storage/providers';
 import { pageFileName, pdfToPngs, zipPages } from './menuBoardImages';
-
-// Sorts sections and items by their configured order, with unordered ones last. The data
-// providers don't guarantee any order (Prisma returns rows however Postgres likes), so every
-// view sorts for itself.
-function byOrder(a: { order: number | null }, b: { order: number | null }): number {
-  if (a.order === null && b.order === null) return 0;
-  if (a.order === null) return 1;
-  if (b.order === null) return -1;
-  return a.order - b.order;
-}
-
-// For filtering a menu's sections down to the ones that show on a view (see SubMenu.hiddenOn)
-const subMenuShownOn = (view: MenuView) => (subMenu: SubMenu) => SubMenu.isShownOn(subMenu, view);
+import { breweryNameToShow, byOrder, subMenuShownOn } from './viewHelpers';
+import { defaultPrintDesign, parsePrintDesign } from '../models/menuDesign';
+import { buildPrintModel } from '../print/model';
+import { renderPrintMenu } from '../print/render';
 
 // The menu board is a portrait 1080x1920 picture, one image per page.
 const BOARD_WIDTH = 1080;
@@ -49,15 +39,6 @@ export class MenusRoutes extends Routes {
         doc.rect(0, 0, BOARD_WIDTH, BOARD_HEIGHT).fill(backgroundColor);
         const menuLogo = Buffer.from(logoBase64, 'base64');
         doc.image(menuLogo, BOARD_WIDTH/2 - imageWidth/2, BOARD_SAFE_MARGIN, {width: imageWidth, height: imageHeight});
-    }
-
-    // The brewery's name as it should be shown on this menu: not at all for the menu's default
-    // brewery (see Menu.defaultBreweryId) or for an item with no brewery
-    const breweryNameToShow = (menu: Menu, brewery: Brewery | null | undefined): string | null => {
-      if (!brewery || (menu.defaultBreweryId && brewery.id === menu.defaultBreweryId)) {
-        return null;
-      }
-      return brewery.name;
     }
 
     // "Brewery Item", or just "Item" when the brewery isn't named
@@ -329,92 +310,21 @@ export class MenusRoutes extends Routes {
         return;
       }
       if (req.query.format === "print") {
-        // Get all the sub-menus for this menu
-        const allSubMenus = (await this.dataProvider.getSubMenusForMenu(result.id!)).filter(subMenuShownOn('print')).sort(byOrder);
-
-        // Initialize a map we can add things to
-        const subMenuToItemMap: Map<string, Array<DisplayItem>> = new Map();
-        const subMenuToContainerDisplayNameToOrder: Map<string, Map<string, number>> = new Map();
-        allSubMenus.forEach((subMenu: SubMenu) => {
-          subMenuToItemMap.set(subMenu.id!, []);
-          subMenuToContainerDisplayNameToOrder.set(subMenu.id!, new Map());
-        })
-
-        // Create DisplayItems for each MenuItem and add it to the appropriate map
-        // Also gathers all container display info for submenus during the loop
-        // Sorted up front so each section's list below ends up in its configured order
-        const allItemsForMenu = (await this.dataProvider.getMenuItemsForMenu(result.id!)).filter(MenuItem.isActive).sort(byOrder);
-        for (const menuItem of allItemsForMenu) {
-          // Items on a section that's left off the print view aren't needed
-          if (!menuItem.subMenuId || !subMenuToItemMap.has(menuItem.subMenuId)) {
-            continue;
+        // How this menu is laid out is its stored design, or the default one (the layout every menu
+        // had before designs existed). A stored design that can't be read must not take the public
+        // menu down, so it falls back to the default.
+        const stored = await this.dataProvider.getMenuDesign(result.id!, 'print');
+        let design = defaultPrintDesign();
+        if (stored) {
+          const parsed = parsePrintDesign(stored.spec);
+          if (parsed.ok) {
+            design = parsed.design;
+          } else {
+            console.error(`The stored print design for menu ${result.id} is invalid; using the default`, parsed.issues);
           }
-          const item = (await this.dataProvider.getItem(menuItem.itemId!))!;
-
-          // Not all items are associated with a brewery
-          let brewery: Brewery | null = null;
-          if (item.breweryId !== null) {
-            brewery = await this.dataProvider.getBrewery(item.breweryId);
-          }
-          
-          // Gather all the container names for this item
-          const allSaleContainersForItem = await this.dataProvider.getSaleContainersForMenuItem(menuItem.id!);
-          const containerDisplayNameToPrice: Map<string, string> = new Map();
-          for (const saleContainer of allSaleContainersForItem) {
-            const containerInfo = (await this.dataProvider.getContainer(saleContainer.containerId))!!;
-            const workingDisplayName = containerInfo.displayName ? containerInfo.displayName : uuidv4();
-            containerDisplayNameToPrice.set(workingDisplayName, saleContainer.price.toLocaleString('en-US', { minimumFractionDigits: 2}));
-
-            // Get the top level display names and orders for the sub menu we're on
-            let displayNameToOrder = null;
-            if (Boolean(menuItem.subMenuId)) {
-              displayNameToOrder = subMenuToContainerDisplayNameToOrder.get(menuItem.subMenuId!)!;
-            } 
-            
-            if (displayNameToOrder !== null) {
-              const workingOrder = containerInfo.order ? containerInfo.order : 999;
-              const existingOrderForDisplayName = displayNameToOrder.get(workingDisplayName);
-              if (!existingOrderForDisplayName || existingOrderForDisplayName > workingOrder) {
-                displayNameToOrder.set(workingDisplayName, workingOrder);
-              }
-            }
-          };
-
-          const displayItem = new DisplayItem(breweryNameToShow(result, brewery), item.displayName!, item.style, item.abv, item.description, menuItem.order, containerDisplayNameToPrice);
-          if (menuItem.subMenuId) {
-            subMenuToItemMap.get(menuItem.subMenuId)?.push(displayItem);
-          } 
-        };
-
-        // For each submenu, gather all the price options
-        const displaySubMenus: Array<DisplaySubMenu> = [];
-        allSubMenus.forEach((menu: SubMenu) => {
-          // Like the widget and menu board, leave out sections with nothing (active) on them
-          if (subMenuToItemMap.get(menu.id!)!.length === 0) {
-            return;
-          }
-          const displayNameToOrder = subMenuToContainerDisplayNameToOrder.get(menu.id!)!;
-          const displayNameAndOrderObjects: Array<{ displayName: string, order: number }> = []
-          displayNameToOrder.forEach((order, displayName) => {
-            displayNameAndOrderObjects.push({ "displayName": displayName, "order": order });
-          });
-          displayNameAndOrderObjects.sort((a, b) => {
-            const orderResult = a.order - b.order;
-            if(orderResult !==0) {
-              return orderResult;
-            }
-            return a.displayName.localeCompare(b.displayName);
-          });
-
-          const displayNames: Array<string> = []
-          displayNameAndOrderObjects.forEach(displayNameAndOrder => {
-            displayNames.push(displayNameAndOrder.displayName);
-          });
-
-          displaySubMenus.push(new DisplaySubMenu(menu, displayNames));
-        });
-
-        res.render('printMenu', { menuLogo: result.logo, menuTitle: result.displayName, allDisplaySubMenus: displaySubMenus, subMenuToItemMap: subMenuToItemMap });
+        }
+        const model = await buildPrintModel(this.dataProvider, result);
+        res.type('html').send(renderPrintMenu(model, design));
         return
       }
       

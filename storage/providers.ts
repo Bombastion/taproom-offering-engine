@@ -5,7 +5,8 @@ import { Brewery } from '../models/breweries';
 import { Menu, MenuItem, SubMenu } from '../models/menus';
 import { NewUser, normalizeEmail, Session, User, UserUpdate } from '../models/users';
 import {v4 as uuidv4} from 'uuid';
-import { PrismaClient } from '../generated/prisma/client';
+import { Prisma, PrismaClient } from '../generated/prisma/client';
+import { DESIGN_VERSION, DesignView, isDesignView, StoredMenuDesign } from '../models/menuDesign';
 
 export class DataProviderError extends Error {
     statusCode: number;
@@ -22,6 +23,14 @@ function containerInUse(count: number): DataProviderError {
 
 function itemInUse(count: number): DataProviderError {
     return new DataProviderError(`This item is still on ${count} menu ${count === 1 ? 'section' : 'sections'}. Take it off first.`, 409);
+}
+
+function toStoredMenuDesign(row: { id: string; menuId: string; view: string; version: number; spec: unknown; updatedAt: Date }): StoredMenuDesign {
+    // The column is plain text; a value this code doesn't know is a problem to surface, not to pass along as a DesignView
+    if (!isDesignView(row.view)) {
+        throw new Error(`Menu design ${row.id} has an unknown view "${row.view}"`);
+    }
+    return { id: row.id, menuId: row.menuId, view: row.view, version: row.version, spec: row.spec, updatedAt: row.updatedAt };
 }
 
 export abstract class DataProvider {
@@ -106,6 +115,17 @@ export abstract class DataProvider {
     abstract setMenuItemActive(id: string, active: boolean): Promise<MenuItem>
     // Sets (or, with null, clears) a menu item's own logo, which updateMenuItem can't do
     abstract setMenuItemLogo(id: string, itemLogo: string | null): Promise<MenuItem>
+
+    // ---- Menu designs ----
+
+    // How a menu looks on a view (see models/menuDesign.ts), or null if it has none stored, which
+    // means the default design. The unscoped provider reads any menu's, for the public views.
+    abstract getMenuDesign(menuId: string, view: DesignView): Promise<StoredMenuDesign | null>;
+    // Stores (or replaces) a menu's design for a view. `spec` is the validated design; the caller
+    // validates it (parsePrintDesign). Refuses with a 404 if the menu isn't the user's.
+    abstract setMenuDesign(menuId: string, view: DesignView, spec: unknown): Promise<StoredMenuDesign>;
+    // Goes back to the default design. Returns true if there was one stored.
+    abstract deleteMenuDesign(menuId: string, view: DesignView): Promise<boolean>;
 
     // ---- Users and sessions ----
 
@@ -656,6 +676,31 @@ export class PrismaDataProvider extends DataProvider {
         });
     }
 
+    async getMenuDesign(menuId: string, view: DesignView): Promise<StoredMenuDesign | null> {
+        const row = await this.prismaClient.menuDesign.findFirst({ where: { menuId: menuId, view: view, ...this.owned() } });
+        return row ? toStoredMenuDesign(row) : null;
+    }
+
+    async setMenuDesign(menuId: string, view: DesignView, spec: unknown): Promise<StoredMenuDesign> {
+        const ownerId = this.owner();
+        // The menu has to be the user's own, or a design could be put on someone else's menu
+        if (!(await this.getMenu(menuId))) {
+            throw new DataProviderError(`Menu with ID ${menuId} does not exist`, 404);
+        }
+        const json = spec as Prisma.InputJsonValue;
+        const row = await this.prismaClient.menuDesign.upsert({
+            where: { menuId_view: { menuId: menuId, view: view } },
+            create: { ownerId: ownerId, menuId: menuId, view: view, version: DESIGN_VERSION, spec: json },
+            update: { version: DESIGN_VERSION, spec: json },
+        });
+        return toStoredMenuDesign(row);
+    }
+
+    async deleteMenuDesign(menuId: string, view: DesignView): Promise<boolean> {
+        const result = await this.prismaClient.menuDesign.deleteMany({ where: { menuId: menuId, view: view, ...this.owned() } });
+        return result.count > 0;
+    }
+
     async createUser(user: NewUser): Promise<User> {
         try {
             return await this.prismaClient.user.create({
@@ -750,6 +795,7 @@ export class LocalDataProvider extends DataProvider {
     SUBMENUS_KEY = "submenus";
     USERS_KEY = "users";
     SESSIONS_KEY = "sessions";
+    MENU_DESIGNS_KEY = "menuDesigns";
 
     dataFolder: string;
     _cache: Map<string, Map<string, any>>;
@@ -780,6 +826,7 @@ export class LocalDataProvider extends DataProvider {
         this._cache.set(this.SUBMENUS_KEY, new Map);
         this._cache.set(this.USERS_KEY, new Map);
         this._cache.set(this.SESSIONS_KEY, new Map);
+        this._cache.set(this.MENU_DESIGNS_KEY, new Map);
         for (const key of this._cache.keys()) {
             this._owners.set(key, new Map);
         }
@@ -1239,6 +1286,34 @@ export class LocalDataProvider extends DataProvider {
         const updated = new MenuItem(original.id, original.menuId, original.itemId, original.subMenuId, itemLogo, original.order, original.active ?? true);
         this._cache.get(this.MENU_ITEMS_KEY)!.set(id, updated);
         return updated;
+    }
+
+    async getMenuDesign(menuId: string, view: DesignView): Promise<StoredMenuDesign | null> {
+        const design: StoredMenuDesign | null = this.getGeneric(this.menuDesignId(menuId, view), this.MENU_DESIGNS_KEY);
+        return design ? { ...design } : null;
+    }
+
+    // One design per menu and view, so that pair is its ID
+    menuDesignId(menuId: string, view: DesignView): string {
+        return `${menuId}:${view}`;
+    }
+
+    async setMenuDesign(menuId: string, view: DesignView, spec: unknown): Promise<StoredMenuDesign> {
+        if (this.ownerId === null) {
+            throw new Error('Data can only be created through forOwner(userId), so it has an owner');
+        }
+        if (!this.idExists(menuId, this.MENUS_KEY)) {
+            throw new DataProviderError(`Menu with ID ${menuId} does not exist`, 404);
+        }
+        const id = this.menuDesignId(menuId, view);
+        const stored: StoredMenuDesign = { id: id, menuId: menuId, view: view, version: DESIGN_VERSION, spec: structuredClone(spec), updatedAt: new Date() };
+        this._cache.get(this.MENU_DESIGNS_KEY)!.set(id, stored);
+        this._owners.get(this.MENU_DESIGNS_KEY)!.set(id, this.ownerId);
+        return { ...stored };
+    }
+
+    async deleteMenuDesign(menuId: string, view: DesignView): Promise<boolean> {
+        return this.removeGeneric(this.menuDesignId(menuId, view), this.MENU_DESIGNS_KEY);
     }
 
     async createUser(user: NewUser): Promise<User> {
