@@ -4,6 +4,8 @@ import { Express } from 'express';
 import { ApiRoutes } from '../../routes/api';
 import { DataProvider, LocalDataProvider } from '../../storage/providers';
 import { ItemContainer } from '../../models/containers';
+import { Item } from '../../models/items';
+import { defaultPrintDesign } from '../../models/menuDesign';
 import { addUser, appWith, Fixture, GIF_HEADER, JPEG_HEADER, memoryProvider, seed, TINY_PNG } from '../helpers';
 
 // The admin JSON API (routes/api.ts), exercised over HTTP against the in-memory data provider.
@@ -941,6 +943,137 @@ describe('breweries', () => {
   it('rejects a GIF brewery logo', async () => {
     const res = await request(app).put(`/api/breweries/${data.breweries.zymos.id}/logo`).send({ logo: GIF_HEADER });
     expect(res.status).toBe(400);
+  });
+});
+
+describe('menu designs', () => {
+  const url = () => `/api/menus/${data.menu.id}/design/print`;
+  const withFooter = { design: { footer: { show: true, text: 'WiFi: Zymos' } } };
+
+  it('lists the fonts a design can use, with what each offers', async () => {
+    const res = await request(app).get('/api/design/fonts');
+    expect(res.status).toBe(200);
+    expect(res.body.map((font: { id: string }) => font.id)).toEqual(expect.arrayContaining(['system-serif', 'roboto', 'oswald']));
+    for (const font of res.body) expect(font).toEqual(expect.objectContaining({ id: expect.any(String), label: expect.any(String), category: expect.any(String), minWeight: expect.any(Number), maxWeight: expect.any(Number), italic: expect.any(Boolean) }));
+  });
+
+  it('lists the designs to start from', async () => {
+    const res = await request(app).get('/api/design/presets');
+    expect(res.status).toBe(200);
+    expect(res.body.map((preset: { id: string }) => preset.id)).toEqual(['classic']);
+    expect(res.body[0].design.version).toBe(1);
+  });
+
+  it('shows the default design for a menu that has none', async () => {
+    const res = await request(app).get(url());
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ design: defaultPrintDesign(), isDefault: true, updatedAt: null });
+  });
+
+  it('saves a design, filling in what it leaves out, and shows it back', async () => {
+    const saved = await request(app).put(url()).send(withFooter);
+    expect(saved.status).toBe(200);
+    expect(saved.body.isDefault).toBe(false);
+    expect(saved.body.design.footer).toMatchObject({ show: true, text: 'WiFi: Zymos', bottomIn: 0.3 });
+    expect(saved.body.design.columns).toEqual(defaultPrintDesign().columns);
+    expect(saved.body.updatedAt).toEqual(expect.any(String));
+
+    const read = await request(app).get(url());
+    expect(read.body).toEqual(saved.body);
+  });
+
+  it('stores the whole design, so a later change to the defaults leaves it alone', async () => {
+    await request(app).put(url()).send(withFooter);
+    const stored = await provider.getMenuDesign(data.menu.id!, 'print');
+    expect(stored!.spec).toEqual({ ...defaultPrintDesign(), footer: { ...defaultPrintDesign().footer, show: true, text: 'WiFi: Zymos' } });
+  });
+
+  it('saves over the previous design', async () => {
+    await request(app).put(url()).send(withFooter);
+    await request(app).put(url()).send({ design: { page: { maxPages: 1 } } });
+    const read = (await request(app).get(url())).body.design;
+    expect(read.page.maxPages).toBe(1);
+    // The new design is whole by itself: the footer from the first save is not carried over
+    expect(read.footer.show).toBe(false);
+  });
+
+  it('goes back to the default when the design is removed', async () => {
+    await request(app).put(url()).send(withFooter);
+    const removed = await request(app).delete(url());
+    expect(removed.status).toBe(204);
+    expect((await request(app).get(url())).body.isDefault).toBe(true);
+    // Removing it again is fine
+    expect((await request(app).delete(url())).status).toBe(204);
+  });
+
+  it.each([
+    ['no design at all', {}, 'design'],
+    ['a null design', { design: null }, 'design'],
+    ['a font that is not offered', { design: { sections: { heading: { style: { font: 'comic-sans' } } } } }, 'sections.heading.style.font'],
+    ['a size that is too big', { design: { sections: { heading: { style: { sizePt: 500 } } } } }, 'sections.heading.style.sizePt'],
+    ['a color that is not a color', { design: { footer: { style: { color: 'red;}</style>' } } } }, 'footer.style.color'],
+    ['a setting there is no such thing as', { design: { footer: { colour: '#000000' } } }, 'footer.colour'],
+    ['columns whose widths do not fit', { design: { columns: [{ ...defaultPrintDesign().columns[0], widthPct: 80 }, { ...defaultPrintDesign().columns[1], widthPct: 80 }] } }, 'columns'],
+    ['a version that does not exist', { design: { version: 99 } }, 'version'],
+  ])('refuses %s, naming the problem, and keeps the design it had', async (_what, body, path) => {
+    await request(app).put(url()).send(withFooter);
+    const res = await request(app).put(url()).send(body);
+    expect(res.status).toBe(400);
+    expect(res.body.error).toEqual(expect.any(String));
+    expect(res.body.issues).toEqual(expect.arrayContaining([expect.objectContaining({ path, message: expect.any(String) })]));
+    expect((await request(app).get(url())).body.design.footer.text).toBe('WiFi: Zymos');
+  });
+
+  it('refuses a design that is too large', async () => {
+    const res = await request(app).put(url()).send({ design: { footer: { text: 'x'.repeat(400) }, columns: Array.from({ length: 6 }, () => ({ id: 'a', pad: 'y'.repeat(4000) })) } });
+    expect(res.status).toBe(400);
+  });
+
+  it('shows the default when the stored design can no longer be read, and says so', async () => {
+    await provider.setMenuDesign(data.menu.id!, 'print', { version: 1, page: { maxPages: 0 } });
+    const res = await request(app).get(url());
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ design: defaultPrintDesign(), isDefault: true, updatedAt: null, storedDesignInvalid: true });
+  });
+
+  it('draws a preview of the menu with the design given, without saving it', async () => {
+    const res = await request(app).post(`${url()}/preview`).send(withFooter);
+    expect(res.status).toBe(200);
+    expect(res.type).toBe('text/html');
+    expect(res.text).toContain('Hazy Sequence');
+    expect(res.text).toContain('WiFi: Zymos');
+    expect(res.text).toContain('id="menuRoot"');
+    expect(res.headers['content-security-policy']).toMatch(/sandbox/);
+    expect(await provider.getMenuDesign(data.menu.id!, 'print')).toBeNull();
+  });
+
+  it('previews a design that is only part of one, as the default with those changes', async () => {
+    const res = await request(app).post(`${url()}/preview`).send({ design: { page: { maxPages: 1 } } });
+    expect(res.text).toContain('data-max-pages="1"');
+  });
+
+  it('refuses to preview a design that is not valid', async () => {
+    const res = await request(app).post(`${url()}/preview`).send({ design: { page: { size: 'poster' } } });
+    expect(res.status).toBe(400);
+    expect(res.body.issues[0].path).toBe('page.size');
+  });
+
+  it('previews hostile text without it getting out of the page', async () => {
+    const hazy = data.items.hazy;
+    await provider.replaceItem(hazy.id!, new Item(null, hazy.internalName, '</script><script>alert(1)</script>', hazy.breweryId, hazy.style, hazy.abv, hazy.description, hazy.category));
+    const res = await request(app).post(`${url()}/preview`).send({ design: { footer: { show: true, text: '</style><script>alert(2)</script>' } } });
+    expect(res.text.match(/<script/g)).toHaveLength(1);
+    expect(res.text.match(/<\/style>/g)).toHaveLength(1);
+  });
+
+  it.each([
+    ['get', ''],
+    ['put', ''],
+    ['delete', ''],
+    ['post', '/preview'],
+  ] as const)('%s is a 404 for a menu that does not exist (design%s)', async (method, suffix) => {
+    const res = await request(app)[method](`/api/menus/no-such-menu/design/print${suffix}`).send(withFooter);
+    expect(res.status).toBe(404);
   });
 });
 

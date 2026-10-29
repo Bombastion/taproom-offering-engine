@@ -35,6 +35,7 @@ function fakePrisma() {
     menuItem: fakeModel(),
     user: fakeModel(),
     session: fakeModel(),
+    menuDesign: { ...fakeModel(), upsert: vi.fn(async ({ create }: { create: object }) => ({ id: 'd1', updatedAt: new Date(), ...create })) },
     $transaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn(client)),
   };
   return client;
@@ -417,6 +418,56 @@ describe('menu items', () => {
   });
 });
 
+describe('menu designs', () => {
+  const stored = { id: 'd1', menuId: 'm1', view: 'print', version: 1, spec: { version: 1 }, updatedAt: new Date('2026-01-01T00:00:00Z'), ownerId: OWNER };
+
+  it('reads the design for a menu and view, limited to its owner', async () => {
+    prisma.menuDesign.findFirst.mockResolvedValue(stored);
+    expect(await provider.getMenuDesign('m1', 'print')).toEqual({ id: 'd1', menuId: 'm1', view: 'print', version: 1, spec: { version: 1 }, updatedAt: stored.updatedAt });
+    expect(prisma.menuDesign.findFirst).toHaveBeenCalledWith({ where: { menuId: 'm1', view: 'print', ownerId: OWNER } });
+  });
+
+  it('has none when nothing is stored', async () => {
+    expect(await provider.getMenuDesign('m1', 'print')).toBeNull();
+  });
+
+  it('does not hand back the owner', async () => {
+    prisma.menuDesign.findFirst.mockResolvedValue(stored);
+    expect(await provider.getMenuDesign('m1', 'print')).not.toHaveProperty('ownerId');
+  });
+
+  it('saves a design by creating it or replacing the one for that menu and view', async () => {
+    prisma.menu.findFirst.mockResolvedValue({ id: 'm1' });
+    const saved = await provider.setMenuDesign('m1', 'print', { version: 1, footer: { show: true } });
+    expect(prisma.menuDesign.upsert).toHaveBeenCalledWith({
+      where: { menuId_view: { menuId: 'm1', view: 'print' } },
+      create: { ownerId: OWNER, menuId: 'm1', view: 'print', version: 1, spec: { version: 1, footer: { show: true } } },
+      update: { version: 1, spec: { version: 1, footer: { show: true } } },
+    });
+    expect(saved).toMatchObject({ menuId: 'm1', view: 'print', spec: { version: 1, footer: { show: true } } });
+  });
+
+  it("will not save onto a menu it does not own, so the owner filter on the menu lookup is what stops it", async () => {
+    // The lookup is owner-limited and finds nothing
+    await expectProviderError(provider.setMenuDesign('someone-elses', 'print', { version: 1 }), 404, /Menu/);
+    expect(prisma.menu.findFirst).toHaveBeenCalledWith({ where: { id: 'someone-elses', ownerId: OWNER } });
+    expect(prisma.menuDesign.upsert).not.toHaveBeenCalled();
+  });
+
+  it('removes a design, limited to its owner, saying whether there was one', async () => {
+    expect(await provider.deleteMenuDesign('m1', 'print')).toBe(true);
+    expect(prisma.menuDesign.deleteMany).toHaveBeenCalledWith({ where: { menuId: 'm1', view: 'print', ownerId: OWNER } });
+    prisma.menuDesign.deleteMany.mockResolvedValueOnce({ count: 0 });
+    expect(await provider.deleteMenuDesign('m1', 'print')).toBe(false);
+  });
+
+  it('cannot save without an owner', async () => {
+    const unscoped = new PrismaDataProvider(prisma as unknown as PrismaClient);
+    await expect(unscoped.setMenuDesign('m1', 'print', {})).rejects.toThrow(/forOwner/);
+    expect(prisma.menuDesign.upsert).not.toHaveBeenCalled();
+  });
+});
+
 describe('users and sessions', () => {
   it('creates a user with a normalized email and the defaults', async () => {
     await provider.createUser({ email: '  Brewer@Example.COM ' });
@@ -562,7 +613,7 @@ describe('every query on an owned table', () => {
     const end = source.indexOf('class LocalDataProvider');
     const prismaClass = source.slice(start, end);
 
-    const calls = [...prismaClass.matchAll(/\b(?:prismaClient|tx)\.(brewery|itemContainer|saleContainer|item|menu|subMenu|menuItem)\.(\w+)\(/g)];
+    const calls = [...prismaClass.matchAll(/\b(?:prismaClient|tx)\.(brewery|itemContainer|saleContainer|item|menu|subMenu|menuItem|menuDesign)\.(\w+)\(/g)];
     expect(calls.length).toBeGreaterThan(30);
 
     const unlimited: string[] = [];

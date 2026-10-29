@@ -116,6 +116,25 @@ model MenuItem {
   @@index([ownerId])
 }
 
+// How a menu looks on one of its public views (today only "print"; see models/menuDesign.ts). One row
+// per (menu, view); a menu with no row uses the default design.
+model MenuDesign {
+  id  String  @id @default(uuid())
+  menuId String
+  // "print" or "board"
+  view String
+  // The version of the format `spec` is written in
+  version Int
+  spec Json
+  updatedAt DateTime @updatedAt
+  // Whose this is. Everything the admin app shows or changes is limited to its owner.
+  ownerId String
+  owner User @relation(fields: [ownerId], references: [id])
+
+  @@unique([menuId, view])
+  @@index([ownerId])
+}
+
 enum UserRole {
   USER
   ADMIN
@@ -147,6 +166,7 @@ model User {
   menus Menu[]
   subMenus SubMenu[]
   menuItems MenuItem[]
+  menuDesigns MenuDesign[]
 }
 
 model Session {

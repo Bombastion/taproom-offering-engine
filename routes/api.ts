@@ -6,6 +6,10 @@ import { Menu, MENU_VIEWS, MenuItem, SubMenu } from '../models/menus';
 import { Item } from '../models/items';
 import { Brewery } from '../models/breweries';
 import { ItemContainer, SaleContainer } from '../models/containers';
+import { defaultPrintDesign, DesignIssue, parsePrintDesign, printDesignPresets, StoredMenuDesign } from '../models/menuDesign';
+import { describeFonts } from '../models/fonts';
+import { buildPrintModel } from '../print/model';
+import { renderPrintMenu } from '../print/render';
 
 /*
 JSON API for the admin client app (see /client). Everything under /api requires a signed-in user
@@ -128,6 +132,33 @@ function parseHiddenOn(body: any): string[] | null {
     throw badRequest(`hiddenOn must be a list of any of: ${MENU_VIEWS.join(', ')}`);
   }
   return MENU_VIEWS.filter((view) => value.includes(view));
+}
+
+// Reads the design out of a request body ({ design: {...} }), filling in the default for anything it
+// leaves out. Sends the problems back, field by field, if it isn't a valid design.
+function parseDesignBody(body: any, res: Response) {
+  if (body?.design === undefined || body.design === null) {
+    res.status(400).json({ error: 'design is required', issues: [{ path: 'design', message: 'Send the design as { "design": { ... } }' }] });
+    return null;
+  }
+  const parsed = parsePrintDesign(body.design);
+  if (!parsed.ok) {
+    const first = parsed.issues.slice(0, 3).map((issue: DesignIssue) => (issue.path ? `${issue.path}: ${issue.message}` : issue.message));
+    res.status(400).json({ error: `The design has problems. ${first.join('; ')}`, issues: parsed.issues });
+    return null;
+  }
+  return parsed.design;
+}
+
+// What the designer is shown for a menu's stored design. Nothing stored (or something that can no
+// longer be read) is the default design.
+function designResponse(stored: StoredMenuDesign | null) {
+  if (stored) {
+    const parsed = parsePrintDesign(stored.spec);
+    if (parsed.ok) return { design: parsed.design, isDefault: false, updatedAt: stored.updatedAt };
+    return { design: defaultPrintDesign(), isDefault: true, updatedAt: null, storedDesignInvalid: true };
+  }
+  return { design: defaultPrintDesign(), isDefault: true, updatedAt: null };
 }
 
 type PourInput = { containerId: string; price: number };
@@ -286,6 +317,55 @@ export class ApiRoutes extends Routes {
       if (!menu) throw notFound('Menu');
       await this.data.replaceMenu(menu.id!, new Menu(null, menu.internalName, menu.displayName, null, menu.defaultBreweryId));
       res.sendStatus(204);
+    }));
+
+    // ---- Menu designs: how the print view looks (see models/menuDesign.ts) ----
+
+    // The fonts and starting designs the designer offers
+    this.router.get('/design/fonts', handle(async (_req, res) => {
+      res.json(describeFonts());
+    }));
+
+    this.router.get('/design/presets', handle(async (_req, res) => {
+      res.json(printDesignPresets());
+    }));
+
+    // A menu's print design: the stored one, or the default if it has none
+    this.router.get('/menus/:menuId/design/print', handle(async (req, res) => {
+      const menu = await this.data.getMenu(req.params.menuId as string);
+      if (!menu) throw notFound('Menu');
+      res.json(designResponse(await this.data.getMenuDesign(menu.id!, 'print')));
+    }));
+
+    // Saves { design } as the menu's print design. Anything the design leaves out is the default, and
+    // the full design is what gets stored and returned.
+    this.router.put('/menus/:menuId/design/print', handle(async (req, res) => {
+      const menu = await this.data.getMenu(req.params.menuId as string);
+      if (!menu) throw notFound('Menu');
+      const design = parseDesignBody(req.body, res);
+      if (!design) return;
+      res.json(designResponse(await this.data.setMenuDesign(menu.id!, 'print', design)));
+    }));
+
+    // Goes back to the default design
+    this.router.delete('/menus/:menuId/design/print', handle(async (req, res) => {
+      const menu = await this.data.getMenu(req.params.menuId as string);
+      if (!menu) throw notFound('Menu');
+      await this.data.deleteMenuDesign(menu.id!, 'print');
+      res.sendStatus(204);
+    }));
+
+    // The print view of this menu drawn with { design } instead of the stored one, as an HTML page,
+    // without saving anything. This is what the designer's live preview shows.
+    this.router.post('/menus/:menuId/design/print/preview', handle(async (req, res) => {
+      const menu = await this.data.getMenu(req.params.menuId as string);
+      if (!menu) throw notFound('Menu');
+      const design = parseDesignBody(req.body, res);
+      if (!design) return;
+      const html = renderPrintMenu(await buildPrintModel(this.data, menu), design);
+      // A page, not data: if anyone opens it directly it may run its own layout script and nothing else
+      res.set('Content-Security-Policy', "sandbox allow-scripts; default-src 'none'; img-src data:; font-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'");
+      res.type('html').send(html);
     }));
 
     // Adds a new section to the end of a menu
