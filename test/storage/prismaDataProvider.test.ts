@@ -431,6 +431,11 @@ describe('menu designs', () => {
     expect(await provider.getMenuDesign('m1', 'print')).toBeNull();
   });
 
+  it('refuses a stored view it does not know, rather than treating text as a view', async () => {
+    prisma.menuDesign.findFirst.mockResolvedValue({ ...stored, view: 'poster' });
+    await expect(provider.getMenuDesign('m1', 'print')).rejects.toThrow(/unknown view "poster"/);
+  });
+
   it('does not hand back the owner', async () => {
     prisma.menuDesign.findFirst.mockResolvedValue(stored);
     expect(await provider.getMenuDesign('m1', 'print')).not.toHaveProperty('ownerId');

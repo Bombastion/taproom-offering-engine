@@ -6,7 +6,7 @@ import { Menu, MenuItem, SubMenu } from '../models/menus';
 import { NewUser, normalizeEmail, Session, User, UserUpdate } from '../models/users';
 import {v4 as uuidv4} from 'uuid';
 import { Prisma, PrismaClient } from '../generated/prisma/client';
-import { DESIGN_VERSION, DesignView, StoredMenuDesign } from '../models/menuDesign';
+import { DESIGN_VERSION, DesignView, isDesignView, StoredMenuDesign } from '../models/menuDesign';
 
 export class DataProviderError extends Error {
     statusCode: number;
@@ -26,7 +26,11 @@ function itemInUse(count: number): DataProviderError {
 }
 
 function toStoredMenuDesign(row: { id: string; menuId: string; view: string; version: number; spec: unknown; updatedAt: Date }): StoredMenuDesign {
-    return { id: row.id, menuId: row.menuId, view: row.view as DesignView, version: row.version, spec: row.spec, updatedAt: row.updatedAt };
+    // The column is plain text; a value this code doesn't know is a problem to surface, not to pass along as a DesignView
+    if (!isDesignView(row.view)) {
+        throw new Error(`Menu design ${row.id} has an unknown view "${row.view}"`);
+    }
+    return { id: row.id, menuId: row.menuId, view: row.view, version: row.version, spec: row.spec, updatedAt: row.updatedAt };
 }
 
 export abstract class DataProvider {
