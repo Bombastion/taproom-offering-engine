@@ -1,0 +1,32 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Preview</title>
+<!--
+The page the menu designer draws its live preview into (see components/design/DesignPreview.tsx).
+
+The print menu is a complete page with its own inline style and script, and it only looks right in the
+browser's "quirks mode" (it has no doctype). An iframe's srcdoc can't be used for it: it would inherit
+this app's strict content policy, which forbids both, and is never in quirks mode. So this separate
+page, served sandboxed with a policy of its own (docker/security-headers-preview.conf), is given the menu
+by the app and writes it in. Writing a doctype-less page into a document like this is what puts it in
+quirks mode, exactly as when the menu is opened on its own.
+
+It does nothing but listen for that message, and only from the app that embeds it. (It has to start
+listening again after each write: opening a document removes the listeners on its window.)
+-->
+<script>
+  function onMessage(event) {
+    if (event.source !== window.parent) return;
+    var message = event.data;
+    if (!message || message.type !== 'toe-preview' || typeof message.html !== 'string') return;
+    document.open();
+    document.write(message.html);
+    document.close();
+    // Opening the document threw away every listener on the window, this one included
+    listen();
+  }
+  function listen() {
+    window.addEventListener('message', onMessage);
+  }
+  listen();
+</script>

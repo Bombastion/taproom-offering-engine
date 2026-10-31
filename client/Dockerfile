@@ -12,5 +12,6 @@ RUN npm run build
 FROM nginx:1.29-alpine
 COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
 COPY docker/security-headers.conf /etc/nginx/snippets/security-headers.conf
+COPY docker/security-headers-preview.conf /etc/nginx/snippets/security-headers-preview.conf
 COPY --from=build /client/dist /usr/share/nginx/html/admin
 EXPOSE 80

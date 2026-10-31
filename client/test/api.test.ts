@@ -50,6 +50,55 @@ describe('requests', () => {
   });
 });
 
+describe('print designs', () => {
+  const design = { version: 1 } as never;
+
+  it('calls the right endpoints', async () => {
+    const server = mockApi({
+      'GET /api/design/fonts': json([]),
+      'GET /api/menus/m1/design/print': json({}),
+      'PUT /api/menus/m1/design/print': json({}),
+      'DELETE /api/menus/m1/design/print': status(204),
+    });
+    await api.designFonts();
+    await api.printDesign('m1');
+    await api.savePrintDesign('m1', design);
+    await api.resetPrintDesign('m1');
+    expect(server.unhandled).toEqual([]);
+    expect(server.calls('PUT', '/api/menus/m1/design/print')[0].body).toEqual({ design });
+  });
+
+  it('gets the preview as text, with the design in the body', async () => {
+    const server = mockApi({ 'POST /api/menus/m1/design/print/preview': { text: '<html>page</html>' } });
+    await expect(api.previewPrintDesign('m1', design)).resolves.toBe('<html>page</html>');
+    expect(server.requests[0].headers.accept).toBe('text/html');
+    expect(server.requests[0].body).toEqual({ design });
+  });
+
+  it('explains what is wrong with a design, field by field', async () => {
+    const issues = Array.from({ length: 12 }, (_, i) => ({ path: `footer.field${i}`, message: 'Not a setting a design has' }));
+    mockApi({ 'PUT /api/menus/m1/design/print': json({ error: 'The design has problems. footer.field0: Not a setting a design has', issues }, 400) });
+    const error = await api.savePrintDesign('m1', design).catch((e) => e);
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error.status).toBe(400);
+    expect(error.message).toBe('The design has problems. footer.field0: Not a setting a design has');
+    // The whole list, however long (the message is cut short; the problems are not)
+    expect(error.issues).toEqual(issues);
+  });
+
+  it('lets a request be cancelled without calling it a failure to reach the server', async () => {
+    const controller = new AbortController();
+    vi.stubGlobal('fetch', vi.fn((_url: string, init: RequestInit) => new Promise((_resolve, reject) => {
+      init.signal!.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')));
+    })));
+    const pending = api.previewPrintDesign('m1', design, controller.signal);
+    controller.abort();
+    const error = await pending.catch((e) => e);
+    expect(error).toBeInstanceOf(DOMException);
+    expect(error.name).toBe('AbortError');
+  });
+});
+
 describe('errors', () => {
   it('signs out when the session stops working', async () => {
     setSignedIn(ADMIN);

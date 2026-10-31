@@ -28,8 +28,8 @@ npm install
 npm run dev        # http://localhost:5173/admin/
 ```
 
-The dev server proxies `/api` to `http://localhost:3000`; set `TOE_API_TARGET` to point it
-somewhere else.
+The dev server proxies `/api` (and `/fonts`, which the print menu designer's preview loads its
+fonts from) to `http://localhost:3000`; set `TOE_API_TARGET` to point it somewhere else.
 
 `npm run build` type-checks and writes the production build to `dist/`.
 
@@ -47,6 +47,7 @@ test:watch` re-runs them as you edit. See `TESTING.md` at the repo root for runn
   - `/admin/breweries` and `/admin/breweries/:breweryId` (details and logo)
   - `/admin/items` the item library, and `/admin/items/:itemId` to edit one (`/new` to create)
   - `/admin/pour-sizes` pour sizes (added, renamed, reordered and deleted in place)
+  - `/admin/menus/:menuId/design/print` the print menu designer (see below)
 - `src/api.ts`: typed API calls. `src/auth.ts`: the stored sign-in. `src/usePendingUsers.ts`: the
   admin user list that the Users screen and the "waiting for approval" dot share.
 - Accounts: `/signup` (request an account), `/account` (change password, sign out) and `/users`
@@ -63,3 +64,28 @@ from that section. Prices belong to an item's place on a section, so they're onl
 
 Deleting is guarded: an item can only be deleted once it's off every menu, and a pour size only
 once no item prices use it. Until then, their screens list where they're still used, with links.
+
+## The print menu designer
+
+`pages/PrintDesignPage.tsx` edits how a menu's print view looks (`design.ts` has the types and helpers
+for it; the server's `models/menuDesign.ts` decides what is valid). It keeps a draft of the whole design,
+and nothing is kept until Save. The preview is the real print view, drawn by the server from the draft
+(`POST /api/menus/:id/design/print/preview`) after a short pause in the editing, so it is always what will
+print.
+
+The preview is shown in an iframe on `public/preview-frame.html`, which is handed the page by
+`postMessage` and writes it in. It can't be a `srcdoc` iframe: that would inherit the app's strict
+content policy (no inline style or script) and would not be in quirks mode, which the print page needs.
+The frame page is served sandboxed with a policy of its own (`docker/security-headers-preview.conf`, wired
+up in `docker/nginx.conf`). After changing any of these, check it in a real browser; jsdom can't.
+
+The controls are one group per part of the menu (Page, Logo and title, Section headings, Item text,
+Prices, Footer), in `components/design/groups.tsx`; only one is open at a time. A group is given the design
+and a `change(path, value)` function and holds no state beyond which of its parts is on show, so adding a
+control is a few lines. `StyleEditor` is the whole text style (font, size, weight, color, alignment, italic,
+uppercase, letter spacing, line height) and is used for every piece of text. The small inputs in
+`controls.tsx` only report values the server would accept, so the draft is always a valid design.
+
+Until there is a columns editor, Item text and Prices edit the style of the first item column's main line
+and line below, and of the first prices column; the parts of a line (which field, the separators, the item
+name being bold) and the other column settings are carried along as they are.

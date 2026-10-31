@@ -13,6 +13,8 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': process.env.TOE_API_TARGET ?? 'http://localhost:3000',
+      // The fonts a print menu design uses; the designer's preview asks for them by this path
+      '/fonts': process.env.TOE_API_TARGET ?? 'http://localhost:3000',
     },
   },
   // Unit tests (`npm test`), run in a simulated browser (jsdom)

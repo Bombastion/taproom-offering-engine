@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, errorMessage, hiddenOnText, MenuDetail, plural } from '../api';
 import { PageHeader, Screen } from '../components/Screen';
-import { ChevronRight, PencilIcon, PlusIcon, PrintIcon, ReorderIcon, ScreenIcon } from '../components/Icons';
+import { ChevronRight, DesignIcon, PencilIcon, PlusIcon, PrintIcon, ReorderIcon, ScreenIcon } from '../components/Icons';
 import { Loading, LoadError } from '../components/QueryState';
 import { NameSheet } from '../components/Sheet';
 import { useToast } from '../components/Toast';
@@ -71,6 +71,9 @@ export function MenuPage() {
               <a className="chip" href={`/menus/${menuId}?format=print`} target="_blank" rel="noopener">
                 <PrintIcon />Print view
               </a>
+              <Link className="chip" to={`/menus/${menuId}/design/print`}>
+                <DesignIcon />Design print menu
+              </Link>
               {menu.data.hasLogo && (
                 <a className="chip" href={`/menus/${menuId}?format=digital`} target="_blank" rel="noopener">
                   <ScreenIcon />Menu board images

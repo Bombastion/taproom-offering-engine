@@ -1,3 +1,4 @@
+import type { FontInfo, PrintDesign, PrintDesignState, TextStyle } from '../src/design';
 import type { Brewery, BreweryDetail, Container, ContainerUse, LibraryItem, LibraryItemDetail, MenuDetail, MenuItemDetail, MenuSummary, SectionDetail } from '../src/api';
 
 // Canned API responses shaped like routes/api.ts on the server
@@ -111,3 +112,82 @@ export const brewery: BreweryDetail = {
   logo: null,
   items: [{ id: 'i1', displayName: 'Hazy Sequence', style: 'NEIPA', abv: 6.5 }],
 };
+
+// Print menu designs, shaped like what routes/api.ts answers with (the standard design, in short)
+
+const bodyText: TextStyle = { font: 'system-serif', sizePt: 12, weight: 400, italic: false, color: '#000000', align: 'left', transform: 'none', letterSpacingEm: 0, lineHeight: null };
+
+export const printDesign: PrintDesign = {
+  version: 1,
+  page: { size: 'letter', marginsIn: { top: 0.5, right: 0.3, bottom: 0.75, left: 0.3 }, maxPages: 2, fit: 'shrink-to-pages', background: '#ffffff' },
+  header: {
+    logo: { show: true, maxWidthPct: 8, align: 'center', spaceBelowRem: 0 },
+    title: { show: false, text: '{menu.name}', style: { ...bodyText, font: 'roboto', sizePt: 24, weight: 700, color: '#3f3f3f', align: 'center' } },
+  },
+  sections: {
+    widthPct: 96,
+    gapAboveRem: 0,
+    heading: {
+      style: { ...bodyText, font: 'roboto', sizePt: 18, weight: 700, color: '#3f3f3f', align: 'center' },
+      box: {
+        paddingRem: { top: 0.625, right: 0.625, bottom: 0.625, left: 0.625 },
+        border: { widthPx: 3, style: 'solid', color: '#949494' },
+        background: null,
+        radiusPx: 0,
+      },
+    },
+  },
+  columns: [
+    {
+      id: 'item',
+      type: 'fields',
+      widthPct: 70,
+      lines: [
+        {
+          style: bodyText,
+          parts: [
+            { field: 'breweryName', before: '', format: '{value}' },
+            { field: 'displayName', before: ' • ', format: '{value}', style: { weight: 700 } },
+            { field: 'style', before: ' • ', format: '{value}' },
+            { field: 'abv', before: ' • ', format: '{value}% ABV' },
+          ],
+        },
+      ],
+      belowLines: [{ style: bodyText, parts: [{ field: 'description', before: '', format: '{value}' }] }],
+    },
+    {
+      id: 'prices',
+      type: 'prices',
+      widthPct: null,
+      sizeWidthPct: 25,
+      sizes: 'all',
+      heading: { show: true, style: { ...bodyText, weight: 700, align: 'center' } },
+      cell: { style: { ...bodyText, align: 'center' }, format: '${value}' },
+    },
+  ],
+  rows: { gapRem: 0, divider: { show: false, color: '#cccccc', widthPx: 1, style: 'solid' } },
+  footer: {
+    show: false,
+    text: '',
+    style: { ...bodyText, font: 'roboto', sizePt: 10, color: '#3f3f3f', align: 'center' },
+    rule: { show: true, color: '#949494', widthPx: 1 },
+    bottomIn: 0.3,
+  },
+};
+
+export const defaultDesignState: PrintDesignState = { design: printDesign, isDefault: true, updatedAt: null };
+
+export const savedDesignState: PrintDesignState = {
+  design: { ...printDesign, footer: { ...printDesign.footer, show: true, text: 'WiFi: Zymos' } },
+  isDefault: false,
+  updatedAt: '2026-10-30T12:00:00.000Z',
+};
+
+export const designFonts: FontInfo[] = [
+  { id: 'system-serif', label: 'Browser serif', category: 'system', weights: [400, 700], italic: true },
+  { id: 'roboto', label: 'Roboto', category: 'sans', weights: [100, 200, 300, 400, 500, 600, 700, 800, 900], italic: true },
+  { id: 'fira-sans', label: 'Fira Sans', category: 'sans', weights: [400, 500, 700], italic: true },
+  { id: 'bebas-neue', label: 'Bebas Neue', category: 'display', weights: [400], italic: false },
+];
+
+export const previewPage = '<html><body><div id="menuRoot">Hazy Sequence</div></body></html>';

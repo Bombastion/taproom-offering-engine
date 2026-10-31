@@ -46,6 +46,9 @@ export const PencilIcon = (p: IconProps) => (
 export const PrintIcon = (p: IconProps) => (
   <Svg size={18} {...p}><path d="M6 9V3h12v6" /><rect x="3" y="9" width="18" height="8" rx="2" /><path d="M6 14h12v7H6z" /></Svg>
 );
+export const DesignIcon = (p: IconProps) => (
+  <Svg size={18} {...p}><path d="M4 7h9" /><path d="M17 7h3" /><circle cx="15" cy="7" r="2" /><path d="M4 17h3" /><path d="M11 17h9" /><circle cx="9" cy="17" r="2" /></Svg>
+);
 export const ScreenIcon = (p: IconProps) => (
   <Svg size={18} {...p}><rect x="3" y="4" width="18" height="13" rx="2" /><path d="M8 21h8" /><path d="M12 17v4" /></Svg>
 );

@@ -125,13 +125,20 @@ export function fontFaceCss(ids: Iterable<string>): string {
 // What the admin client needs to offer the fonts: no file names
 export function describeFonts() {
   return FONTS.map((font) => {
-    const weights = font.files.flatMap((file) => (Array.isArray(file.weight) ? file.weight : [file.weight]));
+    // The weights the font really has, so a design is only offered ones the browser won't have to fake.
+    // A variable font has every hundred in its range; a system font has regular and bold.
+    const weights = new Set<number>();
+    for (const file of font.files) {
+      const [low, high] = Array.isArray(file.weight) ? file.weight : [file.weight, file.weight];
+      for (let weight = Math.ceil(low / 100) * 100; weight <= high; weight += 100) weights.add(weight);
+      if (!Array.isArray(file.weight)) weights.add(file.weight);
+    }
+    if (font.files.length === 0) [400, 700].forEach((weight) => weights.add(weight));
     return {
       id: font.id,
       label: font.label,
       category: font.category,
-      minWeight: weights.length ? Math.min(...weights) : 100,
-      maxWeight: weights.length ? Math.max(...weights) : 900,
+      weights: [...weights].sort((a, b) => a - b),
       italic: font.files.some((file) => file.italic) || font.category === 'system',
     };
   });

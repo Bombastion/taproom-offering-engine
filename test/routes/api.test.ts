@@ -954,7 +954,7 @@ describe('menu designs', () => {
     const res = await request(app).get('/api/design/fonts');
     expect(res.status).toBe(200);
     expect(res.body.map((font: { id: string }) => font.id)).toEqual(expect.arrayContaining(['system-serif', 'roboto', 'oswald']));
-    for (const font of res.body) expect(font).toEqual(expect.objectContaining({ id: expect.any(String), label: expect.any(String), category: expect.any(String), minWeight: expect.any(Number), maxWeight: expect.any(Number), italic: expect.any(Boolean) }));
+    for (const font of res.body) expect(font).toEqual(expect.objectContaining({ id: expect.any(String), label: expect.any(String), category: expect.any(String), weights: expect.arrayContaining([expect.any(Number)]), italic: expect.any(Boolean) }));
   });
 
   it('lists the designs to start from', async () => {

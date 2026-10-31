@@ -32,12 +32,14 @@ type ScreenProps = {
   parent?: string;
   crumbs?: Crumb[];
   tabs?: boolean;
+  // For screens that use the room a computer's screen gives (the designer); the rest stay phone-sized
+  wide?: boolean;
   footer?: ReactNode;
   fab?: ReactNode;
   children: ReactNode;
 };
 
-export function Screen({ barTitle, parent, crumbs, tabs = true, footer, fab, children }: ScreenProps) {
+export function Screen({ barTitle, parent, crumbs, tabs = true, wide = false, footer, fab, children }: ScreenProps) {
   const goBack = useGoBack(parent ?? '/');
   const location = useLocation();
   const main = useRef<HTMLElement>(null);
@@ -48,7 +50,7 @@ export function Screen({ barTitle, parent, crumbs, tabs = true, footer, fab, chi
   }, [location.pathname]);
 
   return (
-    <div className="screen">
+    <div className={`screen${wide ? ' screen-wide' : ''}`}>
       <header className="topbar">
         {parent !== undefined ? (
           <button type="button" className="icon-btn" aria-label="Back" onClick={goBack}>

@@ -1463,3 +1463,206 @@ textarea.field {
   font-weight: 700;
   margin: 0;
 }
+
+
+/* ---------- Print menu designer ---------- */
+
+.screen-wide {
+  max-width: 1400px;
+}
+
+.designer {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* On a phone the preview stays in view above the controls it is showing the effect of */
+.designer-preview {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  max-height: 38dvh;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 10px;
+}
+
+.design-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.design-preview-status {
+  min-height: 20px;
+}
+
+.preview-problem {
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--danger);
+  background: #fbeceb;
+  color: var(--danger);
+  font-size: 13px;
+}
+
+/* The page is drawn at its real size and scaled down to the room there is */
+.design-preview-holder {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  background: #fff;
+  border: 1px solid var(--line);
+}
+
+.design-preview-frame {
+  position: absolute;
+  top: 0;
+  left: 0;
+  border: 0;
+  transform-origin: top left;
+  background: #fff;
+}
+
+.designer-controls {
+  min-width: 0;
+}
+
+.design-group-title {
+  margin: 0;
+  font-size: 16px;
+}
+
+.design-group-title button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-weight: 700;
+  text-align: left;
+}
+
+.design-group-chevron {
+  display: inline-flex;
+  transition: transform 0.15s;
+}
+
+.design-group-chevron.open {
+  transform: rotate(90deg);
+}
+
+.design-group-body {
+  padding-top: 8px;
+}
+
+.field-unit {
+  position: relative;
+}
+
+.field-suffix {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted);
+  font-weight: 500;
+  pointer-events: none;
+}
+
+.field-unit .field {
+  padding-right: 40px;
+}
+
+.field-unit-wide .field {
+  padding-right: 58px;
+}
+
+.design-more summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  font-weight: 600;
+  color: var(--accent-ink, var(--accent));
+  cursor: pointer;
+}
+
+.design-more[open] summary {
+  margin-bottom: 4px;
+}
+
+.color-field {
+  display: flex;
+  gap: 8px;
+}
+
+.color-swatch {
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  padding: 3px;
+  border: 1px solid var(--field-line);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.seg {
+  display: flex;
+  border: 1px solid var(--field-line);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.seg-option {
+  flex: 1;
+  min-height: 44px;
+  border: 0;
+  border-left: 1px solid var(--field-line);
+  background: var(--surface);
+  font-weight: 600;
+}
+
+.seg-option:first-child {
+  border-left: 0;
+}
+
+.seg-on {
+  background: var(--accent);
+  color: #fff;
+}
+
+.notice {
+  padding: 12px 14px;
+  border: 1px solid var(--accent-line);
+  border-radius: 12px;
+  background: var(--accent-tint);
+  font-size: 14px;
+}
+
+/* A computer's screen: the controls beside the preview, which stays put as the controls scroll */
+@media (min-width: 900px) {
+  .designer {
+    display: grid;
+    grid-template-columns: minmax(300px, 400px) minmax(0, 1fr);
+    align-items: start;
+    gap: 24px;
+  }
+
+  .designer-controls {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .designer-preview {
+    grid-column: 2;
+    grid-row: 1;
+    /* Less than the screen's height, so all of the preview can be scrolled to (the top bar, breadcrumbs and save bar take the rest) */
+    max-height: calc(100dvh - 210px);
+  }
+}
