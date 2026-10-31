@@ -9,6 +9,7 @@ import { UsersPage } from './pages/UsersPage';
 import { Loading, LoadError } from './components/QueryState';
 import { HomePage } from './pages/HomePage';
 import { MenuPage } from './pages/MenuPage';
+import { PrintDesignPage } from './pages/PrintDesignPage';
 import { SectionPage } from './pages/SectionPage';
 import { ItemEditorPage } from './pages/ItemEditorPage';
 import { ItemsPage } from './pages/ItemsPage';
@@ -65,6 +66,7 @@ export const routes: RouteObject[] = [
       { element: <RequireAdmin />, children: [{ path: '/users', element: <UsersPage /> }] },
       { path: '/', element: <HomePage /> },
       { path: '/menus/:menuId', element: <MenuPage /> },
+      { path: '/menus/:menuId/design/print', element: <PrintDesignPage /> },
       { path: '/menus/:menuId/sections/:sectionId', element: <SectionPage /> },
       { path: '/menus/:menuId/sections/:sectionId/items/new', element: <ItemEditorPage /> },
       { path: '/menus/:menuId/sections/:sectionId/items/:menuItemId', element: <ItemEditorPage /> },

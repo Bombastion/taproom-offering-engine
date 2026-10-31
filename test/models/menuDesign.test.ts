@@ -207,8 +207,31 @@ describe('the font catalog', () => {
 
   it('describes the fonts for the admin client without file names', () => {
     const fonts = describeFonts();
-    expect(fonts.find((font) => font.id === 'roboto')).toEqual({ id: 'roboto', label: 'Roboto', category: 'sans', minWeight: 100, maxWeight: 900, italic: true });
+    expect(fonts.find((font) => font.id === 'roboto')).toEqual({ id: 'roboto', label: 'Roboto', category: 'sans', weights: [100, 200, 300, 400, 500, 600, 700, 800, 900], italic: true });
     expect(JSON.stringify(fonts)).not.toContain('.woff2');
+  });
+
+  it('lists only the weights a font really has, so none has to be faked', () => {
+    const byId = Object.fromEntries(describeFonts().map((font) => [font.id, font]));
+    // Separate files at 400, 500 and 700
+    expect(byId['fira-sans'].weights).toEqual([400, 500, 700]);
+    // One file, one weight
+    expect(byId['bebas-neue']).toMatchObject({ weights: [400], italic: false });
+    expect(byId['pacifico'].weights).toEqual([400]);
+    // A variable font stops at the end of its range
+    expect(byId['oswald'].weights).toEqual([200, 300, 400, 500, 600, 700]);
+    expect(byId['lora']).toMatchObject({ weights: [400, 500, 600, 700], italic: true });
+    // Browser fonts: regular and bold
+    expect(byId['system-serif']).toMatchObject({ weights: [400, 700], italic: true });
+  });
+
+  it('only describes weights the design schema accepts', () => {
+    for (const font of describeFonts()) {
+      for (const weight of font.weights) {
+        const design = changed((d) => { d.sections.heading.style.font = font.id; d.sections.heading.style.weight = weight; });
+        expect(parsePrintDesign(design).ok, `${font.id} ${weight}`).toBe(true);
+      }
+    }
   });
 });
 

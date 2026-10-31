@@ -1,4 +1,5 @@
 import { SessionUser, setSignedOut } from './auth';
+import type { DesignIssue, FontInfo, PrintDesign, PrintDesignState } from './design';
 
 // ---- Shapes returned by the server's /api routes (routes/api.ts) ----
 
@@ -164,11 +165,14 @@ export class ApiError extends Error {
   // A machine-readable reason, for the few errors the server explains that way (e.g. a sign-in
   // refused because the account is "pending" approval or "disabled")
   code?: string;
+  // For a design the server found problems with: each problem, with where it is
+  issues?: DesignIssue[];
 
-  constructor(status: number, message: string, code?: string) {
+  constructor(status: number, message: string, code?: string, issues?: DesignIssue[]) {
     super(message);
     this.status = status;
     this.code = code;
+    this.issues = issues;
   }
 }
 
@@ -179,8 +183,15 @@ function friendlyMessage(status: number, body: string): string {
   return body || `Request failed (${status})`;
 }
 
-async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const headers: Record<string, string> = { Accept: 'application/json' };
+type RequestOptions = {
+  // Stops the request (the caller no longer wants the answer)
+  signal?: AbortSignal;
+  // What the answer is: JSON (the default) or text, for the preview page
+  as?: 'json' | 'text';
+};
+
+async function request<T>(method: string, path: string, body?: unknown, { signal, as = 'json' }: RequestOptions = {}): Promise<T> {
+  const headers: Record<string, string> = { Accept: as === 'text' ? 'text/html' : 'application/json' };
   if (body !== undefined) headers['Content-Type'] = 'application/json';
 
   let response: Response;
@@ -191,20 +202,29 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
       body: body === undefined ? undefined : JSON.stringify(body),
       // The session cookie rides along on its own; it's never readable from this code
       credentials: 'same-origin',
+      signal,
     });
-  } catch {
+  } catch (e) {
+    // A request that was cancelled on purpose isn't a failure to reach the server
+    if (e instanceof DOMException && e.name === 'AbortError') throw e;
     throw new ApiError(0, "Couldn't reach the server. Check your connection and try again.");
   }
 
   if (!response.ok) {
-    let text = (await response.text().catch(() => '')).slice(0, 300);
+    const raw = await response.text().catch(() => '');
+    let text = raw.slice(0, 300);
     let code: string | undefined;
-    // Most errors are plain text, but a few come as { code, message }
+    let issues: DesignIssue[] | undefined;
+    // Most errors are plain text, but a few come as { code, message }, and a design that isn't
+    // valid as { error, issues }
     if (response.headers.get('Content-Type')?.includes('application/json')) {
       try {
-        const parsed = JSON.parse(text);
+        // The whole text, not the shortened one: a list of problems can be long
+        const parsed = JSON.parse(raw);
         if (typeof parsed?.message === 'string') text = parsed.message;
+        else if (typeof parsed?.error === 'string') text = parsed.error;
         if (typeof parsed?.code === 'string') code = parsed.code;
+        if (Array.isArray(parsed?.issues)) issues = parsed.issues;
       } catch {
         // Not JSON after all; use the text as it came
       }
@@ -212,9 +232,10 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     // The session ended (signed out elsewhere, expired, account disabled): back to sign-in. A
     // refused sign-in attempt is a 401 too, but there's no session to end.
     if (response.status === 401 && path !== '/auth/login') setSignedOut();
-    throw new ApiError(response.status, friendlyMessage(response.status, text), code);
+    throw new ApiError(response.status, friendlyMessage(response.status, text), code, issues);
   }
   if (response.status === 204) return undefined as T;
+  if (as === 'text') return (await response.text()) as T;
   return (await response.json()) as T;
 }
 
@@ -302,6 +323,16 @@ export const api = {
   reorderContainers: (containerIds: string[]) => request<void>('PUT', '/containers/order', { containerIds }),
   containerUses: (containerId: string) => request<ContainerUse[]>('GET', `/containers/${encodeURIComponent(containerId)}/uses`),
   deleteContainer: (containerId: string) => request<void>('DELETE', `/containers/${encodeURIComponent(containerId)}`),
+
+  // How the print menu looks (see models/menuDesign.ts on the server)
+  designFonts: () => request<FontInfo[]>('GET', '/design/fonts'),
+  printDesign: (menuId: string) => request<PrintDesignState>('GET', `/menus/${encodeURIComponent(menuId)}/design/print`),
+  savePrintDesign: (menuId: string, design: PrintDesign) =>
+    request<PrintDesignState>('PUT', `/menus/${encodeURIComponent(menuId)}/design/print`, { design }),
+  resetPrintDesign: (menuId: string) => request<void>('DELETE', `/menus/${encodeURIComponent(menuId)}/design/print`),
+  // The menu drawn with a design that hasn't been saved: a complete HTML page
+  previewPrintDesign: (menuId: string, design: PrintDesign, signal?: AbortSignal) =>
+    request<string>('POST', `/menus/${encodeURIComponent(menuId)}/design/print/preview`, { design }, { signal, as: 'text' }),
 };
 
 export function errorMessage(error: unknown): string {
