@@ -70,6 +70,8 @@ export function createApp(dataProvider: DataProvider): Express {
   app.set('view engine', 'pug');
   app.set('views', './dist/public/views')
   app.use(express.static(path.join(import.meta.dirname, 'public', 'css')));
+  // The fonts menu designs can use (see models/fonts.ts). Their file names never change, so browsers may keep them.
+  app.use('/fonts', express.static(path.join(import.meta.dirname, 'public', 'fonts'), { maxAge: '30d' }));
 
   // Register routers
   // Public menu formats (JSON, widget, print, menu board images)

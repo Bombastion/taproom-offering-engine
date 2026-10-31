@@ -11,12 +11,28 @@ import * as mupdf from 'mupdf';
 import { BOARD_SAFE_MARGIN, BOARD_SECTION_GAP, BOARD_SIZE_SCALE, MenusRoutes } from '../../routes/menus';
 import { Item } from '../../models/items';
 import { Menu, MenuItem, SubMenu } from '../../models/menus';
-import { Fixture, memoryProvider, seed, TINY_PNG } from '../helpers';
+import { addUser, Fixture, memoryProvider, seed, TINY_PNG } from '../helpers';
 
 // The public, read-only menu formats: the JSON the Wix widget polls (?format=widget), the
 // printable HTML menu (?format=print) and the menu board images (?format=digital).
 
 const repoRoot = path.resolve(import.meta.dirname, '../..');
+
+// ---- Reading the print view ----
+// The tests look at what the page says, not at the tags it is written with.
+
+// Tags removed and entities decoded: the text a reader would see
+function plain(fragment: string): string {
+  return fragment
+    .replace(/<[^>]*>/g, '')
+    .replace(/&#x([0-9a-f]+);/gi, (_match, hex: string) => String.fromCodePoint(parseInt(hex, 16)))
+    .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
+}
+
+// The first line of text of each item, as printed in the default design's item column (c0), in order
+function itemLines(html: string): string[] {
+  return [...html.matchAll(/<tbody class="itemGroup"><tr><td class="c0">(.*?)<\/td>/g)].map((m) => plain(m[1]));
+}
 
 let provider: LocalDataProvider;
 let data: Fixture;
@@ -183,12 +199,31 @@ describe('?format=print', () => {
     const html = (await request(app).get(`/menus/${data.menu.id}?format=print`)).text;
     // Items are individual table bodies so a row and its description are never split by a page break
     expect(html).toContain('class="itemGroup"');
-    // The inline script scales the root font size to fit; the stylesheet is what sets up the page
-    expect(html).toContain('MAX_PAGES = 2');
-    // The WiFi footer, a fixed element that browsers repeat on every printed page
-    expect(html).toContain('WiFi Name: Zymos Brewing / Password: @zymos_brew');
-    const css = fs.readFileSync(path.join(repoRoot, 'public/css/print.css'), 'utf8');
-    expect(css).toMatch(/@page\s*\{[^}]*size:\s*letter[^}]*margin:\s*0;/);
+    // The inline script scales the root font size to fit; the page tells it how many pages
+    expect(html).toContain('data-max-pages="2"');
+    expect(html).toContain('data-fit="shrink-to-pages"');
+    expect(html).toContain('data-page-height-px="1056"');
+    // The stylesheet sets up letter paper with no page margin (the margins are rebuilt by the script)
+    expect(html).toMatch(/@page\{size:letter;margin:0\}/);
+  });
+
+  it('has no footer unless the design asks for one', async () => {
+    const html = (await request(app).get(`/menus/${data.menu.id}?format=print`)).text;
+    expect(html).not.toContain('class="pageFooter"');
+    expect(html).not.toContain('WiFi');
+  });
+
+  it('prints the footer from the stored design, fixed so browsers repeat it on every page', async () => {
+    // Designs belong to a user, like the menu they are for
+    const owned = memoryProvider();
+    const owner = await addUser(owned);
+    const mine = await seed(owned.forOwner(owner.id));
+    await owned.forOwner(owner.id).setMenuDesign(mine.menu.id!, 'print', { footer: { show: true, text: 'WiFi Name: Zymos Brewing / Password: @zymos_brew' } });
+    const ownedApp = express();
+    ownedApp.use('/menus', new MenusRoutes(owned).router);
+    const html = (await request(ownedApp).get(`/menus/${mine.menu.id}?format=print`)).text;
+    expect(plain(html.slice(html.indexOf('class="pageFooter"')))).toContain('WiFi Name: Zymos Brewing / Password: @zymos_brew');
+    expect(html).toMatch(/\.pageFooter\{position:fixed;/);
   });
 
   it('renders the printable menu with each section, its pour-size columns and prices', async () => {
@@ -205,8 +240,8 @@ describe('?format=print', () => {
     expect(html).toContain('>$12.00<');
     // A size an item doesn't come in leaves its cell empty, with no stray $
     const hazy = html.slice(html.indexOf('Hazy Sequence'), html.indexOf('Pils'));
-    expect(hazy).toMatch(/containerPriceCell">\$3\.00<\/td>/);
-    expect(html).toContain('<td class="containerPriceCell"></td>');
+    expect(hazy).toMatch(/containerPriceCell ts\d+">\$3\.00<\/td>/);
+    expect(html).toMatch(/<td class="containerPriceCell ts\d+"><\/td>/);
     expect(html.match(/\$/g)).toHaveLength(4);
     // Pour-size columns follow the containers' order within a section
     const drafts = html.slice(html.indexOf('Drafts'), html.indexOf('Guest Taps'));
@@ -258,7 +293,7 @@ describe('items missing a style or an ABV', () => {
       await provider.addMenuItem(new MenuItem(null, data.menu.id, item.id, data.sections.drafts.id, null, 10 + i));
     }
   }
-  const descriptions = (html: string) => [...html.matchAll(/<td class="descriptionCell">(.*?)<\/td>/g)].map((m) => m[1]);
+  const descriptions = itemLines;
   const ITEMS: Array<[string, string | null, number | null]> = [
     ['Style Only', 'Stout', null],
     ['ABV Only', null, 4.8],
@@ -269,12 +304,12 @@ describe('items missing a style or an ABV', () => {
   it('leaves out a missing ABV or style on the print view, with no blank or stray bullet', async () => {
     await addDrafts(...ITEMS);
     const lines = descriptions((await request(app).get(`/menus/${data.menu.id}?format=print`)).text);
-    expect(lines).toContain('Zymos Brewing &bull; <b>Style Only</b> &bull; Stout');
-    expect(lines).toContain('Zymos Brewing &bull; <b>ABV Only</b> &bull; 4.8% ABV');
-    expect(lines).toContain('Zymos Brewing &bull; <b>Bare</b>');
+    expect(lines).toContain('Zymos Brewing • Style Only • Stout');
+    expect(lines).toContain('Zymos Brewing • ABV Only • 4.8% ABV');
+    expect(lines).toContain('Zymos Brewing • Bare');
     // A beer with no ABV set isn't the same as 0%
-    expect(lines).toContain('Zymos Brewing &bull; <b>Zero</b> &bull; NA Lager &bull; 0% ABV');
-    expect(lines).toContain('Zymos Brewing &bull; <b>Hazy Sequence</b> &bull; NEIPA &bull; 6.5% ABV');
+    expect(lines).toContain('Zymos Brewing • Zero • NA Lager • 0% ABV');
+    expect(lines).toContain('Zymos Brewing • Hazy Sequence • NEIPA • 6.5% ABV');
     expect(lines.filter((line) => /null|undefined|% ABV$/.test(line) && !/\d% ABV$/.test(line))).toEqual([]);
   });
 
@@ -368,14 +403,14 @@ describe('sections hidden from some views', () => {
 describe('the default brewery', () => {
   const setDefault = (breweryId: string | null) =>
     provider.replaceMenu(data.menu.id!, new Menu(null, data.menu.internalName, data.menu.displayName, data.menu.logo, breweryId));
-  const descriptions = (html: string) => [...html.matchAll(/<td class="descriptionCell">(.*?)<\/td>/g)].map((m) => m[1]);
+  const descriptions = itemLines;
 
   it('is named on the print view when the menu has no default brewery', async () => {
     const html = (await request(app).get(`/menus/${data.menu.id}?format=print`)).text;
     expect(descriptions(html).filter(Boolean)).toEqual([
-      expect.stringMatching(/^Zymos Brewing &bull; <b>Hazy Sequence<\/b>/),
-      expect.stringMatching(/^Zymos Brewing &bull; <b>Pils<\/b>/),
-      expect.stringMatching(/^Guest Co &bull; <b>Guest Sour<\/b>/),
+      expect.stringMatching(/^Zymos Brewing • Hazy Sequence/),
+      expect.stringMatching(/^Zymos Brewing • Pils/),
+      expect.stringMatching(/^Guest Co • Guest Sour/),
     ]);
   });
 
@@ -384,12 +419,12 @@ describe('the default brewery', () => {
     const html = (await request(app).get(`/menus/${data.menu.id}?format=print`)).text;
     const lines = descriptions(html).filter(Boolean);
     expect(lines).toEqual([
-      expect.stringMatching(/^<b>Hazy Sequence<\/b> &bull; NEIPA &bull; 6.5% ABV/),
-      expect.stringMatching(/^<b>Pils<\/b> &bull; Pilsner &bull; 4.8% ABV/),
-      expect.stringMatching(/^Guest Co &bull; <b>Guest Sour<\/b>/),
+      expect.stringMatching(/^Hazy Sequence • NEIPA • 6.5% ABV/),
+      expect.stringMatching(/^Pils • Pilsner • 4.8% ABV/),
+      expect.stringMatching(/^Guest Co • Guest Sour/),
     ]);
-    // Only the footer's WiFi name still says Zymos
-    expect(html.match(/Zymos Brewing/g)).toHaveLength(1);
+    // Nowhere on the page is the default brewery named any more
+    expect(html).not.toContain('Zymos Brewing');
   });
 
   it('is still named in the widget, which has its own brewery field', async () => {

@@ -229,6 +229,25 @@ A menu can have a **default brewery** (set on its screen in the admin app). The 
 board leave that brewery's name off its beers and still name every other brewery. The widget and JSON
 formats are unaffected.
 
+### Print menu designs
+
+How the print menu looks (fonts, sizes, colors, which fields appear in which columns, page size and
+margins, a footer) is described by a **design**: a JSON document per menu, validated by
+`models/menuDesign.ts` and drawn by `print/render.ts`. A menu with no saved design prints exactly
+as it always has. Existing menus were given the Zymos WiFi footer when designs were introduced.
+A design only needs to hold what differs from the default. Fonts come from a fixed list the server
+hosts itself (`models/fonts.ts`, files and licences in `public/fonts`).
+
+The admin API (all under `/api`, signed in):
+
+| Request | Does |
+| ------- | ---- |
+| `GET /design/fonts`, `GET /design/presets` | The fonts and starting designs on offer |
+| `GET /menus/<menuId>/design/print` | The menu's design, or the default (`isDefault: true`) |
+| `PUT /menus/<menuId>/design/print` with `{ "design": {...} }` | Validates and saves it (400 with `issues`, one per bad field, if not) |
+| `DELETE /menus/<menuId>/design/print` | Goes back to the default |
+| `POST /menus/<menuId>/design/print/preview` with `{ "design": {...} }` | The menu as HTML with that design, without saving |
+
 These are public and need no login. The menu board and print formats are rate limited (10 requests per minute per IP).
 The admin API under `/api` always requires a signed-in user.
 
@@ -255,13 +274,15 @@ None of the tests need a database. See [TESTING.md](TESTING.md) for more.
 
 ```
 server.ts, app.ts       Entry point and Express app (middleware, routes)
-routes/                 menus.ts (public formats), api.ts (menu data API), auth.ts (sign in/out, signup, password), admin.ts (managing accounts)
+routes/                 menus.ts (public formats), api.ts (menu data and design API), auth.ts (sign in/out, signup, password), admin.ts (managing accounts)
 auth/                   Password hashing, sessions, creating the first admin, password reset, settings
 scripts/                Commands run on the server (reset-password)
 middleware/             Session check, same-origin check and rate limits
 storage/providers.ts    Data layer: Prisma/Postgres, plus an in-memory provider used by tests
 prisma/                 Schema and migrations
-public/                 Print menu template, CSS and fonts
+print/                  The print menu: what it shows (model.ts), how it looks (css.ts) and the page itself (render.ts)
+models/menuDesign.ts    The design format, its defaults and validation; models/fonts.ts is the font list
+public/                 Fonts (and the old print template, no longer used)
 data/                   Sample JSON data loaded by the in-memory provider (tests only)
 client/                 Admin app
 wix-widget/             Wix embed
