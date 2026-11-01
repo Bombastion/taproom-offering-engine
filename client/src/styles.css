@@ -1666,3 +1666,87 @@ textarea.field {
     max-height: calc(100dvh - 210px);
   }
 }
+
+/* Entries of a list in the designer that open to show their controls */
+
+.fold {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.fold-open {
+  border-color: var(--accent-line);
+}
+
+.fold-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-right: 4px;
+}
+
+.fold-toggle {
+  flex: 1;
+  min-width: 0;
+  min-height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 4px 6px 14px;
+  border: 0;
+  background: none;
+  text-align: left;
+}
+
+.fold-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.fold-title {
+  font-weight: 700;
+}
+
+.fold-summary {
+  color: var(--muted);
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fold-actions {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.fold-body {
+  padding: 4px 14px 14px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.part {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  background: var(--bg);
+}
+
+.part-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.btn-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}

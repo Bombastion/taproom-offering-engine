@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { json, mockApi, renderApp } from '../utils';
-import { defaultDesignState, designFonts, menu, previewPage, printDesign } from '../fixtures';
+import { containers, defaultDesignState, designFonts, menu, previewPage, printDesign } from '../fixtures';
 import { PrintDesign, setIn } from '../../src/design';
 
 type Mock = ReturnType<typeof mockApi>;
@@ -11,6 +11,7 @@ function designer(design: PrintDesign = printDesign) {
   return mockApi({
     'GET /api/menus/m1': json(menu),
     'GET /api/design/fonts': json(designFonts),
+    'GET /api/containers': json(containers),
     'GET /api/menus/m1/design/print': json({ ...defaultDesignState, design }),
     'POST /api/menus/m1/design/print/preview': { text: previewPage },
   });
@@ -37,11 +38,11 @@ describe('the print designer’s groups', () => {
   it('has one for each part of the menu, opening one at a time', async () => {
     const { user } = await open();
     const names = [...document.querySelectorAll('.design-group-title button')].map((b) => b.textContent);
-    expect(names).toEqual(['Page', 'Logo and title', 'Section headings', 'Item text', 'Prices', 'Footer']);
+    expect(names).toEqual(['Page', 'Logo and title', 'Section headings', 'Columns', 'Rows', 'Footer']);
     expect(screen.getByRole('button', { name: 'Section headings' })).toHaveAttribute('aria-expanded', 'true');
-    await user.click(screen.getByRole('button', { name: 'Prices' }));
+    await user.click(screen.getByRole('button', { name: 'Rows' }));
     expect(screen.getByRole('button', { name: 'Section headings' })).toHaveAttribute('aria-expanded', 'false');
-    expect(screen.getByRole('button', { name: 'Prices' })).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('button', { name: 'Rows' })).toHaveAttribute('aria-expanded', 'true');
   });
 });
 
@@ -152,75 +153,6 @@ describe('Section headings', () => {
     const { user } = await open();
     await typeInto(user, 'Section width', '10');
     expect(screen.getByText('Use 30 to 100')).toBeInTheDocument();
-  });
-});
-
-describe('Item text', () => {
-  it('styles the main line, and says what is on it', async () => {
-    const { server, user } = await open('Item text');
-    expect(screen.getByText('Prints: brewery, name, style, ABV. Styled separately: name.')).toBeInTheDocument();
-    const main = within(screen.getByRole('group', { name: 'Main line' }));
-    expect(main.getByRole('combobox', { name: 'Font' })).toHaveValue('system-serif');
-
-    await user.selectOptions(main.getByRole('combobox', { name: 'Font' }), 'fira-sans');
-    await typeInto(user, 'Size', '10', main);
-    await waitFor(() => expect(lastDesign(server).columns[0]).toMatchObject({ lines: [{ style: { font: 'fira-sans', sizePt: 10 } }] }));
-    // The line below, and the name's own style, are as they were
-    const column = lastDesign(server).columns[0] as unknown as { belowLines: unknown[]; lines: { parts: unknown[] }[] };
-    const original = printDesign.columns[0] as unknown as { belowLines: unknown[]; lines: { parts: unknown[] }[] };
-    expect(column.belowLines).toEqual(original.belowLines);
-    expect(column.lines[0].parts).toEqual(original.lines[0].parts);
-  });
-
-  it('styles the line below on its own', async () => {
-    const { server, user } = await open('Item text');
-    await user.click(screen.getByRole('radio', { name: 'Line below' }));
-    expect(screen.getByText('Prints: description.')).toBeInTheDocument();
-    expect(screen.queryByRole('group', { name: 'Main line' })).not.toBeInTheDocument();
-
-    const below = within(screen.getByRole('group', { name: 'Line below' }));
-    await user.click(below.getByRole('checkbox', { name: 'Italic' }));
-    await waitFor(() => expect(lastDesign(server).columns[0]).toMatchObject({ belowLines: [{ style: { italic: true } }], lines: [{ style: { italic: false } }] }));
-  });
-
-  it('says so when there is no text to style', async () => {
-    await open('Item text', setIn(printDesign, ['columns'], [printDesign.columns[1]]));
-    expect(screen.getByText('This design has no item text to style.')).toBeInTheDocument();
-  });
-
-  it('finds the text wherever its column is', async () => {
-    const reordered = setIn(printDesign, ['columns'], [printDesign.columns[1], printDesign.columns[0]]);
-    const { server, user } = await open('Item text', reordered);
-    await typeInto(user, 'Size', '9', within(screen.getByRole('group', { name: 'Main line' })));
-    await waitFor(() => expect((lastDesign(server).columns[1] as { lines: { style: { sizePt: number } }[] }).lines[0].style.sizePt).toBe(9));
-    expect(lastDesign(server).columns[0]).toEqual(printDesign.columns[1]);
-  });
-});
-
-describe('Prices', () => {
-  it('styles the prices and the size names separately', async () => {
-    const { server, user } = await open('Prices');
-    expect(screen.getByRole('switch', { name: 'Show pour size names above the prices' })).toBeChecked();
-    const prices = within(screen.getByRole('group', { name: 'Prices' }));
-    await typeInto(user, 'Size', '14', prices);
-    await waitFor(() => expect(lastDesign(server).columns[1]).toMatchObject({ cell: { style: { sizePt: 14 } }, heading: { style: { sizePt: 12 } } }));
-
-    await user.click(screen.getByRole('radio', { name: 'Size names' }));
-    await user.click(within(screen.getByRole('group', { name: 'Size names' })).getByRole('radio', { name: 'Left' }));
-    await waitFor(() => expect(lastDesign(server).columns[1]).toMatchObject({ heading: { style: { align: 'left' } }, cell: { style: { align: 'center' } } }));
-  });
-
-  it('can drop the size names, which takes away their style', async () => {
-    const { server, user } = await open('Prices');
-    await user.click(screen.getByRole('switch', { name: 'Show pour size names above the prices' }));
-    await waitFor(() => expect(lastDesign(server).columns[1]).toMatchObject({ heading: { show: false } }));
-    expect(screen.queryByRole('radio', { name: 'Size names' })).not.toBeInTheDocument();
-    expect(screen.getByRole('group', { name: 'Prices' })).toBeInTheDocument();
-  });
-
-  it('says so when there are no prices', async () => {
-    await open('Prices', setIn(printDesign, ['columns'], [printDesign.columns[0]]));
-    expect(screen.getByText('This design has no prices to style.')).toBeInTheDocument();
   });
 });
 

@@ -79,13 +79,17 @@ content policy (no inline style or script) and would not be in quirks mode, whic
 The frame page is served sandboxed with a policy of its own (`docker/security-headers-preview.conf`, wired
 up in `docker/nginx.conf`). After changing any of these, check it in a real browser; jsdom can't.
 
-The controls are one group per part of the menu (Page, Logo and title, Section headings, Item text,
-Prices, Footer), in `components/design/groups.tsx`; only one is open at a time. A group is given the design
-and a `change(path, value)` function and holds no state beyond which of its parts is on show, so adding a
-control is a few lines. `StyleEditor` is the whole text style (font, size, weight, color, alignment, italic,
-uppercase, letter spacing, line height) and is used for every piece of text. The small inputs in
-`controls.tsx` only report values the server would accept, so the draft is always a valid design.
+The controls are one group per part of the menu (Page, Logo and title, Section headings, Columns, Rows,
+Footer), in `components/design/groups.tsx` and `columns.tsx`; only one is open at a time. A group is given the
+design and a `change(path, value)` function and holds no state beyond which of its entries are open, so adding
+a control is a few lines. `StyleEditor` is the whole text style (font, size, weight, color, alignment, italic,
+uppercase, letter spacing, line height) and is used for every piece of text. The small inputs in `controls.tsx`
+only report values the server would accept, so the draft is always a valid design.
 
-Until there is a columns editor, Item text and Prices edit the style of the first item column's main line
-and line below, and of the first prices column; the parts of a line (which field, the separators, the item
-name being bold) and the other column settings are carried along as they are.
+The Columns group edits what is in each item row, from left to right: item details (lines of text, each made
+of parts: a field of the item, what is printed before it and how it is written, with an optional style of its
+own, kept as only what differs from the line's), prices (which pour sizes, their width, the price format, and
+styles for the prices and the size names) and pictures. Columns are reordered with arrows and open in place
+(`Fold.tsx`), so the preview stays in view. A column's width is either its own share or "what the others
+leave", and the editor only offers what keeps the widths within 100%. Prices can be limited to some pour sizes,
+which it lists from `/api/containers` (the designer doesn't wait for them, only that part of it does).

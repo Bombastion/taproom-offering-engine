@@ -1,5 +1,5 @@
-import { useId, useState } from 'react';
-import { BorderStyle, describeLine, findColumn, FontInfo, Line, PrintDesign, styledSeparately } from '../../design';
+import { useId } from 'react';
+import { BorderStyle, FontInfo, PrintDesign } from '../../design';
 import { Choice, ColorField, NumberField, SwitchRow, TextField } from './controls';
 import { StyleEditor } from './StyleEditor';
 
@@ -224,61 +224,27 @@ export function HeadingsGroup({ design, fonts, change }: GroupProps) {
   );
 }
 
-type TextTarget = { id: string; label: string; path: (string | number)[]; style: Line['style']; note?: string };
+const DIVIDER_STYLES = [
+  { value: 'solid', label: 'Solid' },
+  { value: 'dashed', label: 'Dashed' },
+  { value: 'dotted', label: 'Dotted' },
+] as const;
 
-// One text style at a time: a choice of which, then its editor
-function StyleTargets({ targets, fonts, change, choiceLabel }: { targets: TextTarget[]; fonts: FontInfo[]; change: Change; choiceLabel: string }) {
-  const [picked, setPicked] = useState(targets[0]?.id);
-  const target = targets.find((t) => t.id === picked) ?? targets[0];
-  if (!target) return null;
+// The space and the line between one item and the next
+export function RowsGroup({ design, change }: GroupProps) {
+  const { rows } = design;
   return (
     <>
-      {targets.length > 1 && <Choice label={choiceLabel} value={target.id} options={targets.map((t) => ({ value: t.id, label: t.label }))} onChange={setPicked} />}
-      {target.note && <span className="muted-sm">{target.note}</span>}
-      <StyleEditor key={target.id} label={target.label} style={target.style} fonts={fonts} onChange={(style) => change(target.path, style)} />
-    </>
-  );
-}
-
-function lineNote(line: Line): string {
-  const separate = styledSeparately(line);
-  return `Prints: ${describeLine(line)}.${separate.length > 0 ? ` Styled separately: ${separate.join(', ')}.` : ''}`;
-}
-
-// The text about each item: the style of its main line and of the line under it
-export function ItemTextGroup({ design, fonts, change }: GroupProps) {
-  const found = findColumn(design, 'fields');
-  const targets: TextTarget[] = [];
-  if (found) {
-    const { index, column } = found;
-    if (column.lines[0]) {
-      targets.push({ id: 'main', label: 'Main line', path: ['columns', index, 'lines', 0, 'style'], style: column.lines[0].style, note: lineNote(column.lines[0]) });
-    }
-    if (column.belowLines[0]) {
-      targets.push({ id: 'below', label: 'Line below', path: ['columns', index, 'belowLines', 0, 'style'], style: column.belowLines[0].style, note: lineNote(column.belowLines[0]) });
-    }
-  }
-  if (targets.length === 0) return <span className="muted-sm">This design has no item text to style.</span>;
-  return <StyleTargets targets={targets} fonts={fonts} change={change} choiceLabel="Line to style" />;
-}
-
-// The prices, and the pour size names above them
-export function PricesGroup({ design, fonts, change }: GroupProps) {
-  const found = findColumn(design, 'prices');
-  if (!found) return <span className="muted-sm">This design has no prices to style.</span>;
-  const { index, column } = found;
-  const targets: TextTarget[] = [{ id: 'prices', label: 'Prices', path: ['columns', index, 'cell', 'style'], style: column.cell.style }];
-  if (column.heading.show) {
-    targets.push({ id: 'sizes', label: 'Size names', path: ['columns', index, 'heading', 'style'], style: column.heading.style });
-  }
-  return (
-    <>
-      <SwitchRow
-        label="Show pour size names above the prices"
-        checked={column.heading.show}
-        onChange={(show) => change(['columns', index, 'heading', 'show'], show)}
-      />
-      <StyleTargets targets={targets} fonts={fonts} change={change} choiceLabel="Text to style" />
+      <NumberField label="Space under each item" unit="rem" min={0} max={3} step={0.125} value={rows.gapRem} onChange={(rem) => change(['rows', 'gapRem'], rem)} />
+      <span className="muted-sm">{REM_HINT}</span>
+      <SwitchRow label="Line between items" checked={rows.divider.show} onChange={(show) => change(['rows', 'divider', 'show'], show)} />
+      {rows.divider.show && (
+        <>
+          <ColorField label="Divider color" value={rows.divider.color} onChange={(color) => change(['rows', 'divider', 'color'], color)} />
+          <NumberField label="Divider thickness" unit="px" min={1} max={10} value={rows.divider.widthPx} onChange={(px) => change(['rows', 'divider', 'widthPx'], px)} />
+          <Choice label="Divider style" value={rows.divider.style} options={[...DIVIDER_STYLES]} onChange={(style) => change(['rows', 'divider', 'style'], style)} />
+        </>
+      )}
     </>
   );
 }
