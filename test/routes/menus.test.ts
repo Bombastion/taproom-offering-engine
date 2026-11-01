@@ -188,6 +188,13 @@ async function swapDrafts() {
 }
 
 describe('?format=print', () => {
+  it('has nothing in it that is only for the designer\'s preview', async () => {
+    const html = (await request(app).get(`/menus/${data.menu.id}?format=print`)).text;
+    expect(html).not.toContain('data-pick');
+    expect(html).not.toContain('data-preview');
+    expect(html).not.toContain('toe-preview');
+  });
+
   it("lists each section's items in their configured order", async () => {
     await swapDrafts();
     const html = (await request(app).get(`/menus/${data.menu.id}?format=print`)).text;

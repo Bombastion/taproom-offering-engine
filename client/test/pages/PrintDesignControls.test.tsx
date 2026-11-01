@@ -81,7 +81,7 @@ describe('Page', () => {
     await user.click(screen.getByRole('radio', { name: 'Keep sizes' }));
     await waitFor(() => expect(lastDesign(server).page).toMatchObject({ fit: 'none', maxPages: 2 }));
     expect(screen.queryByLabelText('Fit within')).not.toBeInTheDocument();
-    expect(screen.getByText(/continues onto more pages than the preview shows/)).toBeInTheDocument();
+    expect(screen.getByText(/continues onto more pages, and the preview shows them all/)).toBeInTheDocument();
 
     await user.click(screen.getByRole('radio', { name: 'Shrink to fit' }));
     await waitFor(() => expect(lastDesign(server).page).toMatchObject({ fit: 'shrink-to-pages', maxPages: 2 }));

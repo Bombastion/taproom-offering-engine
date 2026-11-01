@@ -1,5 +1,5 @@
 import { SessionUser, setSignedOut } from './auth';
-import type { DesignIssue, FontInfo, PrintDesign, PrintDesignState } from './design';
+import type { DesignIssue, DesignPreset, FontInfo, PrintDesign, PrintDesignState } from './design';
 
 // ---- Shapes returned by the server's /api routes (routes/api.ts) ----
 
@@ -326,6 +326,7 @@ export const api = {
 
   // How the print menu looks (see models/menuDesign.ts on the server)
   designFonts: () => request<FontInfo[]>('GET', '/design/fonts'),
+  designPresets: () => request<DesignPreset[]>('GET', '/design/presets'),
   printDesign: (menuId: string) => request<PrintDesignState>('GET', `/menus/${encodeURIComponent(menuId)}/design/print`),
   savePrintDesign: (menuId: string, design: PrintDesign) =>
     request<PrintDesignState>('PUT', `/menus/${encodeURIComponent(menuId)}/design/print`, { design }),

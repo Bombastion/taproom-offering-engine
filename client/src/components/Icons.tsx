@@ -49,6 +49,8 @@ export const PrintIcon = (p: IconProps) => (
 export const DesignIcon = (p: IconProps) => (
   <Svg size={18} {...p}><path d="M4 7h9" /><path d="M17 7h3" /><circle cx="15" cy="7" r="2" /><path d="M4 17h3" /><path d="M11 17h9" /><circle cx="9" cy="17" r="2" /></Svg>
 );
+export const UndoIcon = (p: IconProps) => <Svg size={18} {...p}><path d="M9 14L4 9l5-5" /><path d="M4 9h10a6 6 0 0 1 0 12h-3" /></Svg>;
+export const RedoIcon = (p: IconProps) => <Svg size={18} {...p}><path d="M15 14l5-5-5-5" /><path d="M20 9H10a6 6 0 0 0 0 12h3" /></Svg>;
 export const ScreenIcon = (p: IconProps) => (
   <Svg size={18} {...p}><rect x="3" y="4" width="18" height="13" rx="2" /><path d="M8 21h8" /><path d="M12 17v4" /></Svg>
 );

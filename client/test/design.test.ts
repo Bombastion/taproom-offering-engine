@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BODY_TEXT, describeColumn, FieldsColumn, newColumn, newColumnId, newPart, nearestWeight, PricesColumn, sameDesign, setIn, styleDifferences, styleForFont, widthLeft } from '../src/design';
+import { applyPreset, BODY_TEXT, describeColumn, FieldsColumn, newColumn, newColumnId, newPart, nearestWeight, PricesColumn, sameDesign, setIn, styleDifferences, styleForFont, widthLeft } from '../src/design';
 import { designFonts, printDesign } from './fixtures';
 
 describe('setIn', () => {
@@ -100,5 +100,26 @@ describe('columns', () => {
     expect(styleDifferences(BODY_TEXT, BODY_TEXT)).toEqual({});
     expect(styleDifferences(BODY_TEXT, { ...BODY_TEXT, weight: 700, color: '#ff0000' })).toEqual({ weight: 700, color: '#ff0000' });
     expect(styleDifferences(BODY_TEXT, { ...BODY_TEXT, lineHeight: 1.5 })).toEqual({ lineHeight: 1.5 });
+  });
+});
+
+describe('applyPreset', () => {
+  it('takes the look and keeps what belongs to the menu', () => {
+    let current = setIn(printDesign, ['footer', 'show'], true);
+    current = setIn(current, ['footer', 'text'], 'Ours');
+    current = setIn(current, ['header', 'title', 'show'], true);
+    current = setIn(current, ['header', 'title', 'text'], 'Our title');
+    let preset = setIn(printDesign, ['sections', 'heading', 'style', 'sizePt'], 15);
+    preset = setIn(preset, ['footer', 'style', 'sizePt'], 8);
+    preset = setIn(preset, ['page', 'maxPages'], 1);
+
+    const result = applyPreset(current, preset);
+    expect(result.sections.heading.style.sizePt).toBe(15);
+    expect(result.page.maxPages).toBe(1);
+    expect(result.footer.style.sizePt).toBe(8);
+    expect(result.footer).toMatchObject({ show: true, text: 'Ours' });
+    expect(result.header.title).toMatchObject({ show: true, text: 'Our title' });
+    // The preset itself is left alone
+    expect(preset.footer.show).toBe(printDesign.footer.show);
   });
 });

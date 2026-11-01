@@ -233,6 +233,14 @@ export type PrintDesignState = {
 // What the server says is wrong with a design
 export type DesignIssue = { path: string; message: string };
 
+// A design to start from (GET /api/design/presets)
+export type DesignPreset = {
+  id: string;
+  name: string;
+  description: string;
+  design: PrintDesign;
+};
+
 export type FontInfo = {
   id: string;
   label: string;
@@ -298,3 +306,18 @@ export function styleForFont(style: TextStyle, font: FontInfo): TextStyle {
 
 // '#rrggbb' or '#rrggbbaa'
 export const HEX_COLOR = /^#(?:[0-9a-f]{6}|[0-9a-f]{8})$/i;
+
+// The look of a preset, with the things that belong to this menu rather than to a look kept as they
+// are: whether the logo and title show (and the title's words), the footer and its words, and the
+// paper size.
+export function applyPreset(current: PrintDesign, preset: PrintDesign): PrintDesign {
+  return {
+    ...preset,
+    page: { ...preset.page, size: current.page.size },
+    header: {
+      logo: { ...preset.header.logo, show: current.header.logo.show },
+      title: { ...preset.header.title, show: current.header.title.show, text: current.header.title.text },
+    },
+    footer: { ...preset.footer, show: current.footer.show, text: current.footer.text },
+  };
+}

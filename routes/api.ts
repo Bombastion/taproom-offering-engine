@@ -362,7 +362,7 @@ export class ApiRoutes extends Routes {
       if (!menu) throw notFound('Menu');
       const design = parseDesignBody(req.body, res);
       if (!design) return;
-      const html = renderPrintMenu(await buildPrintModel(this.data, menu), design);
+      const html = renderPrintMenu(await buildPrintModel(this.data, menu), design, { preview: true });
       // A page, not data: if anyone opens it directly it may run its own layout script and nothing else
       res.set('Content-Security-Policy', "sandbox allow-scripts; default-src 'none'; img-src data:; font-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'");
       res.type('html').send(html);

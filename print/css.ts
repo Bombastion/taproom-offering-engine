@@ -173,3 +173,14 @@ export function designCss(design: PrintDesign): string {
 
   return css.join('\n');
 }
+
+// What the designer's preview adds to the page (see previewScript.ts)
+export function previewCss(): string {
+  return [
+    // Where the preview script has put a page start: the gap down to the top of its page
+    '.pageStart{margin-top:var(--toe-gap,0px)}',
+    // Parts of the menu that can be clicked to find their controls
+    '[data-pick]{cursor:pointer}',
+    '[data-pick]:hover{outline:2px solid rgba(37,99,235,0.6);outline-offset:1px}',
+  ].join('\n');
+}

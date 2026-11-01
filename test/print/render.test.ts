@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { defaultPrintDesign, parsePrintDesign, PrintDesign, ITEM_FIELDS } from '../../models/menuDesign';
+import { defaultPrintDesign, parsePrintDesign, PrintDesign, printDesignPresets, ITEM_FIELDS } from '../../models/menuDesign';
 import { escapeHtml, imageDataUrl, renderPrintMenu } from '../../print/render';
 import { PrintItem, PrintModel } from '../../print/model';
 import { GIF_HEADER, JPEG_HEADER, TINY_PNG } from '../helpers';
@@ -470,5 +470,64 @@ describe('images', () => {
 
   it('ignores whitespace in stored pictures', () => {
     expect(imageDataUrl(`${TINY_PNG.slice(0, 10)}\n${TINY_PNG.slice(10)}`)).toBe(imageDataUrl(TINY_PNG));
+  });
+});
+
+describe('the presets', () => {
+  it('each render the same menu with their own look', () => {
+    const pages = printDesignPresets().map((preset) => renderPrintMenu(model(), preset.design, { now: NOW }));
+    for (const html of pages) {
+      expect(html).toContain('Hazy Sequence');
+      expect(html).toContain('Drafts');
+      expect(html).toContain('$8.00');
+    }
+    expect(new Set(pages).size).toBe(pages.length);
+    expect(pages[1]).toContain('Montserrat');
+    expect(pages[2]).toContain('Playfair Display');
+  });
+});
+
+describe('the preview version', () => {
+  const preview = (design: PrintDesign = defaultPrintDesign()) => renderPrintMenu(model(), design, { now: NOW, preview: true });
+  const withFooter = changed((d) => { d.footer.show = true; d.footer.text = 'Open daily'; });
+
+  it('is the same menu with what the designer needs added', () => {
+    const plain = render(model(), withFooter);
+    const html = preview(withFooter);
+    expect(html).toContain('data-preview="1"');
+    expect(html).toMatch(/data-page-width-px="816"/);
+    expect(html).toMatch(/data-left-px="28\.8"/);
+    expect(html).toMatch(/data-footer-bottom-px="28\.8"/);
+    expect(html.match(/<script/g)).toHaveLength(2);
+    // Taking the additions away leaves the page the print view is
+    const stripped = html
+      .replace(/ data-preview="1" data-page-width-px="[^"]*" data-left-px="[^"]*" data-body-px="[^"]*" data-footer-bottom-px="[^"]*"/, '')
+      .replace(/ data-pick="[^"]*"/g, '')
+      .replace(/<script>\s*\(function \(\) \{\s*var root = [\s\S]*?<\/script>/, '');
+    expect(bodyOf(stripped)).toBe(bodyOf(plain));
+  });
+
+  it('marks what each part of the menu is changed by', () => {
+    const html = preview(changed((d) => { d.header.title.show = true; d.rows.divider.show = true; d.footer.show = true; d.footer.text = 'x'; }));
+    expect(html).toContain('class="menuLogoUnit" data-pick="header"');
+    expect(html).toMatch(/class="menuTitle [^"]*" data-pick="header"/);
+    expect(html).toMatch(/<h3 class="header subMenuHeader [^"]*" data-pick="headings">/);
+    expect(html).toContain('<tr class="itemDivider" data-pick="rows">');
+    expect(html).toContain('<div class="pageFooter" data-pick="footer">');
+    expect(html).toContain('<td class="c0" data-pick="column:item">');
+    expect(html).toContain('<td class="c1" data-pick="column:prices">');
+  });
+
+  it('is not available to anything but the designer\'s preview: the print view has no marks or preview script', () => {
+    const html = render();
+    expect(html).not.toContain('data-pick');
+    expect(html).not.toContain('data-preview');
+    expect(html).not.toContain('toe-preview-info');
+    expect(html).not.toContain('--toe-gap');
+  });
+
+  it('only marks columns by their (validated) IDs', () => {
+    const odd = changed((d) => { d.columns[0].id = 'item-1_a'; });
+    expect(preview(odd)).toContain('data-pick="column:item-1_a"');
   });
 });

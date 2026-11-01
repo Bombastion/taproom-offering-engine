@@ -1,7 +1,8 @@
 import { fontFaceCss } from '../models/fonts';
 import { Column, ItemField, Line, parsePrintDesign, PrintDesign, TextStyle } from '../models/menuDesign';
-import { designCss, ImageRegistry, num, pageDimensions, StyleRegistry } from './css';
+import { designCss, ImageRegistry, num, pageDimensions, previewCss, StyleRegistry } from './css';
 import { FIT_SCRIPT } from './fitScript';
+import { PREVIEW_SCRIPT } from './previewScript';
 import { PrintItem, PrintModel, PrintSection } from './model';
 
 /*
@@ -65,6 +66,9 @@ function fieldValue(item: PrintItem, field: ItemField, fixedText: string | undef
 export interface RenderOptions {
   // The date for {date} in the title and footer; now by default
   now?: Date;
+  // For the designer's preview: the same page, plus what is needed to show its pages as they will
+  // print and to say which part of it is clicked (see previewScript.ts). Never for the print view.
+  preview?: boolean;
 }
 
 export function renderPrintMenu(model: PrintModel, design: PrintDesign, options: RenderOptions = {}): string {
@@ -80,6 +84,10 @@ export function renderPrintMenu(model: PrintModel, design: PrintDesign, options:
   const date = (options.now ?? new Date()).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
   const expandTokens = (template: string) =>
     template.replace(/\{(menu\.name|date)\}/g, (_match, token: string) => (token === 'date' ? date : model.menuName));
+
+  // In the preview, parts of the menu say which controls change them (clicking one finds them)
+  const pick = (target: string) => (options.preview ? ` data-pick="${target}"` : '');
+  const columnPick = (column: Column) => pick(`column:${column.id}`);
 
   const lineHtml = (line: Line, item: PrintItem): string | null => {
     let html = '';
@@ -111,16 +119,16 @@ export function renderPrintMenu(model: PrintModel, design: PrintDesign, options:
   const headerRow = (section: PrintSection): string => {
     if (!showHeaderRow) return '';
     const cells = d.columns.map((column, index) => {
-      if (column.type !== 'prices' || !column.heading.show) return `<td class="c${index}"></td>`;
+      if (column.type !== 'prices' || !column.heading.show) return `<td class="c${index}"${columnPick(column)}></td>`;
       const heading = styles.classFor(column.heading.style);
       const names = sizesFor(column, section).map((size) => `<th class="containerName ${heading}">${escapeHtml(size.displayName)}</th>`).join('');
-      return `<td class="c${index}"><table class="containerNameSubTable"><tr>${names}</tr></table></td>`;
+      return `<td class="c${index}"${columnPick(column)}><table class="containerNameSubTable"><tr>${names}</tr></table></td>`;
     });
     return `<tbody class="itemHeader"><tr>${cells.join('')}</tr></tbody>`;
   };
 
   const mainCell = (column: Column, index: number, item: PrintItem, section: PrintSection): string => {
-    if (column.type === 'fields') return `<td class="c${index}">${linesHtml(column.lines, item)}</td>`;
+    if (column.type === 'fields') return `<td class="c${index}"${columnPick(column)}>${linesHtml(column.lines, item)}</td>`;
     if (column.type === 'prices') {
       const cellClass = styles.classFor(column.cell.style);
       const cells = sizesFor(column, section).map((size) => {
@@ -129,35 +137,35 @@ export function renderPrintMenu(model: PrintModel, design: PrintDesign, options:
         const text = price !== undefined && price.trim() !== '' ? column.cell.format.split('{value}').join(price) : '';
         return `<td class="containerPriceCell ${cellClass}">${escapeHtml(text)}</td>`;
       });
-      return `<td class="c${index}"><table class="containerPrices"><tr>${cells.join('')}</tr></table></td>`;
+      return `<td class="c${index}"${columnPick(column)}><table class="containerPrices"><tr>${cells.join('')}</tr></table></td>`;
     }
     const picture = imageDataUrl(item.itemLogo)
       ?? (column.source === 'item-then-brewery-then-menu' ? imageDataUrl(item.breweryLogo) : null)
       ?? imageDataUrl(model.menuLogo);
-    return `<td class="c${index}">${picture ? `<span class="thumb ${images.classFor(picture)}"></span>` : ''}</td>`;
+    return `<td class="c${index}"${columnPick(column)}>${picture ? `<span class="thumb ${images.classFor(picture)}"></span>` : ''}</td>`;
   };
 
   const itemGroup = (item: PrintItem, section: PrintSection): string => {
     let html = `<tbody class="itemGroup"><tr>${d.columns.map((column, index) => mainCell(column, index, item, section)).join('')}</tr>`;
     if (showBelowRow) {
-      const cells = d.columns.map((column, index) => `<td class="c${index}">${column.type === 'fields' ? linesHtml(column.belowLines, item) : ''}</td>`);
+      const cells = d.columns.map((column, index) => `<td class="c${index}"${columnPick(column)}>${column.type === 'fields' ? linesHtml(column.belowLines, item) : ''}</td>`);
       html += `<tr>${cells.join('')}</tr>`;
     }
-    if (d.rows.divider.show) html += `<tr class="itemDivider"><td colspan="${d.columns.length}"></td></tr>`;
+    if (d.rows.divider.show) html += `<tr class="itemDivider"${pick('rows')}><td colspan="${d.columns.length}"></td></tr>`;
     return `${html}</tbody>`;
   };
 
   const headingClass = styles.classFor(d.sections.heading.style);
   const sectionHtml = (section: PrintSection): string =>
-    `<div class="subMenuDiv"><h3 class="header subMenuHeader ${headingClass}">${escapeHtml(section.name)}</h3>` +
+    `<div class="subMenuDiv"><h3 class="header subMenuHeader ${headingClass}"${pick('headings')}>${escapeHtml(section.name)}</h3>` +
     `<div><table class="itemTable">${headerRow(section)}${section.items.map((item) => itemGroup(item, section)).join('')}</table></div></div>`;
 
   // ---- The page ----
 
   const logo = d.header.logo.show ? imageDataUrl(model.menuLogo) : null;
-  const logoHtml = logo ? `<div class="menuLogoUnit"><img class="menuLogo" src="${logo}" alt=""></div>` : '';
+  const logoHtml = logo ? `<div class="menuLogoUnit"${pick('header')}><img class="menuLogo" src="${logo}" alt=""></div>` : '';
   const titleHtml = d.header.title.show && d.header.title.text.trim() !== ''
-    ? `<div class="menuTitle ${styles.classFor(d.header.title.style)}">${escapeHtml(expandTokens(d.header.title.text))}</div>`
+    ? `<div class="menuTitle ${styles.classFor(d.header.title.style)}"${pick('header')}>${escapeHtml(expandTokens(d.header.title.text))}</div>`
     : '';
 
   let footerHtml = '';
@@ -165,24 +173,28 @@ export function renderPrintMenu(model: PrintModel, design: PrintDesign, options:
     const lines = expandTokens(d.footer.text).split('\n').filter((line) => line.trim() !== '');
     const footerClass = styles.classFor(d.footer.style, true);
     footerHtml =
-      '<div class="pageFooter">' +
+      `<div class="pageFooter"${pick('footer')}>` +
       (d.footer.rule.show ? '<div class="pageFooterRule"></div>' : '') +
       lines.map((line) => `<div class="pageFooterText ${footerClass}">${escapeHtml(line)}</div>`).join('') +
       '</div>';
   }
 
-  const { heightIn } = pageDimensions(d);
+  const { widthIn, heightIn, bodyWidthIn } = pageDimensions(d);
   const rootAttributes =
     `data-page-height-px="${num(heightIn * 96)}" data-top-px="${num(d.page.marginsIn.top * 96)}" ` +
-    `data-bottom-px="${num(d.page.marginsIn.bottom * 96)}" data-max-pages="${d.page.maxPages ?? ''}" data-fit="${d.page.fit}"`;
+    `data-bottom-px="${num(d.page.marginsIn.bottom * 96)}" data-max-pages="${d.page.maxPages ?? ''}" data-fit="${d.page.fit}"` +
+    (options.preview
+      ? ` data-preview="1" data-page-width-px="${num(widthIn * 96)}" data-left-px="${num(d.page.marginsIn.left * 96)}"` +
+        ` data-body-px="${num(bodyWidthIn * 96)}" data-footer-bottom-px="${num(d.footer.bottomIn * 96)}"`
+      : '');
 
   const body =
     `<div id="menuRoot" ${rootAttributes}>${logoHtml}${titleHtml}${model.sections.map(sectionHtml).join('')}</div>${footerHtml}`;
 
   // Collected while the body was built, so the stylesheet has exactly what the page uses
-  const stylesheet = [fontFaceCss(styles.fonts()), designCss(d), styles.css(), images.css()].filter(Boolean).join('\n');
+  const stylesheet = [fontFaceCss(styles.fonts()), designCss(d), options.preview ? previewCss() : '', styles.css(), images.css()].filter(Boolean).join('\n');
   return (
     `<html><head><meta charset="utf-8"><title>${escapeHtml(model.menuName)}</title><style>\n${stylesheet}\n</style></head>` +
-    `<body>${body}<script>${FIT_SCRIPT}</script></body></html>`
+    `<body>${body}${options.preview ? `<script>${PREVIEW_SCRIPT}</script>` : ''}<script>${FIT_SCRIPT}</script></body></html>`
   );
 }

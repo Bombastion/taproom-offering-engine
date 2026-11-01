@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Container } from '../../api';
 import {
   Column,
@@ -34,7 +34,15 @@ import { StyleEditor } from './StyleEditor';
 // The columns of each item row, and what is in them. Like the other groups it is handed the design and
 // says what to change by path; the only state here is which entries are open.
 
-type Props = { design: PrintDesign; fonts: FontInfo[]; containers: { data?: Container[]; failed: boolean }; change: Change };
+type Props = {
+  design: PrintDesign;
+  fonts: FontInfo[];
+  containers: { data?: Container[]; failed: boolean };
+  change: Change;
+  // A column to open (the ID of one, and a number that changes with each request), and what to call once that is done
+  focus?: { id: string; n: number } | null;
+  onFocused?: () => void;
+};
 
 // Columns of the same kind are told apart by number ("Prices 2")
 function columnLabel(columns: Column[], index: number): string {
@@ -52,9 +60,19 @@ function followMove(open: number | null, from: number, to: number): number | nul
   return open;
 }
 
-export function ColumnsGroup({ design, fonts, containers, change }: Props) {
+export function ColumnsGroup({ design, fonts, containers, change, focus, onFocused }: Props) {
   const { columns } = design;
   const [open, setOpen] = useState<string | null>(null);
+
+  // Asked to show one column (it was clicked in the preview): open it, once
+  useEffect(() => {
+    if (!focus) return;
+    if (columns.some((column) => column.id === focus.id)) setOpen(focus.id);
+    onFocused?.();
+    // Only a new request matters, not the columns changing after it
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focus]);
+
   const total = columns.reduce((sum, column) => sum + columnWidth(column), 0);
 
   const add = (type: Column['type']) => {
