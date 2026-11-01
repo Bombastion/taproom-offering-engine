@@ -960,7 +960,7 @@ describe('menu designs', () => {
   it('lists the designs to start from', async () => {
     const res = await request(app).get('/api/design/presets');
     expect(res.status).toBe(200);
-    expect(res.body.map((preset: { id: string }) => preset.id)).toEqual(['classic']);
+    expect(res.body.map((preset: { id: string }) => preset.id)).toEqual(['classic', 'modern', 'rustic', 'compact']);
     expect(res.body[0].design.version).toBe(1);
   });
 
@@ -1062,8 +1062,18 @@ describe('menu designs', () => {
     const hazy = data.items.hazy;
     await provider.replaceItem(hazy.id!, new Item(null, hazy.internalName, '</script><script>alert(1)</script>', hazy.breweryId, hazy.style, hazy.abv, hazy.description, hazy.category));
     const res = await request(app).post(`${url()}/preview`).send({ design: { footer: { show: true, text: '</style><script>alert(2)</script>' } } });
-    expect(res.text.match(/<script/g)).toHaveLength(1);
+    // The preview's own script and the fit script, and nothing the text could add
+    expect(res.text.match(/<script/g)).toHaveLength(2);
     expect(res.text.match(/<\/style>/g)).toHaveLength(1);
+  });
+
+  it('draws the preview so that its pages, footers and clicks can be shown', async () => {
+    const preview = await request(app).post(`${url()}/preview`).send(withFooter);
+    expect(preview.text).toContain('data-preview="1"');
+    expect(preview.text).toContain('toePreviewAfterFit');
+    expect(preview.text).toContain('data-pick="headings"');
+    expect(preview.text).toContain('data-pick="column:item"');
+    expect(preview.text).toContain('data-pick="footer"');
   });
 
   it.each([

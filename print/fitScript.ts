@@ -135,6 +135,8 @@ export const FIT_SCRIPT = `
       html.style.fontSize = MAX_SIZE + 'px';
     }
     applyBreaks(root);
+    // The designer's preview adds the page edges and footers (previewScript.ts); the print view has none
+    if (window.toePreviewAfterFit) window.toePreviewAfterFit();
   }
 
   function run() { fit(); }

@@ -1498,6 +1498,10 @@ textarea.field {
 
 .design-preview-status {
   min-height: 20px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 2px 12px;
 }
 
 .preview-problem {

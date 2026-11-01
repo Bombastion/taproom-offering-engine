@@ -82,7 +82,7 @@ export function PageGroup({ design, change }: GroupProps) {
             <span className="muted-sm">Text gets smaller, never bigger, until the menu fits.</span>
           </>
         ) : (
-          <span className="muted-sm">Sizes are used as you set them. A long menu continues onto more pages than the preview shows.</span>
+          <span className="muted-sm">Sizes are used as you set them. A long menu continues onto more pages, and the preview shows them all.</span>
         )}
       </div>
 

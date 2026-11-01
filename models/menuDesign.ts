@@ -345,8 +345,184 @@ export interface DesignPreset {
   design: PrintDesign;
 }
 
+// Clean and sans-serif: a dark band for each section heading, thin rules between items
+function modernPrintDesign(): PrintDesign {
+  const base = defaultPrintDesign();
+  const body: TextStyle = { ...BODY_TEXT, font: 'montserrat', sizePt: 10.5, color: '#222222' };
+  return {
+    ...base,
+    page: { ...base.page, marginsIn: { top: 0.6, right: 0.5, bottom: 0.75, left: 0.5 } },
+    header: {
+      logo: { ...base.header.logo, maxWidthPct: 10, spaceBelowRem: 0.5 },
+      title: { show: false, text: '{menu.name}', style: { ...body, sizePt: 26, weight: 700, align: 'center', transform: 'uppercase', letterSpacingEm: 0.1 } },
+    },
+    sections: {
+      widthPct: 98,
+      gapAboveRem: 1.2,
+      heading: {
+        style: { ...body, sizePt: 15, weight: 700, color: '#ffffff', align: 'left', transform: 'uppercase', letterSpacingEm: 0.12 },
+        box: {
+          paddingRem: { top: 0.5, right: 0.8, bottom: 0.5, left: 0.8 },
+          border: { widthPx: 0, style: 'none', color: '#2b2d42' },
+          background: '#2b2d42',
+          radiusPx: 4,
+        },
+      },
+    },
+    columns: [
+      {
+        id: 'item',
+        type: 'fields',
+        widthPct: 72,
+        lines: [
+          {
+            style: body,
+            parts: [
+              { field: 'breweryName', before: '', format: '{value}', style: { color: '#555555' } },
+              { field: 'displayName', before: ' · ', format: '{value}', style: { weight: 700 } },
+              { field: 'style', before: ' · ', format: '{value}' },
+              { field: 'abv', before: ' · ', format: '{value}%' },
+            ],
+          },
+        ],
+        belowLines: [{ style: { ...body, sizePt: 9, italic: true, color: '#555555' }, parts: [{ field: 'description', before: '', format: '{value}' }] }],
+      },
+      {
+        id: 'prices',
+        type: 'prices',
+        widthPct: null,
+        sizeWidthPct: 25,
+        sizes: 'all',
+        heading: { show: true, style: { ...body, sizePt: 9, weight: 700, align: 'center', transform: 'uppercase', letterSpacingEm: 0.05 } },
+        cell: { style: { ...body, weight: 600, align: 'center' }, format: '${value}' },
+      },
+    ],
+    rows: { gapRem: 0.35, divider: { show: true, color: '#dddddd', widthPx: 1, style: 'solid' } },
+    footer: { ...base.footer, style: { ...base.footer.style, font: 'montserrat', sizePt: 9 } },
+  };
+}
+
+// Warm and old-fashioned: serif type on cream paper, a double rule around each heading
+function rusticPrintDesign(): PrintDesign {
+  const base = defaultPrintDesign();
+  const body: TextStyle = { ...BODY_TEXT, font: 'lora', sizePt: 12, color: '#3b2a1a' };
+  return {
+    ...base,
+    page: { ...base.page, marginsIn: { top: 0.6, right: 0.6, bottom: 0.8, left: 0.6 }, background: '#fbf6ea' },
+    header: {
+      logo: { ...base.header.logo, maxWidthPct: 12, spaceBelowRem: 0.5 },
+      title: { show: false, text: '{menu.name}', style: { ...body, font: 'playfair-display', sizePt: 30, weight: 700, color: '#4a2f1b', align: 'center' } },
+    },
+    sections: {
+      widthPct: 94,
+      gapAboveRem: 1,
+      heading: {
+        style: { ...body, font: 'playfair-display', sizePt: 22, weight: 700, color: '#4a2f1b', align: 'center' },
+        box: {
+          paddingRem: { top: 0.4, right: 0.6, bottom: 0.4, left: 0.6 },
+          border: { widthPx: 4, style: 'double', color: '#8c6a43' },
+          background: null,
+          radiusPx: 0,
+        },
+      },
+    },
+    columns: [
+      {
+        id: 'item',
+        type: 'fields',
+        widthPct: 72,
+        lines: [
+          {
+            style: body,
+            parts: [
+              { field: 'breweryName', before: '', format: '{value}', style: { italic: true } },
+              { field: 'displayName', before: ' — ', format: '{value}', style: { weight: 700 } },
+              { field: 'style', before: ' — ', format: '{value}' },
+              { field: 'abv', before: ' — ', format: '{value}% ABV' },
+            ],
+          },
+        ],
+        belowLines: [{ style: { ...body, sizePt: 10.5, italic: true, color: '#5b4632' }, parts: [{ field: 'description', before: '', format: '{value}' }] }],
+      },
+      {
+        id: 'prices',
+        type: 'prices',
+        widthPct: null,
+        sizeWidthPct: 25,
+        sizes: 'all',
+        heading: { show: true, style: { ...body, weight: 700, color: '#4a2f1b', align: 'center' } },
+        cell: { style: { ...body, weight: 700, color: '#4a2f1b', align: 'center' }, format: '${value}' },
+      },
+    ],
+    rows: { gapRem: 0.5, divider: { show: true, color: '#b59b78', widthPx: 1, style: 'dotted' } },
+    footer: { ...base.footer, style: { ...base.footer.style, font: 'lora', italic: true, color: '#5b4632' }, rule: { show: true, color: '#b59b78', widthPx: 1 } },
+  };
+}
+
+// Small type and tight rows, to fit a long list on one page
+function compactPrintDesign(): PrintDesign {
+  const base = defaultPrintDesign();
+  const body: TextStyle = { ...BODY_TEXT, font: 'roboto', sizePt: 9, color: '#1f1f1f' };
+  return {
+    ...base,
+    page: { ...base.page, marginsIn: { top: 0.4, right: 0.4, bottom: 0.6, left: 0.4 }, maxPages: 1 },
+    header: {
+      logo: { ...base.header.logo, maxWidthPct: 6 },
+      title: { show: false, text: '{menu.name}', style: { ...body, sizePt: 18, weight: 700, align: 'center' } },
+    },
+    sections: {
+      widthPct: 100,
+      gapAboveRem: 0.5,
+      heading: {
+        style: { ...body, sizePt: 11, weight: 700, color: '#1f1f1f', align: 'left', transform: 'uppercase', letterSpacingEm: 0.08 },
+        box: {
+          paddingRem: { top: 0.25, right: 0.5, bottom: 0.25, left: 0.5 },
+          border: { widthPx: 0, style: 'none', color: '#949494' },
+          background: '#eeeeee',
+          radiusPx: 0,
+        },
+      },
+    },
+    columns: [
+      {
+        id: 'item',
+        type: 'fields',
+        widthPct: 78,
+        lines: [
+          {
+            style: body,
+            parts: [
+              { field: 'breweryName', before: '', format: '{value}' },
+              { field: 'displayName', before: ' • ', format: '{value}', style: { weight: 700 } },
+              { field: 'style', before: ' • ', format: '{value}' },
+              { field: 'abv', before: ' • ', format: '{value}%' },
+            ],
+          },
+        ],
+        belowLines: [{ style: { ...body, sizePt: 8, color: '#555555' }, parts: [{ field: 'description', before: '', format: '{value}' }] }],
+      },
+      {
+        id: 'prices',
+        type: 'prices',
+        widthPct: null,
+        sizeWidthPct: 18,
+        sizes: 'all',
+        heading: { show: true, style: { ...body, weight: 700, align: 'center' } },
+        cell: { style: { ...body, align: 'center' }, format: '${value}' },
+      },
+    ],
+    rows: { gapRem: 0.15, divider: { show: true, color: '#e2e2e2', widthPx: 1, style: 'solid' } },
+    footer: { ...base.footer, style: { ...base.footer.style, sizePt: 8 }, bottomIn: 0.2 },
+  };
+}
+
 export function printDesignPresets(): DesignPreset[] {
-  return [{ id: 'classic', name: 'Classic', description: 'The print menu as it has always looked.', design: defaultPrintDesign() }];
+  return [
+    { id: 'classic', name: 'Classic', description: 'The print menu as it has always looked.', design: defaultPrintDesign() },
+    { id: 'modern', name: 'Modern', description: 'Clean sans-serif type, a dark band behind each section heading, thin lines between beers.', design: modernPrintDesign() },
+    { id: 'rustic', name: 'Rustic', description: 'Serif type on cream paper with a double rule around each heading.', design: rusticPrintDesign() },
+    { id: 'compact', name: 'Compact', description: 'Small type and tight rows, for a long list that has to fit on one page.', design: compactPrintDesign() },
+  ];
 }
 
 // ---- Reading a stored or submitted design ----

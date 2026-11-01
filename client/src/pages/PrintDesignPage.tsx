@@ -1,18 +1,21 @@
-import { ReactNode, useId, useState } from 'react';
-import { useParams } from 'react-router';
+import { ReactNode, useEffect, useId, useState } from 'react';
+import { useBlocker, useParams } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, errorMessage } from '../api';
-import { PrintDesign, PrintDesignState, sameDesign, setIn } from '../design';
+import { applyPreset, PrintDesignState } from '../design';
+import { useDesignHistory } from '../useDesignHistory';
 import { PageHeader, Screen } from '../components/Screen';
-import { ChevronRight } from '../components/Icons';
+import { ChevronRight, RedoIcon, UndoIcon } from '../components/Icons';
 import { Loading, LoadError } from '../components/QueryState';
 import { ConfirmSheet } from '../components/Sheet';
 import { useToast } from '../components/Toast';
 import { DesignPreview } from '../components/design/DesignPreview';
+import { PresetSheet } from '../components/design/PresetSheet';
 import { ColumnsGroup } from '../components/design/columns';
 import { FooterGroup, HeaderGroup, HeadingsGroup, PageGroup, RowsGroup } from '../components/design/groups';
 
-type GroupId = 'page' | 'header' | 'headings' | 'columns' | 'rows' | 'footer';
+const GROUP_IDS = ['page', 'header', 'headings', 'columns', 'rows', 'footer'] as const;
+type GroupId = typeof GROUP_IDS[number];
 
 // Changes how a menu's print view looks, with a preview that follows every change. Nothing is
 // kept until it is saved.
@@ -29,30 +32,41 @@ export function PrintDesignPage() {
   const containers = useQuery({ queryKey: ['containers'], queryFn: api.containers });
   const fonts = useQuery({ queryKey: ['designFonts'], queryFn: api.designFonts, staleTime: Infinity });
 
-  // The changes made since the last save, or nothing yet
-  const [draft, setDraft] = useState<PrintDesign | null>(null);
   const [open, setOpen] = useState<GroupId | null>('headings');
   const [saving, setSaving] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
+  const [choosingPreset, setChoosingPreset] = useState(false);
+  // A column asked for by clicking it in the preview (the number tells one click from the next)
+  const [focusColumn, setFocusColumn] = useState<{ id: string; n: number } | null>(null);
+  const [scrollTo, setScrollTo] = useState<{ group: GroupId; n: number } | null>(null);
 
   const queries = [saved, fonts];
   const failed = queries.find((q) => q.isError);
   const ready = saved.isSuccess && fonts.isSuccess;
 
-  const design = draft ?? saved.data?.design;
-  const dirty = ready && draft !== null && !sameDesign(draft, saved.data!.design);
+  // The design as edited so far (the saved one until something is changed), and the steps to undo
+  const { design, dirty: edited, canUndo, canRedo, change, replace, revert, undo, redo, markSaved, clear } = useDesignHistory(saved.data?.design);
+  const dirty = ready && edited;
 
-  const change = (path: (string | number)[], value: unknown) => {
-    if (design) setDraft(setIn(design, path, value));
+  // Clicking a part of the menu in the preview opens the controls that change it
+  const pick = (target: string) => {
+    const group: GroupId | null = target.startsWith('column:') ? 'columns' : GROUP_IDS.find((id) => id === target) ?? null;
+    if (!group) return;
+    setOpen(group);
+    if (group === 'columns') setFocusColumn({ id: target.slice('column:'.length), n: Date.now() });
+    setScrollTo({ group, n: Date.now() });
   };
+  useEffect(() => {
+    if (scrollTo) document.getElementById(`design-group-${scrollTo.group}`)?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' });
+  }, [scrollTo]);
 
   const save = async () => {
-    if (!draft) return;
+    if (!design || !dirty) return;
     setSaving(true);
     try {
-      const state = await api.savePrintDesign(menuId, draft);
+      const state = await api.savePrintDesign(menuId, design);
       queryClient.setQueryData<PrintDesignState>(designKey, state);
-      setDraft(null);
+      markSaved();
       toast('Design saved');
     } catch (e) {
       toast(`Couldn't save the design: ${errorMessage(e)}`, 'error');
@@ -60,6 +74,34 @@ export function PrintDesignPage() {
       setSaving(false);
     }
   };
+
+  // Changes that haven't been saved are not thrown away by leaving the page without asking
+  const leaving = useBlocker(dirty && !saving);
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [dirty]);
+
+  // Ctrl/Cmd+Z and Shift+Ctrl/Cmd+Z (or Ctrl+Y), except in a box where they mean undoing typing
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
+      const target = event.target as HTMLElement | null;
+      if (target?.matches?.('textarea, select, [contenteditable], input:not([type=checkbox]):not([type=radio]):not([type=color]):not([type=range])')) return;
+      const key = event.key.toLowerCase();
+      if (key === 'z' && !event.shiftKey) undo();
+      else if ((key === 'z' && event.shiftKey) || key === 'y') redo();
+      else return;
+      event.preventDefault();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [undo, redo]);
 
   const menuName = menu.data?.displayName ?? 'Menu';
   const controls = ready && design ? { design, fonts: fonts.data, change } : null;
@@ -78,7 +120,7 @@ export function PrintDesignPage() {
       footer={
         ready ? (
           <div className="save-bar">
-            <button type="button" className="btn-secondary" disabled={!dirty || saving} onClick={() => setDraft(null)}>
+            <button type="button" className="btn-secondary" disabled={!dirty || saving} onClick={revert}>
               Revert
             </button>
             <button type="button" className="btn-primary save-btn" disabled={!dirty || saving} onClick={save}>
@@ -100,6 +142,15 @@ export function PrintDesignPage() {
               </div>
             )}
             <div className="chip-row">
+              <button type="button" className="chip" disabled={!canUndo} onClick={undo}>
+                <UndoIcon /> Undo
+              </button>
+              <button type="button" className="chip" disabled={!canRedo} onClick={redo}>
+                <RedoIcon /> Redo
+              </button>
+              <button type="button" className="chip" onClick={() => setChoosingPreset(true)}>
+                Presets
+              </button>
               <a className="chip" href={`/menus/${menuId}?format=print`} target="_blank" rel="noopener">
                 Saved print view
               </a>
@@ -113,7 +164,7 @@ export function PrintDesignPage() {
 
             <div className="designer">
               <div className="designer-preview">
-                <DesignPreview menuId={menuId} design={design} />
+                <DesignPreview menuId={menuId} design={design} onPick={pick} />
               </div>
 
               <div className="designer-controls stack-sm">
@@ -127,7 +178,7 @@ export function PrintDesignPage() {
                   <HeadingsGroup {...controls} />
                 </Group>
                 <Group id="columns" title="Columns" open={open === 'columns'} onToggle={setOpen}>
-                  <ColumnsGroup {...controls} containers={{ data: containers.data, failed: containers.isError }} />
+                  <ColumnsGroup {...controls} containers={{ data: containers.data, failed: containers.isError }} focus={focusColumn} onFocused={() => setFocusColumn(null)} />
                 </Group>
                 <Group id="rows" title="Rows" open={open === 'rows'} onToggle={setOpen}>
                   <RowsGroup {...controls} />
@@ -141,6 +192,25 @@ export function PrintDesignPage() {
         )}
       </div>
 
+      {leaving.state === 'blocked' && (
+        <ConfirmSheet
+          title="Leave without saving?"
+          message="The changes you made to this design haven't been saved, and are lost if you leave."
+          confirmLabel="Leave without saving"
+          onClose={() => leaving.reset()}
+          onConfirm={async () => leaving.proceed()}
+        />
+      )}
+      {choosingPreset && design && (
+        <PresetSheet
+          onClose={() => setChoosingPreset(false)}
+          onPick={(preset) => {
+            replace(applyPreset(design, preset.design));
+            setChoosingPreset(false);
+            toast(`Started from ${preset.name}`);
+          }}
+        />
+      )}
       {confirmReset && (
         <ConfirmSheet
           title="Reset to the standard design?"
@@ -150,7 +220,7 @@ export function PrintDesignPage() {
           onConfirm={async () => {
             await api.resetPrintDesign(menuId);
             await queryClient.invalidateQueries({ queryKey: designKey });
-            setDraft(null);
+            clear();
             setConfirmReset(false);
             toast('Back to the standard design');
           }}
@@ -166,7 +236,7 @@ type GroupProps = { id: GroupId; title: string; open: boolean; onToggle: (open: 
 function Group({ id, title, open, onToggle, children }: GroupProps) {
   const bodyId = useId();
   return (
-    <section className="panel design-group">
+    <section id={`design-group-${id}`} className="panel design-group">
       <h2 className="design-group-title">
         <button type="button" aria-expanded={open} aria-controls={bodyId} onClick={() => onToggle(open ? null : id)}>
           {title}

@@ -48,8 +48,27 @@ describe('the default print design', () => {
   });
 
   it('is offered as the Classic preset', () => {
-    expect(printDesignPresets().map((preset) => preset.id)).toEqual(['classic']);
+    expect(printDesignPresets().map((preset) => preset.id)).toEqual(['classic', 'modern', 'rustic', 'compact']);
     expect(printDesignPresets()[0].design).toEqual(defaultPrintDesign());
+  });
+
+  it('offers presets that are all valid, different from each other, and use only fonts the server has', () => {
+    const presets = printDesignPresets();
+    for (const preset of presets) {
+      expect(preset.name).toBeTruthy();
+      expect(preset.description).toBeTruthy();
+      const parsed = parsePrintDesign(preset.design);
+      expect(parsed.ok, `${preset.id}: ${JSON.stringify(parsed.ok ? [] : parsed.issues)}`).toBe(true);
+      for (const id of designFonts(preset.design)) expect(getFont(id), `${preset.id} uses ${id}`).toBeDefined();
+    }
+    expect(new Set(presets.map((preset) => JSON.stringify(preset.design))).size).toBe(presets.length);
+  });
+
+  it('gives every preset italics only from fonts that have them', () => {
+    for (const preset of printDesignPresets()) {
+      const json = JSON.stringify(preset.design);
+      for (const match of json.matchAll(/"font":"([a-z-]+)"[^{}]*"italic":true/g)) expect(getFont(match[1])?.files.some((file) => file.italic) || match[1] === 'system-serif' || match[1] === 'system-sans').toBe(true);
+    }
   });
 
   it('uses only fonts the server has', () => {

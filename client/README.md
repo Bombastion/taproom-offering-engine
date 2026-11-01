@@ -93,3 +93,23 @@ styles for the prices and the size names) and pictures. Columns are reordered wi
 (`Fold.tsx`), so the preview stays in view. A column's width is either its own share or "what the others
 leave", and the editor only offers what keeps the widths within 100%. Prices can be limited to some pour sizes,
 which it lists from `/api/containers` (the designer doesn't wait for them, only that part of it does).
+
+The draft lives in `useDesignHistory.ts`: a stack of whole designs, so Undo and Redo (the chips above the
+controls, and Ctrl/Cmd+Z, Shift+Ctrl/Cmd+Z or Ctrl+Y outside text boxes) step through changes. Typing in one
+control, or dragging a number, is one step: changes to the same path within 800 ms join up (lists and switches
+never do). Revert and picking a preset are steps too, so they can be undone, and saving doesn't clear the
+steps. Leaving the page with unsaved changes asks first (a data router's `useBlocker`, which is why the app
+uses `createBrowserRouter`), and closing the tab asks through `beforeunload`.
+
+Presets (`GET /api/design/presets`, `PresetSheet.tsx`) replace the look of the draft but keep what belongs to
+the menu: whether the logo, title and footer show, their words, and the paper size (`applyPreset`).
+
+The preview page tells the designer back what the browser made of it, by `postMessage` (only messages whose
+`source` is the preview frame are listened to). The server adds some extras to the page it draws for the
+preview (`print/previewScript.ts`; the saved print view doesn't have them): page starts moved to the tops of
+their pages, the footer on every page, guides for the page edges and margins, `{type: 'toe-preview-info'}` with
+the page count, how far the text was shrunk and whether it fits (shown above the preview, with a warning when
+it doesn't), and `{type: 'toe-preview-pick'}` when something is clicked. Parts of the menu carry `data-pick`
+(`header`, `headings`, `rows`, `footer`, `column:<id>`), and clicking one opens the group (and column) that
+changes it. The frame is given the page once when it first loads; writing a page into it loads it again, so
+sending on every load would rewrite it for ever (`DesignPreview.tsx` has a test for this).
