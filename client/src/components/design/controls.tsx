@@ -155,11 +155,30 @@ export function Choice<T extends string>({ label, value, options, onChange }: Ch
   );
 }
 
-type TextFieldProps = { label: string; value: string; maxLength: number; hint?: ReactNode; onChange: (value: string) => void };
+type TextFieldProps = {
+  label: string;
+  value: string;
+  maxLength: number;
+  hint?: ReactNode;
+  // Says what is wrong with a value, or nothing; only a value that is fine is passed on, and the
+  // real one comes back when the box is left with something that isn't
+  validate?: (value: string) => string | null;
+  onChange: (value: string) => void;
+};
 
 // One line of text
-export function TextField({ label, value, maxLength, hint, onChange }: TextFieldProps) {
+export function TextField({ label, value, maxLength, hint, validate, onChange }: TextFieldProps) {
   const id = useId();
+  const [text, setText] = useState(value);
+
+  useEffect(() => {
+    setText((current) => (current === value || validate?.(current) ? current : value));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
+
+  const problem = validate?.(text) ?? null;
+  const describedBy = [problem ? `${id}-error` : null, hint ? `${id}-hint` : null].filter(Boolean).join(' ') || undefined;
+
   return (
     <div className="field-label">
       <label htmlFor={id}>{label}</label>
@@ -168,10 +187,16 @@ export function TextField({ label, value, maxLength, hint, onChange }: TextField
         className="field"
         type="text"
         maxLength={maxLength}
-        value={value}
-        aria-describedby={hint ? `${id}-hint` : undefined}
-        onChange={(e) => onChange(e.target.value)}
+        value={text}
+        aria-invalid={problem !== null}
+        aria-describedby={describedBy}
+        onChange={(e) => {
+          setText(e.target.value);
+          if (!validate?.(e.target.value)) onChange(e.target.value);
+        }}
+        onBlur={() => setText(value)}
       />
+      {problem && <span className="field-error" id={`${id}-error`}>{problem}</span>}
       {hint && <span id={`${id}-hint`} className="muted-sm">{hint}</span>}
     </div>
   );

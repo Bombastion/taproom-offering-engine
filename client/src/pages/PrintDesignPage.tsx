@@ -9,9 +9,10 @@ import { Loading, LoadError } from '../components/QueryState';
 import { ConfirmSheet } from '../components/Sheet';
 import { useToast } from '../components/Toast';
 import { DesignPreview } from '../components/design/DesignPreview';
-import { FooterGroup, HeaderGroup, HeadingsGroup, ItemTextGroup, PageGroup, PricesGroup } from '../components/design/groups';
+import { ColumnsGroup } from '../components/design/columns';
+import { FooterGroup, HeaderGroup, HeadingsGroup, PageGroup, RowsGroup } from '../components/design/groups';
 
-type GroupId = 'page' | 'header' | 'headings' | 'items' | 'prices' | 'footer';
+type GroupId = 'page' | 'header' | 'headings' | 'columns' | 'rows' | 'footer';
 
 // Changes how a menu's print view looks, with a preview that follows every change. Nothing is
 // kept until it is saved.
@@ -24,6 +25,8 @@ export function PrintDesignPage() {
   const menu = useQuery({ queryKey: ['menu', menuId], queryFn: () => api.menu(menuId) });
   // Always start from what is saved now
   const saved = useQuery({ queryKey: designKey, queryFn: () => api.printDesign(menuId), staleTime: 0 });
+  // Only the price columns need these, so the designer doesn't wait for them
+  const containers = useQuery({ queryKey: ['containers'], queryFn: api.containers });
   const fonts = useQuery({ queryKey: ['designFonts'], queryFn: api.designFonts, staleTime: Infinity });
 
   // The changes made since the last save, or nothing yet
@@ -123,11 +126,11 @@ export function PrintDesignPage() {
                 <Group id="headings" title="Section headings" open={open === 'headings'} onToggle={setOpen}>
                   <HeadingsGroup {...controls} />
                 </Group>
-                <Group id="items" title="Item text" open={open === 'items'} onToggle={setOpen}>
-                  <ItemTextGroup {...controls} />
+                <Group id="columns" title="Columns" open={open === 'columns'} onToggle={setOpen}>
+                  <ColumnsGroup {...controls} containers={{ data: containers.data, failed: containers.isError }} />
                 </Group>
-                <Group id="prices" title="Prices" open={open === 'prices'} onToggle={setOpen}>
-                  <PricesGroup {...controls} />
+                <Group id="rows" title="Rows" open={open === 'rows'} onToggle={setOpen}>
+                  <RowsGroup {...controls} />
                 </Group>
                 <Group id="footer" title="Footer" open={open === 'footer'} onToggle={setOpen}>
                   <FooterGroup {...controls} />
