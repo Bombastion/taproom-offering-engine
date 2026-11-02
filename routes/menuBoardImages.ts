@@ -8,14 +8,15 @@ import { zipSync } from 'fflate';
 // as a 1080x1920 image.
 
 // Renders every page of a PDF to a PNG, in page order.
-export function pdfToPngs(pdf: Buffer): Uint8Array[] {
+// `scale` shrinks (or enlarges) the pictures: 0.5 gives half-size ones.
+export function pdfToPngs(pdf: Buffer, scale = 1): Uint8Array[] {
   const doc = mupdf.Document.openDocument(pdf, 'application/pdf');
   try {
     const pngs: Uint8Array[] = [];
     for (let i = 0; i < doc.countPages(); i++) {
       const page = doc.loadPage(i);
       // No alpha channel: the board paints its own background, and a TV has no use for transparency
-      const pixmap = page.toPixmap(mupdf.Matrix.scale(1, 1), mupdf.ColorSpace.DeviceRGB, false, true);
+      const pixmap = page.toPixmap(mupdf.Matrix.scale(scale, scale), mupdf.ColorSpace.DeviceRGB, false, true);
       pngs.push(pixmap.asPNG());
       pixmap.destroy();
       page.destroy();

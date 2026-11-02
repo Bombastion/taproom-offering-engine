@@ -33,6 +33,7 @@ beforeEach(async () => {
   b = await seed(storage.forOwner(bob.id));
   // Alice has a print design saved, so an attempt to replace or remove it would show
   await storage.forOwner(alice.id).setMenuDesign(a.menu.id!, 'print', { version: 1, footer: { show: true, text: 'Alice only' } });
+  await storage.forOwner(alice.id).setMenuDesign(a.menu.id!, 'board', { version: 1, canvas: { background: '#abcdef' } });
   aliceCookie = await sessionCookieFor(storage, alice);
   bobCookie = await sessionCookieFor(storage, bob);
   app = createApp(storage);
@@ -57,7 +58,7 @@ async function snapshot(user: User) {
     containers: await data.getContainers(),
     sections: (await Promise.all(menus.map((m) => data.getSubMenusForMenu(m.id!)))).flat(),
     menuItems: (await Promise.all(menus.map((m) => data.getMenuItemsForMenu(m.id!)))).flat(),
-    designs: await Promise.all(menus.map((m) => data.getMenuDesign(m.id!, 'print'))),
+    designs: await Promise.all(menus.flatMap((m) => [data.getMenuDesign(m.id!, 'print'), data.getMenuDesign(m.id!, 'board')])),
     prices: (await Promise.all((await data.getContainers()).map((c) => data.getSaleContainersForContainer(c.id!)))).flat(),
   };
 }
@@ -119,6 +120,10 @@ describe("someone else's data", () => {
     ['save a print design on a menu', 'put', `/api/menus/${a.menu.id}/design/print`, { design: { footer: { show: true, text: 'Hacked' } } }, 404],
     ['remove a menu\'s print design', 'delete', `/api/menus/${a.menu.id}/design/print`, undefined, 404],
     ['preview a menu with a design', 'post', `/api/menus/${a.menu.id}/design/print/preview`, { design: {} }, 404],
+    ['read a menu\'s board design', 'get', `/api/menus/${a.menu.id}/design/board`, undefined, 404],
+    ['save a board design on a menu', 'put', `/api/menus/${a.menu.id}/design/board`, { design: { canvas: { background: '#000000' } } }, 404],
+    ['remove a menu\'s board design', 'delete', `/api/menus/${a.menu.id}/design/board`, undefined, 404],
+    ['preview a menu board with a design', 'post', `/api/menus/${a.menu.id}/design/board/preview`, { design: {} }, 404],
     ['reorder pour sizes', 'put', '/api/containers/order', { containerIds: [a.containers.crowler.id, a.containers.fullPour.id, a.containers.taster.id] }, 400],
   ];
 
@@ -187,6 +192,22 @@ describe('menu designs', () => {
     const res = await as(aliceCookie).get(`/api/menus/${a.menu.id}/design/print`);
     expect(res.body.design.footer.text).toBe('Alice only');
     expect((await as(bobCookie).get(`/api/menus/${b.menu.id}/design/print`)).body.isDefault).toBe(true);
+  });
+
+  it("draw each user's menu board with that user's own design", async () => {
+    const at = async (menuId: string | null) => {
+      const res = await request(app).get(`/menus/${menuId}?format=digital&page=1`).buffer(true).parse((response, callback) => {
+        const chunks: Buffer[] = [];
+        response.on('data', (chunk: Buffer) => chunks.push(chunk));
+        response.on('end', () => callback(null, Buffer.concat(chunks)));
+      });
+      return res.body as Buffer;
+    };
+    // Alice's board is not drawn like Bob's, which has no design of his own
+    expect((await at(a.menu.id)).equals(await at(b.menu.id))).toBe(false);
+    const bobBoard = await at(b.menu.id);
+    await storage.forOwner(alice.id).deleteMenuDesign(a.menu.id!, 'board');
+    expect((await at(a.menu.id)).equals(bobBoard)).toBe(true);
   });
 
   it('cannot be saved on a menu that is not yours, whatever the design says', async () => {
@@ -263,7 +284,8 @@ describe('what leaves the server', () => {
       '/api/items', `/api/items/${a.items.hazy.id}`,
       '/api/breweries', `/api/breweries/${a.breweries.zymos.id}`,
       '/api/containers', `/api/containers/${a.containers.taster.id}/uses`,
-      `/api/menus/${a.menu.id}/design/print`, '/api/design/fonts', '/api/design/presets',
+      `/api/menus/${a.menu.id}/design/print`, `/api/menus/${a.menu.id}/design/board`, '/api/design/fonts', '/api/design/presets',
+      '/api/design/fonts?view=board', '/api/design/presets?view=board',
     ];
     const responses = [
       ...(await Promise.all(urls.map(get))),
@@ -275,6 +297,8 @@ describe('what leaves the server', () => {
       await request(leaky).post('/api/containers').set('Cookie', aliceCookie).send({ displayName: 'New' }),
       await request(leaky).put(`/api/menus/${a.menu.id}/design/print`).set('Cookie', aliceCookie).send({ design: {} }),
       await request(leaky).post(`/api/menus/${a.menu.id}/design/print/preview`).set('Cookie', aliceCookie).send({ design: {} }),
+      await request(leaky).put(`/api/menus/${a.menu.id}/design/board`).set('Cookie', aliceCookie).send({ design: {} }),
+      await request(leaky).post(`/api/menus/${a.menu.id}/design/board/preview`).set('Cookie', aliceCookie).send({ design: {} }),
     ];
     for (const res of responses) {
       expect(res.status, res.request.url).toBeLessThan(300);

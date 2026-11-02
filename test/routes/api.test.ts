@@ -5,7 +5,9 @@ import { ApiRoutes } from '../../routes/api';
 import { DataProvider, LocalDataProvider } from '../../storage/providers';
 import { ItemContainer } from '../../models/containers';
 import { Item } from '../../models/items';
+import { SubMenu } from '../../models/menus';
 import { defaultPrintDesign } from '../../models/menuDesign';
+import { boardDesignPresets, defaultBoardDesign } from '../../models/boardDesign';
 import { addUser, appWith, Fixture, GIF_HEADER, JPEG_HEADER, memoryProvider, seed, TINY_PNG } from '../helpers';
 
 // The admin JSON API (routes/api.ts), exercised over HTTP against the in-memory data provider.
@@ -1083,6 +1085,132 @@ describe('menu designs', () => {
     ['post', '/preview'],
   ] as const)('%s is a 404 for a menu that does not exist (design%s)', async (method, suffix) => {
     const res = await request(app)[method](`/api/menus/no-such-menu/design/print${suffix}`).send(withFooter);
+    expect(res.status).toBe(404);
+  });
+});
+
+describe('menu board designs', () => {
+  const url = () => `/api/menus/${data.menu.id}/design/board`;
+  const dark = { design: { canvas: { background: '#101010' } } };
+
+  it('lists the fonts the board can draw, and the designs to start from', async () => {
+    const fonts = await request(app).get('/api/design/fonts?view=board');
+    expect(fonts.status).toBe(200);
+    const ids = fonts.body.map((font: { id: string }) => font.id);
+    expect(ids).toContain('fira-sans');
+    expect(ids).not.toContain('system-serif');
+    expect(fonts.body.find((font: { id: string }) => font.id === 'bebas-neue')).toMatchObject({ weights: [400], italic: false });
+
+    const presets = await request(app).get('/api/design/presets?view=board');
+    expect(presets.body.map((preset: { id: string }) => preset.id)).toEqual(boardDesignPresets().map((preset) => preset.id));
+    expect(presets.body[0].design).toEqual(defaultBoardDesign());
+    // The print lists are what they were
+    expect((await request(app).get('/api/design/presets')).body[0].id).toBe('modern');
+    expect((await request(app).get('/api/design/fonts')).body.map((font: { id: string }) => font.id)).toContain('system-serif');
+  });
+
+  it('refuses a view there is no design for', async () => {
+    expect((await request(app).get('/api/design/fonts?view=poster')).status).toBe(404);
+    expect((await request(app).get('/api/design/presets?view=poster')).status).toBe(404);
+    expect((await request(app).get(`/api/menus/${data.menu.id}/design/poster`)).status).toBe(404);
+    expect((await request(app).put(`/api/menus/${data.menu.id}/design/poster`).send(dark)).status).toBe(404);
+    expect((await request(app).delete(`/api/menus/${data.menu.id}/design/poster`)).status).toBe(404);
+    expect((await request(app).post(`/api/menus/${data.menu.id}/design/poster/preview`).send(dark)).status).toBe(404);
+  });
+
+  it('shows the default design for a menu that has none', async () => {
+    const res = await request(app).get(url());
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ design: defaultBoardDesign(), isDefault: true, updatedAt: null });
+  });
+
+  it('saves a design, filling in what it leaves out, and shows it back', async () => {
+    const saved = await request(app).put(url()).send(dark);
+    expect(saved.status).toBe(200);
+    expect(saved.body.design.canvas).toEqual({ background: '#101010', safeMarginPx: 40 });
+    expect(saved.body.design.items).toEqual(defaultBoardDesign().items);
+    expect(saved.body.isDefault).toBe(false);
+    const read = await request(app).get(url());
+    expect(read.body.design).toEqual(saved.body.design);
+    // The whole design is stored
+    expect(((await provider.getMenuDesign(data.menu.id!, 'board'))!.spec as any).items).toEqual(defaultBoardDesign().items);
+  });
+
+  it('keeps the print design and the board design apart', async () => {
+    await request(app).put(url()).send(dark);
+    expect((await request(app).get(`/api/menus/${data.menu.id}/design/print`)).body.isDefault).toBe(true);
+    await request(app).put(`/api/menus/${data.menu.id}/design/print`).send({ design: { footer: { show: true, text: 'WiFi' } } });
+    expect((await request(app).get(url())).body.design.canvas.background).toBe('#101010');
+    await request(app).delete(`/api/menus/${data.menu.id}/design/print`);
+    expect((await request(app).get(url())).body.isDefault).toBe(false);
+  });
+
+  it('goes back to the default when the design is removed', async () => {
+    await request(app).put(url()).send(dark);
+    expect((await request(app).delete(url())).status).toBe(204);
+    expect((await request(app).get(url())).body.isDefault).toBe(true);
+  });
+
+  it.each([
+    ['no design at all', {}, 'design'],
+    ['a font the board cannot draw', { design: { sections: { bar: { style: { font: 'system-serif' } } } } }, 'sections.bar.style.font'],
+    ['a size that is too big', { design: { items: { logo: { sizePx: 5000 } } } }, 'items.logo.sizePx'],
+    ['a color that is not a color', { design: { canvas: { background: 'red;}</style>' } } }, 'canvas.background'],
+    ['a setting there is no such thing as', { design: { canvas: { colour: '#000000' } } }, 'canvas.colour'],
+    ['a print design', { design: { page: { size: 'letter' } } }, 'page'],
+  ])('refuses %s, naming the problem, and keeps the design it had', async (_what, body, path) => {
+    await request(app).put(url()).send(dark);
+    const res = await request(app).put(url()).send(body);
+    expect(res.status).toBe(400);
+    expect(res.body.issues.map((issue: { path: string }) => issue.path)).toContain(path);
+    expect((await request(app).get(url())).body.design.canvas.background).toBe('#101010');
+  });
+
+  it('shows the default when the stored design can no longer be read, and says so', async () => {
+    await provider.setMenuDesign(data.menu.id!, 'board', { version: 1, canvas: { background: 'nope' } });
+    const res = await request(app).get(url());
+    expect(res.body).toEqual({ design: defaultBoardDesign(), isDefault: true, updatedAt: null, storedDesignInvalid: true });
+  });
+
+  it('draws a preview of the board with the design given, as half-size pictures, without saving it', async () => {
+    const res = await request(app).post(`${url()}/preview`).send(dark);
+    expect(res.status).toBe(200);
+    expect(res.body.pages).toHaveLength(1);
+    expect(res.body.pages[0]).toMatch(/^data:image\/png;base64,[A-Za-z0-9+/]+=*$/);
+    const png = Buffer.from(res.body.pages[0].split(',')[1], 'base64');
+    expect([...png.subarray(0, 4)]).toEqual([0x89, 0x50, 0x4e, 0x47]);
+    // IHDR: width and height, half of 1080x1920
+    expect([png.readUInt32BE(16), png.readUInt32BE(20)]).toEqual([540, 960]);
+    expect(await provider.getMenuDesign(data.menu.id!, 'board')).toBeNull();
+  });
+
+  it('previews only the sections the board shows', async () => {
+    const withHidden = await request(app).post(`${url()}/preview`).send({ design: {} });
+    await provider.updateSubMenu(data.sections.guestTaps.id!, new SubMenu(null, null, null, null, null, ['board']));
+    const without = await request(app).post(`${url()}/preview`).send({ design: {} });
+    expect(without.body.pages[0]).not.toEqual(withHidden.body.pages[0]);
+  });
+
+  it('refuses to preview a design that is not valid', async () => {
+    const res = await request(app).post(`${url()}/preview`).send({ design: { canvas: { safeMarginPx: 9999 } } });
+    expect(res.status).toBe(400);
+    expect(res.body.issues[0].path).toBe('canvas.safeMarginPx');
+  });
+
+  it('draws a preview in every one of the presets', async () => {
+    for (const preset of boardDesignPresets()) {
+      const res = await request(app).post(`${url()}/preview`).send({ design: preset.design });
+      expect(res.status, preset.id).toBe(200);
+    }
+  });
+
+  it.each([
+    ['get', ''],
+    ['put', ''],
+    ['delete', ''],
+    ['post', '/preview'],
+  ] as const)('%s is a 404 for a menu that does not exist (board design%s)', async (method, suffix) => {
+    const res = await request(app)[method](`/api/menus/no-such-menu/design/board${suffix}`).send(dark);
     expect(res.status).toBe(404);
   });
 });

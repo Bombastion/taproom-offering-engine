@@ -2,8 +2,8 @@ import { z } from 'zod';
 import { isFontId } from './fonts';
 
 /*
-How a menu looks on one of its views, as data. Today that is the print menu; the menu board will use
-the same pieces later (see DESIGN_VIEWS).
+How a menu looks on one of its views, as data. The print menu and the menu board (models/boardDesign.ts) share the
+building blocks below (see DESIGN_VIEWS).
 
 A design is a JSON document, one per (menu, view), kept in the MenuDesign table. It is written by users
 (through the admin API) and rendered on public pages, so it is deliberately not free-form: every value
@@ -22,7 +22,7 @@ the rest of the menu when it is shrunk to fit its pages); page margins are inche
 
 export const DESIGN_VERSION = 1;
 
-// The views that can be designed. Only 'print' has a renderer so far.
+// The views that can be designed: the print menu (see PrintDesign) and the menu board (see boardDesign.ts)
 export const DESIGN_VIEWS = ['print', 'board'] as const;
 export type DesignView = typeof DESIGN_VIEWS[number];
 
@@ -48,27 +48,27 @@ export const MAX_DESIGN_BYTES = 16 * 1024;
 
 // ---- Building blocks ----
 
-const hexColor = z
+export const hexColor = z
   .string()
   .regex(/^#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/, 'Use a color like #3f3f3f')
   .transform((color) => color.toLowerCase());
 
-const num = (min: number, max: number) => z.number().min(min, `At least ${min}`).max(max, `At most ${max}`);
+export const num = (min: number, max: number) => z.number().min(min, `At least ${min}`).max(max, `At most ${max}`);
 
 // Text that ends up on the page: no control characters other than line breaks, and not very long
 const noControlCharacters = (value: string) => !/[\u0000-\u0009\u000B-\u001F\u007F]/.test(value);
-const text = (max: number) => z.string().max(max, `At most ${max} characters`).refine(noControlCharacters, 'Contains characters that cannot be printed');
+export const text = (max: number) => z.string().max(max, `At most ${max} characters`).refine(noControlCharacters, 'Contains characters that cannot be printed');
 
 const fontId = z.string().refine(isFontId, 'Not one of the available fonts');
 
-const weight = z
+export const weight = z
   .number()
   .int()
   .min(100)
   .max(900)
   .refine((value) => value % 100 === 0, 'Use 100, 200, ... 900');
 
-const align = z.enum(['left', 'center', 'right']);
+export const align = z.enum(['left', 'center', 'right']);
 
 const columnId = z.string().regex(/^[a-z0-9][a-z0-9_-]{0,39}$/, 'Use lowercase letters, numbers, - and _');
 
@@ -337,11 +337,11 @@ export function defaultPrintDesign(): PrintDesign {
 }
 
 // Designs people can start from (copied into the draft, never referenced)
-export interface DesignPreset {
+export interface DesignPreset<T = PrintDesign> {
   id: string;
   name: string;
   description: string;
-  design: PrintDesign;
+  design: T;
 }
 
 // Warm and old-fashioned: serif type on cream paper, a double rule around each heading
@@ -474,7 +474,7 @@ export interface DesignIssue {
   message: string;
 }
 
-export type ParsedDesign = { ok: true; design: PrintDesign } | { ok: false; issues: DesignIssue[] };
+export type ParsedDesign<T = PrintDesign> = { ok: true; design: T } | { ok: false; issues: DesignIssue[] };
 
 const UNSAFE_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 
@@ -505,8 +505,9 @@ export function migrateDesign(raw: unknown): { ok: true; design: unknown } | { o
   return { ok: true, design: raw };
 }
 
-// Validates a design, using the default for anything it leaves out. Never throws.
-export function parsePrintDesign(raw: unknown): ParsedDesign {
+// Validates a design of any view against that view's schema, using its defaults for anything the
+// design leaves out. Never throws.
+export function parseDesign<T>(raw: unknown, schema: z.ZodType<T>, defaults: () => unknown): ParsedDesign<T> {
   let size: number;
   try {
     size = Buffer.byteLength(JSON.stringify(raw) ?? '', 'utf8');
@@ -518,7 +519,7 @@ export function parsePrintDesign(raw: unknown): ParsedDesign {
   }
   const migrated = migrateDesign(raw);
   if (!migrated.ok) return migrated;
-  const parsed = printDesignSchema.safeParse(mergeOver(defaultPrintDesign(), migrated.design));
+  const parsed = schema.safeParse(mergeOver(defaults(), migrated.design));
   if (!parsed.success) {
     const issues: DesignIssue[] = [];
     for (const issue of parsed.error.issues) {
@@ -533,6 +534,10 @@ export function parsePrintDesign(raw: unknown): ParsedDesign {
     return { ok: false, issues };
   }
   return { ok: true, design: parsed.data };
+}
+
+export function parsePrintDesign(raw: unknown): ParsedDesign {
+  return parseDesign(raw, printDesignSchema, defaultPrintDesign);
 }
 
 // Every font a design uses
