@@ -35,23 +35,28 @@ describe('the default board design', () => {
     first.items.lines.pop();
     first.canvas.background = '#000000';
     expect(defaultBoardDesign().items.lines).toHaveLength(1);
-    expect(defaultBoardDesign().canvas.background).toBe('#175a6c');
+    expect(defaultBoardDesign().canvas.background).toBe('#0e2a47');
   });
 
-  it('is the board as it looked before designs existed', () => {
+  it('is the Bold design: big condensed capitals on deep blue with red section bars', () => {
     const d = defaultBoardDesign();
-    expect(d.canvas).toEqual({ background: '#175a6c', safeMarginPx: 40 });
+    expect(d.canvas).toEqual({ background: '#0e2a47', safeMarginPx: 40 });
     expect(d.header.logo).toMatchObject({ show: true, sizePx: 150, align: 'center' });
     expect(d.header.title.show).toBe(false);
-    expect(d.sections.bar).toMatchObject({ heightPx: 52.5, background: '#2b2b2b', continuedSuffix: ', Continued' });
-    expect(d.sections.bar.style).toMatchObject({ font: 'fira-sans', sizePx: 42.5, color: '#ffffff' });
+    expect(d.sections.bar).toMatchObject({ heightPx: 74, background: '#d6402b', continuedSuffix: ', Continued' });
+    expect(d.sections.bar.style).toMatchObject({ font: 'bebas-neue', sizePx: 62, color: '#ffffff', transform: 'uppercase' });
     expect(d.sections.gapPx).toBe(30);
-    expect(d.items.logo).toMatchObject({ show: true, sizePx: 52.5, shape: 'circle' });
+    expect(d.items.logo).toMatchObject({ show: true, sizePx: 64, shape: 'circle' });
     expect(d.items.lines).toHaveLength(1);
-    expect(d.items.lines[0].style).toMatchObject({ font: 'fira-sans', sizePx: 52.5, color: '#f3f3f3' });
+    expect(d.items.lines[0].style).toMatchObject({ font: 'bebas-neue', sizePx: 64, color: '#ffffff', transform: 'uppercase' });
     expect(d.items.lines[0].parts.map((part) => part.field)).toEqual(['breweryName', 'displayName', 'style', 'abv']);
     // Prices stay off the board
     expect(JSON.stringify(d)).not.toMatch(/price/i);
+  });
+
+  it('has nothing in it that belongs to one brewery', () => {
+    expect(JSON.stringify(defaultBoardDesign())).not.toMatch(/zymos/i);
+    for (const preset of boardDesignPresets()) expect(JSON.stringify(preset.design), preset.id).not.toMatch(/zymos/i);
   });
 });
 
@@ -117,9 +122,24 @@ describe('reading a board design', () => {
 describe('board design presets', () => {
   const presets = boardDesignPresets();
 
-  it('starts with Classic, which is the default design', () => {
-    expect(presets[0]).toMatchObject({ id: 'classic', name: 'Classic' });
+  it('starts with Bold, which is the default design', () => {
+    expect(presets.map((preset) => preset.id)).toEqual(['bold', 'dark', 'light']);
     expect(presets[0].design).toEqual(defaultBoardDesign());
+  });
+
+  it('keep the looks they have, whatever the default is', () => {
+    // Dark and Light state every setting themselves, so a new default can't move them
+    for (const preset of presets.slice(1)) {
+      expect(preset.design.canvas.background, preset.id).not.toBe(defaultBoardDesign().canvas.background);
+      expect(preset.design.sections.bar.background, preset.id).not.toBe(defaultBoardDesign().sections.bar.background);
+    }
+    expect(presets.find((preset) => preset.id === 'dark')!.design).toMatchObject({ canvas: { background: '#141414' }, sections: { bar: { heightPx: 60, background: '#e0a526', radiusPx: 6 } } });
+    expect(presets.find((preset) => preset.id === 'light')!.design).toMatchObject({ canvas: { background: '#f6efdc' }, sections: { bar: { background: '#4a2f1b' } } });
+  });
+
+  it('give a title that can be read on the preset’s own background', () => {
+    const light = presets.find((preset) => preset.id === 'light')!.design;
+    expect(light.header.title.style.color).toBe('#3b2a1a');
   });
 
   it('offers several, each different and each valid as it stands', () => {
@@ -177,6 +197,6 @@ describe('fonts on the board', () => {
     for (const preset of boardDesignPresets()) {
       for (const id of boardDesignFonts(preset.design)) expect(isBoardFontId(id), `${preset.id}: ${id}`).toBe(true);
     }
-    expect([...boardDesignFonts(defaultBoardDesign())]).toEqual(['fira-sans']);
+    expect([...boardDesignFonts(defaultBoardDesign())]).toEqual(['bebas-neue']);
   });
 });

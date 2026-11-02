@@ -7,6 +7,7 @@ import { unzipSync } from 'fflate';
 import * as mupdf from 'mupdf';
 import { MenusRoutes } from '../../routes/menus';
 import { defaultBoardDesign } from '../../models/boardDesign';
+import { blueBoardDesign } from '../board/designs';
 import { Item } from '../../models/items';
 import { Menu, MenuItem, SubMenu } from '../../models/menus';
 import { addUser, Fixture, memoryProvider, seed, TINY_PNG } from '../helpers';
@@ -14,9 +15,10 @@ import { addUser, Fixture, memoryProvider, seed, TINY_PNG } from '../helpers';
 // The public, read-only menu formats: the JSON the Wix widget polls (?format=widget), the
 // printable HTML menu (?format=print) and the menu board images (?format=digital).
 
-// The menu board's default design is how it looked before designs existed
-const BOARD_SAFE_MARGIN = defaultBoardDesign().canvas.safeMarginPx;
-const BOARD_SECTION_GAP = defaultBoardDesign().sections.gapPx;
+// Most of these tests draw the board with a design saved for the menu whose measurements they know
+// (blueBoardDesign); the ones about what a menu with no saved design gets say so
+const BOARD_SAFE_MARGIN = blueBoardDesign().canvas.safeMarginPx;
+const BOARD_SECTION_GAP = blueBoardDesign().sections.gapPx;
 
 // ---- Reading the print view ----
 // The tests look at what the page says, not at the tags it is written with.
@@ -39,10 +41,14 @@ let data: Fixture;
 let app: Express;
 
 beforeEach(async () => {
-  provider = memoryProvider();
+  // Designs belong to a user, like the menu they are for
+  const shared = memoryProvider();
+  const owner = await addUser(shared);
+  provider = shared.forOwner(owner.id) as LocalDataProvider;
   data = await seed(provider);
+  await provider.setMenuDesign(data.menu.id!, 'board', blueBoardDesign());
   app = express();
-  app.use('/menus', new MenusRoutes(provider).router);
+  app.use('/menus', new MenusRoutes(shared).router);
 });
 
 describe('GET /menus/:menuId', () => {
@@ -471,6 +477,7 @@ describe('?format=digital', () => {
   const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
   const BOARD_BLUE = [0x17, 0x5a, 0x6c];
   const SECTION_HEADER_GREY = [0x2b, 0x2b, 0x2b];
+  const DEFAULT_BACKGROUND = [1, 3, 5].map((i) => parseInt(defaultBoardDesign().canvas.background.slice(i, i + 2), 16));
 
   const decode = (png: Uint8Array) => {
     const pixmap = new mupdf.Image(png).toPixmap();
@@ -564,9 +571,13 @@ describe('?format=digital', () => {
       close(image.at(101, 100 + 150 + 10 + 20), [0xe0, 0xa5, 0x26]);
     });
 
+    it('is drawn with the default design until one is saved', async () => {
+      expect((await firstPage()).at(2, 2)).toEqual(DEFAULT_BACKGROUND);
+    });
+
     it('is not affected by the print design', async () => {
       await provider.setMenuDesign(data.menu.id!, 'print', { version: 1, page: { background: '#ff0000' } });
-      expect((await firstPage()).at(2, 2)).toEqual(BOARD_BLUE);
+      expect((await firstPage()).at(2, 2)).toEqual(DEFAULT_BACKGROUND);
     });
 
     it('falls back to the default, and says why, when the stored design can no longer be read', async () => {
@@ -574,7 +585,7 @@ describe('?format=digital', () => {
       await provider.setMenuDesign(data.menu.id!, 'board', { version: 1, canvas: { background: 'not a color' } });
       const res = await binary(`/menus/${data.menu.id}?format=digital`);
       expect(res.status).toBe(200);
-      expect(decode(unzipSync(new Uint8Array(res.body as Buffer))['menu-board-1.png']).at(2, 2)).toEqual(BOARD_BLUE);
+      expect(decode(unzipSync(new Uint8Array(res.body as Buffer))['menu-board-1.png']).at(2, 2)).toEqual(DEFAULT_BACKGROUND);
       expect(error).toHaveBeenCalledWith(expect.stringContaining(`menu ${data.menu.id}`), expect.anything());
     });
 

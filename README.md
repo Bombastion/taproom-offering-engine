@@ -240,8 +240,8 @@ server hosts itself (`models/fonts.ts`, files and licences in `public/fonts`).
   which fields appear in which columns, page size and margins, a footer. The default is the Modern preset.
 - **Board** (`models/boardDesign.ts`, drawn by `board/render.ts` as a PDF that is turned into one PNG per
   screenful): background and safe margin, the logo and an optional title at the top, section bars, and
-  item rows made of a picture and lines of text built from the item's fields. The default is the board's
-  original look (blue background, dark bars, Fira Sans). Every size is in pixels of the 1080×1920 picture,
+  item rows made of a picture and lines of text built from the item's fields. The default is the Bold
+  preset (big condensed capitals on deep blue with red bars); Dark and Light are the other presets. Every size is in pixels of the 1080×1920 picture,
   and the board shows no prices. pdfkit can't use the web fonts, so the board draws with static
   regular/bold files in `public/fonts/board` (and `FiraSans-Regular.ttf`); a font is offered on the
   board only if it has them (`boardFiles` in `models/fonts.ts`).
