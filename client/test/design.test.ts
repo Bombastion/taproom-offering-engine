@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { applyPreset, BODY_TEXT, describeColumn, FieldsColumn, newColumn, newColumnId, newPart, nearestWeight, PricesColumn, sameDesign, setIn, styleDifferences, styleForFont, widthLeft } from '../src/design';
-import { designFonts, printDesign } from './fixtures';
+import { applyBoardPreset, isBoardStyle, newBoardLine } from '../src/boardDesign';
+import { boardDesign, boardPresets, designFonts, printDesign } from './fixtures';
 
 describe('setIn', () => {
   it('replaces what is at the path and leaves the original alone', () => {
@@ -121,5 +122,53 @@ describe('applyPreset', () => {
     expect(result.header.title).toMatchObject({ show: true, text: 'Our title' });
     // The preset itself is left alone
     expect(preset.footer.show).toBe(printDesign.footer.show);
+  });
+});
+
+describe('board designs', () => {
+  const dark = boardPresets[1].design;
+
+  it('applyBoardPreset takes the look and keeps what belongs to the menu', () => {
+    const own = setIn(setIn(setIn(boardDesign, ['canvas', 'safeMarginPx'], 90), ['header', 'logo', 'show'], false), ['header', 'title', 'text'], 'Our words');
+    const result = applyBoardPreset(own, dark);
+    expect(result.canvas).toEqual({ background: '#141414', safeMarginPx: 90 });
+    expect(result.sections.bar.background).toBe('#e0a526');
+    expect(result.header.logo.show).toBe(false);
+    expect(result.header.logo.sizePx).toBe(dark.header.logo.sizePx);
+    expect(result.header.title.show).toBe(false);
+    expect(result.header.title.text).toBe('Our words');
+    expect(own.canvas.background).toBe('#175a6c');
+  });
+
+  it('newBoardLine copies the first line’s look at 60% of its size, with one description part', () => {
+    const line = newBoardLine(boardDesign.items.lines);
+    expect(line.style).toEqual({ ...boardDesign.items.lines[0].style, sizePx: 32 });
+    expect(line.parts).toEqual([{ field: 'description', before: '', format: '{value}' }]);
+    expect(newBoardLine(boardDesign.items.lines).style).not.toBe(boardDesign.items.lines[0].style);
+  });
+
+  it('newBoardLine never goes under the smallest size the server takes', () => {
+    const tiny = setIn(boardDesign.items.lines, [0, 'style', 'sizePx'], 12);
+    expect(newBoardLine(tiny).style.sizePx).toBe(10);
+  });
+
+  it('newBoardLine has something to go on when there are no lines', () => {
+    expect(newBoardLine([]).style.sizePx).toBeGreaterThanOrEqual(10);
+  });
+
+  it('tells a board style from a print one by its size unit', () => {
+    expect(isBoardStyle(boardDesign.items.lines[0].style)).toBe(true);
+    expect(isBoardStyle(printDesign.sections.heading.style)).toBe(false);
+  });
+
+  it('newPart uses the separator it is given, and none for the first part', () => {
+    const line = boardDesign.items.lines[0];
+    expect(newPart(line, ' · ').before).toBe(' · ');
+    expect(newPart({ ...line, parts: [] }, ' · ').before).toBe('');
+  });
+
+  it('styleDifferences works on board styles', () => {
+    const base = boardDesign.items.lines[0].style;
+    expect(styleDifferences(base, { ...base, color: '#000000', sizePx: 10 })).toEqual({ color: '#000000', sizePx: 10 });
   });
 });

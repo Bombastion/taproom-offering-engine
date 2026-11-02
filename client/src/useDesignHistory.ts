@@ -1,5 +1,5 @@
 import { useCallback, useReducer } from 'react';
-import { PrintDesign, sameDesign, setIn } from './design';
+import { sameDesign, setIn } from './design';
 
 /*
 The design being edited, with undo and redo.
@@ -14,24 +14,24 @@ is one step, so undo goes back to before the run and not to the last keystroke.
 
 type Path = (string | number)[];
 
-type State = {
-  past: PrintDesign[];
-  present: PrintDesign | null;
-  future: PrintDesign[];
+type State<D> = {
+  past: D[];
+  present: D | null;
+  future: D[];
   // The setting changed last and when, for joining a run of changes into one step
   last: { key: string; at: number } | null;
 };
 
-type Action =
-  | { type: 'change'; base: PrintDesign; path: Path; value: unknown; now: number }
-  | { type: 'replace'; base: PrintDesign; design: PrintDesign }
-  | { type: 'revert'; base: PrintDesign }
-  | { type: 'undo'; base: PrintDesign }
-  | { type: 'redo'; base: PrintDesign }
+type Action<D> =
+  | { type: 'change'; base: D; path: Path; value: unknown; now: number }
+  | { type: 'replace'; base: D; design: D }
+  | { type: 'revert'; base: D }
+  | { type: 'undo'; base: D }
+  | { type: 'redo'; base: D }
   | { type: 'saved' }
   | { type: 'clear' };
 
-const EMPTY: State = { past: [], present: null, future: [], last: null };
+const EMPTY: State<never> = { past: [], present: null, future: [], last: null };
 
 // How far apart two changes to one setting can be and still count as the same run
 export const RUN_MS = 800;
@@ -40,11 +40,11 @@ const MAX_STEPS = 100;
 // Lists (a column moved, a line removed) and switches are each a step of their own
 const joinable = (value: unknown) => !Array.isArray(value) && typeof value !== 'boolean';
 
-function remember(past: PrintDesign[], design: PrintDesign): PrintDesign[] {
+function remember<D>(past: D[], design: D): D[] {
   return [...past, design].slice(-MAX_STEPS);
 }
 
-function reduce(state: State, action: Action): State {
+function reduce<D>(state: State<D>, action: Action<D>): State<D> {
   switch (action.type) {
     case 'change': {
       const current = state.present ?? action.base;
@@ -83,8 +83,9 @@ function reduce(state: State, action: Action): State {
   }
 }
 
-export function useDesignHistory(base: PrintDesign | undefined) {
-  const [state, dispatch] = useReducer(reduce, EMPTY);
+// Works for any design: the print menu's or the menu board's
+export function useDesignHistory<D>(base: D | undefined) {
+  const [state, dispatch] = useReducer(reduce as (state: State<D>, action: Action<D>) => State<D>, EMPTY as State<D>);
 
   const design = state.present ?? base;
   const dirty = base !== undefined && state.present !== null && !sameDesign(state.present, base);
@@ -97,7 +98,7 @@ export function useDesignHistory(base: PrintDesign | undefined) {
     // Sets what is at `path`
     change: useCallback((path: Path, value: unknown) => base && dispatch({ type: 'change', base, path, value, now: Date.now() }), [base]),
     // Takes the place of the whole design (a preset)
-    replace: useCallback((next: PrintDesign) => base && dispatch({ type: 'replace', base, design: next }), [base]),
+    replace: useCallback((next: D) => base && dispatch({ type: 'replace', base, design: next }), [base]),
     // Back to what is saved
     revert: useCallback(() => base && dispatch({ type: 'revert', base }), [base]),
     undo: useCallback(() => base && dispatch({ type: 'undo', base }), [base]),

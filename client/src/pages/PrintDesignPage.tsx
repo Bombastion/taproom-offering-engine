@@ -1,15 +1,17 @@
-import { ReactNode, useEffect, useId, useState } from 'react';
-import { useBlocker, useParams } from 'react-router';
+import { useEffect, useState } from 'react';
+import { useParams } from 'react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, errorMessage } from '../api';
 import { applyPreset, PrintDesignState } from '../design';
 import { useDesignHistory } from '../useDesignHistory';
+import { useLeaveWarning, useUndoKeys } from '../useDesignGuards';
 import { PageHeader, Screen } from '../components/Screen';
-import { ChevronRight, RedoIcon, UndoIcon } from '../components/Icons';
+import { RedoIcon, UndoIcon } from '../components/Icons';
 import { Loading, LoadError } from '../components/QueryState';
 import { ConfirmSheet } from '../components/Sheet';
 import { useToast } from '../components/Toast';
 import { DesignPreview } from '../components/design/DesignPreview';
+import { Group } from '../components/design/Group';
 import { PresetSheet } from '../components/design/PresetSheet';
 import { ColumnsGroup } from '../components/design/columns';
 import { FooterGroup, HeaderGroup, HeadingsGroup, PageGroup, RowsGroup } from '../components/design/groups';
@@ -75,33 +77,8 @@ export function PrintDesignPage() {
     }
   };
 
-  // Changes that haven't been saved are not thrown away by leaving the page without asking
-  const leaving = useBlocker(dirty && !saving);
-  useEffect(() => {
-    if (!dirty) return;
-    const warn = (event: BeforeUnloadEvent) => {
-      event.preventDefault();
-      event.returnValue = '';
-    };
-    window.addEventListener('beforeunload', warn);
-    return () => window.removeEventListener('beforeunload', warn);
-  }, [dirty]);
-
-  // Ctrl/Cmd+Z and Shift+Ctrl/Cmd+Z (or Ctrl+Y), except in a box where they mean undoing typing
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
-      const target = event.target as HTMLElement | null;
-      if (target?.matches?.('textarea, select, [contenteditable], input:not([type=checkbox]):not([type=radio]):not([type=color]):not([type=range])')) return;
-      const key = event.key.toLowerCase();
-      if (key === 'z' && !event.shiftKey) undo();
-      else if ((key === 'z' && event.shiftKey) || key === 'y') redo();
-      else return;
-      event.preventDefault();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [undo, redo]);
+  const leaving = useLeaveWarning(dirty, saving);
+  useUndoKeys(undo, redo);
 
   const menuName = menu.data?.displayName ?? 'Menu';
   const controls = ready && design ? { design, fonts: fonts.data, change } : null;
@@ -227,27 +204,5 @@ export function PrintDesignPage() {
         />
       )}
     </Screen>
-  );
-}
-
-type GroupProps = { id: GroupId; title: string; open: boolean; onToggle: (open: GroupId | null) => void; children: ReactNode };
-
-// One set of controls, opened by its heading; opening one closes the others
-function Group({ id, title, open, onToggle, children }: GroupProps) {
-  const bodyId = useId();
-  return (
-    <section id={`design-group-${id}`} className="panel design-group">
-      <h2 className="design-group-title">
-        <button type="button" aria-expanded={open} aria-controls={bodyId} onClick={() => onToggle(open ? null : id)}>
-          {title}
-          <span className={`design-group-chevron${open ? ' open' : ''}`}><ChevronRight /></span>
-        </button>
-      </h2>
-      {open && (
-        <div id={bodyId} className="design-group-body stack-sm">
-          {children}
-        </div>
-      )}
-    </section>
   );
 }

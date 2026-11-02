@@ -431,6 +431,72 @@ p {
   display: none;
 }
 
+/* Chips in titled rows, each of which scrolls on its own, with an arrow where there is more out of sight */
+.chip-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.chip-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.chip-section-title {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.chip-scroll {
+  position: relative;
+  margin: 0 -16px;
+}
+
+.chip-scroll .chip-row {
+  margin: 0;
+}
+
+.chip-edge {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 44px;
+  display: flex;
+  align-items: center;
+  border: 0;
+  padding: 0 6px;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.chip-edge svg {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  padding: 5px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid #c9d7db;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+}
+
+.chip-edge-before {
+  left: 0;
+  justify-content: flex-start;
+  background: linear-gradient(to right, var(--bg) 55%, transparent);
+}
+
+.chip-edge-after {
+  right: 0;
+  justify-content: flex-end;
+  background: linear-gradient(to left, var(--bg) 55%, transparent);
+}
+
 .chip {
   flex-shrink: 0;
   min-height: 40px;
@@ -1668,6 +1734,55 @@ textarea.field {
     grid-row: 1;
     /* Less than the screen's height, so all of the preview can be scrolled to (the top bar, breadcrumbs and save bar take the rest) */
     max-height: calc(100dvh - 210px);
+  }
+}
+
+/* The menu board's pages: one picture each, side by side as far as there is room */
+.board-pages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: flex-start;
+}
+
+.board-page {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  /* Small enough on a phone that a whole page shows in the preview that stays above the controls */
+  width: min(100%, 130px);
+}
+
+.board-page-picture {
+  position: relative;
+  line-height: 0;
+  border: 1px solid var(--line);
+}
+
+.board-page-picture img {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* Where the TV may crop: nothing but the background is drawn outside it */
+.board-page-guide {
+  position: absolute;
+  border: 1px dotted rgba(255, 255, 255, 0.9);
+  outline: 1px dotted rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+}
+
+@media (min-width: 600px) {
+  .board-page {
+    width: min(100%, 210px);
+  }
+}
+
+@media (min-width: 900px) {
+  .board-page {
+    width: min(100%, 280px);
   }
 }
 

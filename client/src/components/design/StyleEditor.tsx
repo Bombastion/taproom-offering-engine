@@ -1,4 +1,5 @@
 import { FontInfo, styleForFont, TextStyle, WEIGHT_NAMES } from '../../design';
+import { BOARD_TEXT_LIMITS, BoardTextStyle, isBoardStyle } from '../../boardDesign';
 import { Choice, ColorField, NumberField } from './controls';
 
 const CATEGORY_LABELS: Record<FontInfo['category'], string> = {
@@ -9,23 +10,28 @@ const CATEGORY_LABELS: Record<FontInfo['category'], string> = {
   script: 'Script',
 };
 
-type Props = {
-  style: TextStyle;
+type Props<S extends TextStyle | BoardTextStyle> = {
+  style: S;
   fonts: FontInfo[];
-  onChange: (style: TextStyle) => void;
+  onChange: (style: S) => void;
   // Names the controls as a group, for when a screen has more than one editor
   label?: string;
+  // Settings left out because they can't differ here (a part of a line is the line's size, and a line is aligned as a whole)
+  without?: ('size' | 'align')[];
 };
 
 // What a line of text gets when it is given a line height of its own
 const FIRST_LINE_HEIGHT = 1.2;
 
-// Everything about how a piece of text looks, in one place: font, size, weight, color, alignment, spacing
-export function StyleEditor({ style, fonts, onChange, label }: Props) {
+// Everything about how a piece of text looks, in one place: font, size, weight, color, alignment, spacing.
+// For the print menu (sizes in points) or the menu board (sizes in pixels, and no line height).
+export function StyleEditor<S extends TextStyle | BoardTextStyle>({ style, fonts, onChange, label, without = [] }: Props<S>) {
+  const board = isBoardStyle(style);
+  const print = style as TextStyle;
   const font = fonts.find((f) => f.id === style.font);
   // Only the weights the font really has (others the browser would fake); the current one stays in the list either way
   const weights = font ? (font.weights.includes(style.weight) ? font.weights : [...font.weights, style.weight].sort((a, b) => a - b)) : [style.weight];
-  const patch = (changes: Partial<TextStyle>) => onChange({ ...style, ...changes });
+  const patch = (changes: Partial<TextStyle> | Partial<BoardTextStyle>) => onChange({ ...style, ...changes });
 
   return (
     <div className="stack-sm" role={label ? 'group' : undefined} aria-label={label}>
@@ -55,7 +61,12 @@ export function StyleEditor({ style, fonts, onChange, label }: Props) {
       </label>
 
       <div className="grid-2">
-        <NumberField label="Size" unit="pt" min={4} max={96} step={0.5} value={style.sizePt} onChange={(sizePt) => patch({ sizePt })} />
+        {!without.includes('size') &&
+          (board ? (
+            <NumberField label="Size" unit="px" min={BOARD_TEXT_LIMITS.sizePx.min} max={BOARD_TEXT_LIMITS.sizePx.max} step={0.5} value={style.sizePx} onChange={(sizePx) => patch({ sizePx })} />
+          ) : (
+            <NumberField label="Size" unit="pt" min={4} max={96} step={0.5} value={print.sizePt} onChange={(sizePt) => patch({ sizePt })} />
+          ))}
         <label className="field-label">
           Weight
           <select className="field" value={style.weight} onChange={(e) => patch({ weight: Number(e.target.value) })}>
@@ -68,16 +79,18 @@ export function StyleEditor({ style, fonts, onChange, label }: Props) {
 
       <ColorField label="Color" value={style.color} onChange={(color) => patch({ color })} />
 
-      <Choice
-        label="Alignment"
-        value={style.align}
-        options={[
-          { value: 'left', label: 'Left' },
-          { value: 'center', label: 'Center' },
-          { value: 'right', label: 'Right' },
-        ]}
-        onChange={(align) => patch({ align })}
-      />
+      {!without.includes('align') && (
+        <Choice
+          label="Alignment"
+          value={style.align}
+          options={[
+            { value: 'left', label: 'Left' },
+            { value: 'center', label: 'Center' },
+            { value: 'right', label: 'Right' },
+          ]}
+          onChange={(align) => patch({ align })}
+        />
+      )}
 
       <div className="grid-2">
         {(font?.italic ?? true) && (
@@ -93,28 +106,32 @@ export function StyleEditor({ style, fonts, onChange, label }: Props) {
       </div>
 
       {/* Open to begin with when the text has spacing of its own, so it isn't hidden */}
-      <details className="design-more" open={style.letterSpacingEm !== 0 || style.lineHeight !== null}>
+      <details className="design-more" open={style.letterSpacingEm !== 0 || (!board && print.lineHeight !== null)}>
         <summary>Spacing</summary>
         <div className="stack-sm">
           <NumberField
             label="Letter spacing"
             unit="em"
-            min={-0.2}
-            max={1}
+            min={board ? BOARD_TEXT_LIMITS.letterSpacingEm.min : -0.2}
+            max={board ? BOARD_TEXT_LIMITS.letterSpacingEm.max : 1}
             step={0.01}
             value={style.letterSpacingEm}
             onChange={(letterSpacingEm) => patch({ letterSpacingEm })}
           />
-          <label className="check-row">
-            <input
-              type="checkbox"
-              checked={style.lineHeight !== null}
-              onChange={(e) => patch({ lineHeight: e.target.checked ? FIRST_LINE_HEIGHT : null })}
-            />
-            Set the line height
-          </label>
-          {style.lineHeight !== null && (
-            <NumberField label="Line height" min={0.8} max={3} step={0.05} value={style.lineHeight} onChange={(lineHeight) => patch({ lineHeight })} />
+          {!board && (
+            <>
+              <label className="check-row">
+                <input
+                  type="checkbox"
+                  checked={print.lineHeight !== null}
+                  onChange={(e) => patch({ lineHeight: e.target.checked ? FIRST_LINE_HEIGHT : null })}
+                />
+                Set the line height
+              </label>
+              {print.lineHeight !== null && (
+                <NumberField label="Line height" min={0.8} max={3} step={0.05} value={print.lineHeight} onChange={(lineHeight) => patch({ lineHeight })} />
+              )}
+            </>
           )}
         </div>
       </details>
