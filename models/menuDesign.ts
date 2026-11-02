@@ -11,9 +11,10 @@ is a number inside a range, one of a fixed list of words, a '#rrggbb' color, a f
 (by ID, see models/fonts.ts) or a short piece of text, and nothing but those validated values ever
 reaches the stylesheet. Text is only ever placed in the page escaped.
 
-Every field has a default, and the defaults reproduce the print menu as it looked before designs
-existed. A stored design only needs to hold what differs; parsePrintDesign() fills in the rest, so a
-field added later doesn't break designs stored without it.
+Every field has a default (the Modern design, see defaultPrintDesign()), which is what a menu prints
+with until a design is saved for it. A stored design only needs to hold what differs; parsePrintDesign()
+fills in the rest, so a field added later doesn't break designs stored without it. A saved design from the
+designer holds all of it, so a later change to the defaults doesn't change how it looks.
 
 Units: font sizes are points (pt); spacing is in rem (1 = the menu's normal 16px text size, scaling with
 the rest of the menu when it is shrunk to fit its pages); page margins are inches; widths are percent.
@@ -266,94 +267,21 @@ const BODY_TEXT: TextStyle = {
   lineHeight: null,
 };
 
-const HEADING_TEXT: TextStyle = { ...BODY_TEXT, font: 'roboto', sizePt: 18, weight: 700, color: '#3f3f3f', align: 'center' };
-
+// What a menu prints with until a design is saved for it: the Modern preset. Clean sans-serif type, a
+// dark band behind each section heading, thin lines between beers, and no footer.
 export function defaultPrintDesign(): PrintDesign {
+  const body: TextStyle = { ...BODY_TEXT, font: 'montserrat', sizePt: 10.5, color: '#222222' };
   return {
     version: DESIGN_VERSION,
     page: {
       size: 'letter',
-      marginsIn: { top: 0.5, right: 0.3, bottom: 0.75, left: 0.3 },
+      marginsIn: { top: 0.6, right: 0.5, bottom: 0.75, left: 0.5 },
       maxPages: 2,
       fit: 'shrink-to-pages',
       background: '#ffffff',
     },
     header: {
-      logo: { show: true, maxWidthPct: 8, align: 'center', spaceBelowRem: 0 },
-      title: { show: false, text: '{menu.name}', style: { ...HEADING_TEXT, sizePt: 24 } },
-    },
-    sections: {
-      widthPct: 96,
-      gapAboveRem: 0,
-      heading: {
-        style: { ...HEADING_TEXT },
-        box: {
-          paddingRem: { top: 0.625, right: 0.625, bottom: 0.625, left: 0.625 },
-          border: { widthPx: 3, style: 'solid', color: '#949494' },
-          background: null,
-          radiusPx: 0,
-        },
-      },
-    },
-    columns: [
-      {
-        id: 'item',
-        type: 'fields',
-        widthPct: 70,
-        lines: [
-          {
-            style: { ...BODY_TEXT },
-            parts: [
-              { field: 'breweryName', before: '', format: '{value}' },
-              { field: 'displayName', before: ' • ', format: '{value}', style: { weight: 700 } },
-              { field: 'style', before: ' • ', format: '{value}' },
-              { field: 'abv', before: ' • ', format: '{value}% ABV' },
-            ],
-          },
-        ],
-        belowLines: [{ style: { ...BODY_TEXT }, parts: [{ field: 'description', before: '', format: '{value}' }] }],
-      },
-      {
-        id: 'prices',
-        type: 'prices',
-        widthPct: null,
-        sizeWidthPct: 25,
-        sizes: 'all',
-        heading: { show: true, style: { ...BODY_TEXT, weight: 700, align: 'center' } },
-        cell: { style: { ...BODY_TEXT, align: 'center' }, format: '${value}' },
-      },
-    ],
-    rows: {
-      gapRem: 0,
-      divider: { show: false, color: '#cccccc', widthPx: 1, style: 'solid' },
-    },
-    footer: {
-      show: false,
-      text: '',
-      style: { ...BODY_TEXT, font: 'roboto', sizePt: 10, color: '#3f3f3f', align: 'center' },
-      rule: { show: true, color: '#949494', widthPx: 1 },
-      bottomIn: 0.3,
-    },
-  };
-}
-
-// Designs people can start from (copied into the draft, never referenced)
-export interface DesignPreset {
-  id: string;
-  name: string;
-  description: string;
-  design: PrintDesign;
-}
-
-// Clean and sans-serif: a dark band for each section heading, thin rules between items
-function modernPrintDesign(): PrintDesign {
-  const base = defaultPrintDesign();
-  const body: TextStyle = { ...BODY_TEXT, font: 'montserrat', sizePt: 10.5, color: '#222222' };
-  return {
-    ...base,
-    page: { ...base.page, marginsIn: { top: 0.6, right: 0.5, bottom: 0.75, left: 0.5 } },
-    header: {
-      logo: { ...base.header.logo, maxWidthPct: 10, spaceBelowRem: 0.5 },
+      logo: { show: true, maxWidthPct: 10, align: 'center', spaceBelowRem: 0.5 },
       title: { show: false, text: '{menu.name}', style: { ...body, sizePt: 26, weight: 700, align: 'center', transform: 'uppercase', letterSpacingEm: 0.1 } },
     },
     sections: {
@@ -398,8 +326,22 @@ function modernPrintDesign(): PrintDesign {
       },
     ],
     rows: { gapRem: 0.35, divider: { show: true, color: '#dddddd', widthPx: 1, style: 'solid' } },
-    footer: { ...base.footer, style: { ...base.footer.style, font: 'montserrat', sizePt: 9 } },
+    footer: {
+      show: false,
+      text: '',
+      style: { ...BODY_TEXT, font: 'montserrat', sizePt: 9, color: '#3f3f3f', align: 'center' },
+      rule: { show: true, color: '#949494', widthPx: 1 },
+      bottomIn: 0.3,
+    },
   };
+}
+
+// Designs people can start from (copied into the draft, never referenced)
+export interface DesignPreset {
+  id: string;
+  name: string;
+  description: string;
+  design: PrintDesign;
 }
 
 // Warm and old-fashioned: serif type on cream paper, a double rule around each heading
@@ -455,7 +397,7 @@ function rusticPrintDesign(): PrintDesign {
       },
     ],
     rows: { gapRem: 0.5, divider: { show: true, color: '#b59b78', widthPx: 1, style: 'dotted' } },
-    footer: { ...base.footer, style: { ...base.footer.style, font: 'lora', italic: true, color: '#5b4632' }, rule: { show: true, color: '#b59b78', widthPx: 1 } },
+    footer: { ...base.footer, style: { ...base.footer.style, font: 'lora', sizePt: 10, italic: true, color: '#5b4632' }, rule: { show: true, color: '#b59b78', widthPx: 1 } },
   };
 }
 
@@ -467,7 +409,7 @@ function compactPrintDesign(): PrintDesign {
     ...base,
     page: { ...base.page, marginsIn: { top: 0.4, right: 0.4, bottom: 0.6, left: 0.4 }, maxPages: 1 },
     header: {
-      logo: { ...base.header.logo, maxWidthPct: 6 },
+      logo: { ...base.header.logo, maxWidthPct: 6, spaceBelowRem: 0 },
       title: { show: false, text: '{menu.name}', style: { ...body, sizePt: 18, weight: 700, align: 'center' } },
     },
     sections: {
@@ -512,14 +454,13 @@ function compactPrintDesign(): PrintDesign {
       },
     ],
     rows: { gapRem: 0.15, divider: { show: true, color: '#e2e2e2', widthPx: 1, style: 'solid' } },
-    footer: { ...base.footer, style: { ...base.footer.style, sizePt: 8 }, bottomIn: 0.2 },
+    footer: { ...base.footer, style: { ...base.footer.style, font: 'roboto', sizePt: 8 }, bottomIn: 0.2 },
   };
 }
 
 export function printDesignPresets(): DesignPreset[] {
   return [
-    { id: 'classic', name: 'Classic', description: 'The print menu as it has always looked.', design: defaultPrintDesign() },
-    { id: 'modern', name: 'Modern', description: 'Clean sans-serif type, a dark band behind each section heading, thin lines between beers.', design: modernPrintDesign() },
+    { id: 'modern', name: 'Modern', description: 'Clean sans-serif type, a dark band behind each section heading, thin lines between beers.', design: defaultPrintDesign() },
     { id: 'rustic', name: 'Rustic', description: 'Serif type on cream paper with a double rule around each heading.', design: rusticPrintDesign() },
     { id: 'compact', name: 'Compact', description: 'Small type and tight rows, for a long list that has to fit on one page.', design: compactPrintDesign() },
   ];

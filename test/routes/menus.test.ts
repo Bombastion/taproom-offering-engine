@@ -42,8 +42,6 @@ beforeEach(async () => {
   provider = memoryProvider();
   data = await seed(provider);
   app = express();
-  app.set('view engine', 'pug');
-  app.set('views', path.join(repoRoot, 'public/views'));
   app.use('/menus', new MenusRoutes(provider).router);
 });
 
@@ -238,7 +236,7 @@ describe('?format=print', () => {
     expect(res.status).toBe(200);
     expect(res.headers['content-type']).toMatch(/text\/html/);
     const html = res.text;
-    for (const text of ['Drafts', 'Guest Taps', 'Hazy Sequence', 'Pils', 'Guest Sour', 'Zymos Brewing', 'NEIPA', '6.5% ABV', 'Juicy']) {
+    for (const text of ['Drafts', 'Guest Taps', 'Hazy Sequence', 'Pils', 'Guest Sour', 'Zymos Brewing', 'NEIPA', '6.5%', 'Juicy']) {
       expect(html).toContain(text);
     }
     // Prices always show cents
@@ -311,13 +309,13 @@ describe('items missing a style or an ABV', () => {
   it('leaves out a missing ABV or style on the print view, with no blank or stray bullet', async () => {
     await addDrafts(...ITEMS);
     const lines = descriptions((await request(app).get(`/menus/${data.menu.id}?format=print`)).text);
-    expect(lines).toContain('Zymos Brewing • Style Only • Stout');
-    expect(lines).toContain('Zymos Brewing • ABV Only • 4.8% ABV');
-    expect(lines).toContain('Zymos Brewing • Bare');
+    expect(lines).toContain('Zymos Brewing · Style Only · Stout');
+    expect(lines).toContain('Zymos Brewing · ABV Only · 4.8%');
+    expect(lines).toContain('Zymos Brewing · Bare');
     // A beer with no ABV set isn't the same as 0%
-    expect(lines).toContain('Zymos Brewing • Zero • NA Lager • 0% ABV');
-    expect(lines).toContain('Zymos Brewing • Hazy Sequence • NEIPA • 6.5% ABV');
-    expect(lines.filter((line) => /null|undefined|% ABV$/.test(line) && !/\d% ABV$/.test(line))).toEqual([]);
+    expect(lines).toContain('Zymos Brewing · Zero · NA Lager · 0%');
+    expect(lines).toContain('Zymos Brewing · Hazy Sequence · NEIPA · 6.5%');
+    expect(lines.filter((line) => /null|undefined|[^\d]%$/.test(line))).toEqual([]);
   });
 
   describe('on the menu board', () => {
@@ -415,9 +413,9 @@ describe('the default brewery', () => {
   it('is named on the print view when the menu has no default brewery', async () => {
     const html = (await request(app).get(`/menus/${data.menu.id}?format=print`)).text;
     expect(descriptions(html).filter(Boolean)).toEqual([
-      expect.stringMatching(/^Zymos Brewing • Hazy Sequence/),
-      expect.stringMatching(/^Zymos Brewing • Pils/),
-      expect.stringMatching(/^Guest Co • Guest Sour/),
+      expect.stringMatching(/^Zymos Brewing · Hazy Sequence/),
+      expect.stringMatching(/^Zymos Brewing · Pils/),
+      expect.stringMatching(/^Guest Co · Guest Sour/),
     ]);
   });
 
@@ -426,9 +424,9 @@ describe('the default brewery', () => {
     const html = (await request(app).get(`/menus/${data.menu.id}?format=print`)).text;
     const lines = descriptions(html).filter(Boolean);
     expect(lines).toEqual([
-      expect.stringMatching(/^Hazy Sequence • NEIPA • 6.5% ABV/),
-      expect.stringMatching(/^Pils • Pilsner • 4.8% ABV/),
-      expect.stringMatching(/^Guest Co • Guest Sour/),
+      expect.stringMatching(/^Hazy Sequence · NEIPA · 6.5%/),
+      expect.stringMatching(/^Pils · Pilsner · 4.8%/),
+      expect.stringMatching(/^Guest Co · Guest Sour/),
     ]);
     // Nowhere on the page is the default brewery named any more
     expect(html).not.toContain('Zymos Brewing');
