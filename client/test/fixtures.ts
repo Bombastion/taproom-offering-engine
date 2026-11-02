@@ -254,7 +254,7 @@ const PAGE_IMAGE = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAA
 export const boardPages = { pages: [PAGE_IMAGE, PAGE_IMAGE.replace('iVBOR', 'iVBOS')] };
 
 export const boardPresets = [
-  { id: 'classic', name: 'Classic', description: 'Blue background with dark section bars.', design: boardDesign },
+  { id: 'bold', name: 'Bold', description: 'Big condensed capitals on deep blue.', design: boardDesign },
   {
     id: 'dark',
     name: 'Dark',

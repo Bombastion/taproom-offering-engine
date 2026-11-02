@@ -11,8 +11,7 @@ The board is a 1080x1920 picture per screenful, so every size here is in pixels 
 (BOARD_WIDTH x BOARD_HEIGHT). It has no prices, and no columns: each item is a row with a picture and
 lines of text built from the item's fields ("parts"), the way a print column's lines are.
 
-The defaults are the board as it was drawn before designs existed (blue background, dark section
-bars, Fira Sans), so a menu with no saved design looks exactly as it always has.
+A menu with no saved design is drawn with the default (the Bold preset, see defaultBoardDesign()).
 */
 
 export const BOARD_WIDTH = 1080;
@@ -120,54 +119,54 @@ export const boardDesignSchema = z.strictObject({
 });
 export type BoardDesign = z.infer<typeof boardDesignSchema>;
 
-// ---- Defaults: the menu board as it was before designs existed ----
+// ---- Defaults and presets ----
 
-const FIRA: BoardTextStyle = {
-  font: 'fira-sans',
-  sizePx: 52.5,
-  weight: 400,
-  italic: false,
-  color: '#f3f3f3',
-  align: 'left',
-  transform: 'none',
-  letterSpacingEm: 0,
-};
+// A text style with every setting stated
+function textStyle(font: string, sizePx: number, color: string, more: Partial<BoardTextStyle> = {}): BoardTextStyle {
+  return { font, sizePx, weight: 400, italic: false, color, align: 'left', transform: 'none', letterSpacingEm: 0, ...more };
+}
 
-const QUIET = '#9d9d9d';
-
+// What a menu's board is drawn with until a design is saved for it: the Bold preset. Big condensed
+// capitals on deep blue with red section bars, easy to read from across the room.
 export function defaultBoardDesign(): BoardDesign {
+  return boldBoardDesign();
+}
+
+// Big condensed capitals, easy to read from across the room
+function boldBoardDesign(): BoardDesign {
+  const quiet = { color: '#8fb8de' };
   return {
     version: DESIGN_VERSION,
-    canvas: { background: '#175a6c', safeMarginPx: 40 },
+    canvas: { background: '#0e2a47', safeMarginPx: 40 },
     header: {
       logo: { show: true, sizePx: 150, align: 'center', fit: 'stretch' },
-      title: { show: false, text: '{menu.name}', gapAbovePx: 0, style: { ...FIRA, sizePx: 60, color: '#ffffff', align: 'center' } },
+      title: { show: false, text: '{menu.name}', gapAbovePx: 0, style: textStyle('bebas-neue', 60, '#ffffff', { align: 'center' }) },
       gapBelowPx: 0,
     },
     sections: {
       gapPx: 30,
       bar: {
-        heightPx: 52.5,
+        heightPx: 74,
         marginTopPx: 10,
         insetPx: 5,
-        textTopPx: 2.5,
-        background: '#2b2b2b',
+        textTopPx: 8,
+        background: '#d6402b',
         radiusPx: 0,
         continuedSuffix: ', Continued',
-        style: { ...FIRA, sizePx: 42.5, color: '#ffffff' },
+        style: textStyle('bebas-neue', 62, '#ffffff', { transform: 'uppercase', letterSpacingEm: 0.06 }),
       },
     },
     items: {
       gapPx: 10,
-      logo: { show: true, sizePx: 52.5, shape: 'circle', source: 'item-then-menu' },
+      logo: { show: true, sizePx: 64, shape: 'circle', source: 'item-then-menu' },
       lines: [
         {
-          style: FIRA,
+          style: textStyle('bebas-neue', 64, '#ffffff', { transform: 'uppercase', letterSpacingEm: 0.03 }),
           parts: [
             { field: 'breweryName', before: '', format: '{value}' },
             { field: 'displayName', before: ' ', format: '{value}' },
-            { field: 'style', before: '  ', format: '{value}', style: { color: QUIET } },
-            { field: 'abv', before: '  ', format: '{value}%', style: { color: QUIET } },
+            { field: 'style', before: '  ', format: '{value}', style: quiet },
+            { field: 'abv', before: '  ', format: '{value}%', style: quiet },
           ],
         },
       ],
@@ -175,44 +174,42 @@ export function defaultBoardDesign(): BoardDesign {
   };
 }
 
-// ---- Presets ----
-
-function withFont(design: BoardDesign, font: string, weights: { bar?: number; item?: number } = {}): BoardDesign {
-  const lines = design.items.lines.map((line) => ({ ...line, style: { ...line.style, font, weight: weights.item ?? line.style.weight } }));
-  return {
-    ...design,
-    header: { ...design.header, title: { ...design.header.title, style: { ...design.header.title.style, font } } },
-    sections: { ...design.sections, bar: { ...design.sections.bar, style: { ...design.sections.bar.style, font, weight: weights.bar ?? design.sections.bar.style.weight } } },
-    items: { ...design.items, lines },
-  };
-}
-
 // Near-black with warm amber bars and bold uppercase section names
 function darkBoardDesign(): BoardDesign {
-  const base = withFont(defaultBoardDesign(), 'montserrat', { bar: 700 });
-  const item = { ...base.items.lines[0].style, color: '#f1ede4', sizePx: 46 };
+  const quiet = { color: '#b5ab96' };
   return {
-    ...base,
-    canvas: { ...base.canvas, background: '#141414' },
+    version: DESIGN_VERSION,
+    canvas: { background: '#141414', safeMarginPx: 40 },
+    header: {
+      logo: { show: true, sizePx: 150, align: 'center', fit: 'stretch' },
+      title: { show: false, text: '{menu.name}', gapAbovePx: 0, style: textStyle('montserrat', 60, '#ffffff', { align: 'center' }) },
+      gapBelowPx: 0,
+    },
     sections: {
-      ...base.sections,
+      gapPx: 30,
       bar: {
-        ...base.sections.bar,
         heightPx: 60,
+        marginTopPx: 10,
+        insetPx: 5,
         textTopPx: 7,
         background: '#e0a526',
         radiusPx: 6,
-        style: { ...base.sections.bar.style, sizePx: 38, color: '#141414', transform: 'uppercase', letterSpacingEm: 0.08 },
+        continuedSuffix: ', Continued',
+        style: textStyle('montserrat', 38, '#141414', { weight: 700, transform: 'uppercase', letterSpacingEm: 0.08 }),
       },
     },
     items: {
-      ...base.items,
-      logo: { ...base.items.logo, sizePx: 46 },
+      gapPx: 10,
+      logo: { show: true, sizePx: 46, shape: 'circle', source: 'item-then-menu' },
       lines: [
         {
-          style: item,
-          parts: base.items.lines[0].parts.map((part, index) =>
-            index === 1 ? { ...part, style: { weight: 700 } } : part.style ? { ...part, style: { color: '#b5ab96' } } : part),
+          style: textStyle('montserrat', 46, '#f1ede4'),
+          parts: [
+            { field: 'breweryName', before: '', format: '{value}' },
+            { field: 'displayName', before: ' ', format: '{value}', style: { weight: 700 } },
+            { field: 'style', before: '  ', format: '{value}', style: quiet },
+            { field: 'abv', before: '  ', format: '{value}%', style: quiet },
+          ],
         },
       ],
     },
@@ -221,60 +218,40 @@ function darkBoardDesign(): BoardDesign {
 
 // Cream paper with serif type, the way a chalkboard menu might read
 function lightBoardDesign(): BoardDesign {
-  const base = withFont(defaultBoardDesign(), 'playfair-display', { bar: 700 });
-  const item = { ...base.items.lines[0].style, color: '#3b2a1a', sizePx: 50 };
+  const quiet = { color: '#8c6a43', italic: true };
   return {
-    ...base,
-    canvas: { ...base.canvas, background: '#f6efdc' },
+    version: DESIGN_VERSION,
+    canvas: { background: '#f6efdc', safeMarginPx: 40 },
+    header: {
+      logo: { show: true, sizePx: 150, align: 'center', fit: 'stretch' },
+      title: { show: false, text: '{menu.name}', gapAbovePx: 0, style: textStyle('playfair-display', 60, '#3b2a1a', { align: 'center' }) },
+      gapBelowPx: 0,
+    },
     sections: {
-      ...base.sections,
+      gapPx: 30,
       bar: {
-        ...base.sections.bar,
         heightPx: 60,
+        marginTopPx: 10,
+        insetPx: 5,
         textTopPx: 7,
         background: '#4a2f1b',
         radiusPx: 0,
-        style: { ...base.sections.bar.style, sizePx: 36, color: '#f6efdc', align: 'center' },
+        continuedSuffix: ', Continued',
+        style: textStyle('playfair-display', 36, '#f6efdc', { weight: 700, align: 'center' }),
       },
     },
     items: {
-      ...base.items,
-      logo: { ...base.items.logo, sizePx: 50 },
+      gapPx: 10,
+      logo: { show: true, sizePx: 50, shape: 'circle', source: 'item-then-menu' },
       lines: [
         {
-          style: item,
-          parts: base.items.lines[0].parts.map((part, index) =>
-            index === 1 ? { ...part, style: { weight: 700 } } : part.style ? { ...part, style: { color: '#8c6a43', italic: true } } : part),
-        },
-      ],
-    },
-  };
-}
-
-// Big condensed capitals, easy to read from across the room
-function boldBoardDesign(): BoardDesign {
-  const base = withFont(defaultBoardDesign(), 'bebas-neue');
-  const item = { ...base.items.lines[0].style, sizePx: 64, color: '#ffffff', transform: 'uppercase' as const, letterSpacingEm: 0.03 };
-  return {
-    ...base,
-    canvas: { ...base.canvas, background: '#0e2a47' },
-    sections: {
-      ...base.sections,
-      bar: {
-        ...base.sections.bar,
-        heightPx: 74,
-        textTopPx: 8,
-        background: '#d6402b',
-        style: { ...base.sections.bar.style, sizePx: 62, transform: 'uppercase', letterSpacingEm: 0.06 },
-      },
-    },
-    items: {
-      ...base.items,
-      logo: { ...base.items.logo, sizePx: 64 },
-      lines: [
-        {
-          style: item,
-          parts: base.items.lines[0].parts.map((part) => (part.style ? { ...part, style: { color: '#8fb8de' } } : part)),
+          style: textStyle('playfair-display', 50, '#3b2a1a'),
+          parts: [
+            { field: 'breweryName', before: '', format: '{value}' },
+            { field: 'displayName', before: ' ', format: '{value}', style: { weight: 700 } },
+            { field: 'style', before: '  ', format: '{value}', style: quiet },
+            { field: 'abv', before: '  ', format: '{value}%', style: quiet },
+          ],
         },
       ],
     },
@@ -283,10 +260,9 @@ function boldBoardDesign(): BoardDesign {
 
 export function boardDesignPresets(): DesignPreset<BoardDesign>[] {
   return [
-    { id: 'classic', name: 'Classic', description: 'Blue background with dark section bars: the board as it has always looked.', design: defaultBoardDesign() },
+    { id: 'bold', name: 'Bold', description: 'Big condensed capitals on deep blue with red section bars, for reading from across the room.', design: boldBoardDesign() },
     { id: 'dark', name: 'Dark', description: 'Near-black background with amber section bars.', design: darkBoardDesign() },
     { id: 'light', name: 'Light', description: 'Cream background with serif type and brown section bars.', design: lightBoardDesign() },
-    { id: 'bold', name: 'Bold', description: 'Big condensed capitals on deep blue, for reading from across the room.', design: boldBoardDesign() },
   ];
 }
 

@@ -3,6 +3,7 @@ import pdfkit from 'pdfkit';
 import * as mupdf from 'mupdf';
 import { renderBoardPages } from '../../board/render';
 import { BoardDesign, boardDesignPresets, defaultBoardDesign } from '../../models/boardDesign';
+import { blueBoardDesign } from './designs';
 import { FONTS } from '../../models/fonts';
 import { PrintItem, PrintModel } from '../../print/model';
 import { solidPng } from '../helpers';
@@ -35,7 +36,7 @@ function modelOf(sections: Array<[string, PrintItem[]]> = [['Drafts', [item()]]]
 }
 
 function changed(change: (design: any) => void): BoardDesign {
-  const design: any = structuredClone(defaultBoardDesign());
+  const design: any = structuredClone(blueBoardDesign());
   change(design);
   return design;
 }
@@ -57,16 +58,16 @@ const decode = (png: Uint8Array) => {
 
 const hex = (color: string) => [1, 3, 5].map((i) => parseInt(color.slice(i, i + 2), 16));
 const near = (actual: number[], expected: number[], tolerance = 3) => actual.every((value, i) => Math.abs(value - expected[i]) <= tolerance);
-const BG = hex(defaultBoardDesign().canvas.background);
-const BAR = hex(defaultBoardDesign().sections.bar.background!);
+const BG = hex(blueBoardDesign().canvas.background);
+const BAR = hex(blueBoardDesign().sections.bar.background!);
 
-async function page(model: PrintModel, design: BoardDesign = defaultBoardDesign(), index = 0) {
+async function page(model: PrintModel, design: BoardDesign = blueBoardDesign(), index = 0) {
   return decode((await renderBoardPages(model, design))[index]);
 }
 
 // Every string drawn on the board, in order, with where each run of text starts (x and y are only given
 // for the first piece of a line). Text is also laid out on a scratch page to measure it; that is left out.
-async function textDrawn(model: PrintModel, design: BoardDesign = defaultBoardDesign()) {
+async function textDrawn(model: PrintModel, design: BoardDesign = blueBoardDesign()) {
   const spy = vi.spyOn(pdfkit.prototype, 'text');
   await renderBoardPages(model, design);
   const calls = spy.mock.calls
@@ -90,7 +91,7 @@ const manyItems = (count: number) => Array.from({ length: count }, (_, i) => ite
 
 describe('the canvas', () => {
   it('is one 1080x1920 picture per screenful, painted with the background', async () => {
-    const pages = await renderBoardPages(modelOf(), defaultBoardDesign());
+    const pages = await renderBoardPages(modelOf(), blueBoardDesign());
     expect(pages).toHaveLength(1);
     const image = decode(pages[0]);
     expect([image.width, image.height]).toEqual([1080, 1920]);
@@ -113,7 +114,7 @@ describe('the canvas', () => {
   });
 
   it('is just the background (and the logo) for a menu with nothing on it', async () => {
-    const pages = await renderBoardPages(modelOf([]), defaultBoardDesign());
+    const pages = await renderBoardPages(modelOf([]), blueBoardDesign());
     expect(pages).toHaveLength(1);
     const image = decode(pages[0]);
     expect(image.at(540, 400)).toEqual(BG);
@@ -121,7 +122,7 @@ describe('the canvas', () => {
   });
 
   it('can be drawn at a smaller scale', async () => {
-    const image = decode((await renderBoardPages(modelOf(), defaultBoardDesign(), { scale: 0.5 }))[0]);
+    const image = decode((await renderBoardPages(modelOf(), blueBoardDesign(), { scale: 0.5 }))[0]);
     expect([image.width, image.height]).toEqual([540, 960]);
   });
 });
@@ -194,7 +195,7 @@ describe('the header', () => {
   });
 
   it('is on every page', async () => {
-    const pages = await renderBoardPages(modelOf([['Drafts', manyItems(40)]]), defaultBoardDesign());
+    const pages = await renderBoardPages(modelOf([['Drafts', manyItems(40)]]), blueBoardDesign());
     expect(pages.length).toBeGreaterThan(1);
     for (const png of pages) expect(near(decode(png).at(540, 40 + 75), RED)).toBe(true);
   });
@@ -254,7 +255,7 @@ describe('section bars', () => {
   it('are not left alone at the bottom of a page, away from their first item', async () => {
     // Sections of two items each: wherever the page ends, a bar is followed by an item on the same page
     const sections: Array<[string, PrintItem[]]> = Array.from({ length: 12 }, (_, i) => [`Section ${i}`, manyItems(2)]);
-    const pages = await renderBoardPages(modelOf(sections), defaultBoardDesign());
+    const pages = await renderBoardPages(modelOf(sections), blueBoardDesign());
     expect(pages.length).toBeGreaterThan(1);
     for (const png of pages) {
       const image = decode(png);
@@ -387,7 +388,7 @@ describe('item rows', () => {
   });
 
   it('start a new page before they would run into the bottom', async () => {
-    const pages = await renderBoardPages(modelOf([['Drafts', manyItems(40)]]), defaultBoardDesign());
+    const pages = await renderBoardPages(modelOf([['Drafts', manyItems(40)]]), blueBoardDesign());
     expect(pages.length).toBeGreaterThan(2);
   });
 });
@@ -421,6 +422,10 @@ describe('type', () => {
 });
 
 describe('the presets', () => {
+  it('start with the default design', () => {
+    expect(boardDesignPresets()[0].design).toEqual(defaultBoardDesign());
+  });
+
   it.each(boardDesignPresets().map((preset) => [preset.id, preset.design] as const))('%s draws a full menu inside the margins', async (_id, design) => {
     const sections: Array<[string, PrintItem[]]> = [['Drafts', manyItems(14)], ['Guest Taps', manyItems(9)], ['Cans', manyItems(6)]];
     const pages = await renderBoardPages(modelOf(sections), design);

@@ -48,9 +48,8 @@ export class MenusRoutes extends Routes {
           pageNumber = Number(pageParam);
         }
 
-        // How the board is drawn is its stored design, or the default one (the look every board had
-        // before designs existed). A stored design that can't be read must not take the public board
-        // down, so it falls back to the default.
+        // How the board is drawn is its stored design, or the default one. A stored design that
+        // can't be read must not take the public board down, so it falls back to the default.
         let design = defaultBoardDesign();
         const stored = await this.dataProvider.getMenuDesign(result.id!, 'board');
         if (stored) {
@@ -130,9 +129,8 @@ export class MenusRoutes extends Routes {
         return;
       }
       if (req.query.format === "print") {
-        // How this menu is laid out is its stored design, or the default one (the layout every menu
-        // had before designs existed). A stored design that can't be read must not take the public
-        // menu down, so it falls back to the default.
+        // How this menu is laid out is its stored design, or the default one. A stored design that
+        // can't be read must not take the public menu down, so it falls back to the default.
         const stored = await this.dataProvider.getMenuDesign(result.id!, 'print');
         let design = defaultPrintDesign();
         if (stored) {

@@ -139,7 +139,7 @@ describe('board presets', () => {
     await user.click(screen.getByRole('button', { name: 'Presets' }));
     const sheet = await screen.findByRole('dialog', { name: 'Start from a design' });
     expect(await within(sheet).findByText('Near-black background with amber section bars.')).toBeInTheDocument();
-    expect(sheet).toHaveTextContent('Classic');
+    expect(sheet).toHaveTextContent('Bold');
     expect(sheet).toHaveTextContent('Dark');
     expect(server.calls('GET', '/api/design/presets').at(-1)!.search).toBe('?view=board');
   });
