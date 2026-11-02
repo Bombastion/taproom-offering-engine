@@ -29,7 +29,7 @@ export const containers: Container[] = [
 ];
 
 export const breweries: Brewery[] = [
-  { id: 'b1', name: 'Zymos Brewing', location: 'Littleton, CO', hasLogo: false },
+  { id: 'b1', name: 'Example Brewery', location: 'Nowhere, US', hasLogo: false },
   { id: 'b2', name: 'Guest Co', location: null, hasLogo: true },
 ];
 
@@ -38,7 +38,7 @@ const hazy = {
   displayName: 'Hazy Sequence',
   internalName: 'hazy-sequence',
   breweryId: 'b1',
-  breweryName: 'Zymos Brewing',
+  breweryName: 'Example Brewery',
   style: 'NEIPA',
   abv: 6.5,
   description: 'Juicy',
@@ -86,7 +86,7 @@ export const menuItem: MenuItemDetail = {
 
 export const library: LibraryItem[] = [
   { id: 'i3', displayName: 'Guest Sour', internalName: 'guest-sour', breweryId: 'b2', breweryName: 'Guest Co', style: 'Sour', abv: 5.2 },
-  { id: 'i1', displayName: 'Hazy Sequence', internalName: 'hazy-sequence', breweryId: 'b1', breweryName: 'Zymos Brewing', style: 'NEIPA', abv: 6.5 },
+  { id: 'i1', displayName: 'Hazy Sequence', internalName: 'hazy-sequence', breweryId: 'b1', breweryName: 'Example Brewery', style: 'NEIPA', abv: 6.5 },
   { id: 'i4', displayName: 'Pretzel', internalName: 'pretzel', breweryId: null, breweryName: null, style: null, abv: null },
 ];
 
@@ -108,8 +108,8 @@ export const fullPourUses: ContainerUse[] = [
 
 export const brewery: BreweryDetail = {
   id: 'b1',
-  name: 'Zymos Brewing',
-  location: 'Littleton, CO',
+  name: 'Example Brewery',
+  location: 'Nowhere, US',
   logo: null,
   items: [{ id: 'i1', displayName: 'Hazy Sequence', style: 'NEIPA', abv: 6.5 }],
 };
@@ -179,7 +179,7 @@ export const printDesign: PrintDesign = {
 export const defaultDesignState: PrintDesignState = { design: printDesign, isDefault: true, updatedAt: null };
 
 export const savedDesignState: PrintDesignState = {
-  design: { ...printDesign, footer: { ...printDesign.footer, show: true, text: 'WiFi: Zymos' } },
+  design: { ...printDesign, footer: { ...printDesign.footer, show: true, text: 'WiFi: Example' } },
   isDefault: false,
   updatedAt: '2026-10-30T12:00:00.000Z',
 };

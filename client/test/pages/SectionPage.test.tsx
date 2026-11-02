@@ -16,7 +16,7 @@ describe('SectionPage', () => {
     const hazy = await screen.findByRole('link', { name: /Hazy Sequence/ });
     expect(hazy).toHaveAttribute('href', `${base}/items/mi1`);
     expect(hazy).toHaveTextContent('6.5% ABV');
-    expect(hazy).toHaveTextContent('NEIPA · Zymos Brewing');
+    expect(hazy).toHaveTextContent('NEIPA · Example Brewery');
     expect(hazy).toHaveTextContent('Taster $3');
     expect(hazy).toHaveTextContent('Full Pour $8.50');
     const pils = screen.getByRole('link', { name: /Pils/ });

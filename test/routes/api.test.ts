@@ -124,14 +124,14 @@ describe('menus', () => {
   });
 
   describe('default brewery', () => {
-    const zymos = () => data.breweries.zymos.id;
+    const exampleId = () => data.breweries.example.id;
     const defaultOf = async () => (await request(app).get(`/api/menus/${data.menu.id}`)).body.defaultBreweryId;
 
     it('is set, shown, and cleared again with null', async () => {
-      const set = await request(app).patch(`/api/menus/${data.menu.id}`).send({ defaultBreweryId: zymos() });
+      const set = await request(app).patch(`/api/menus/${data.menu.id}`).send({ defaultBreweryId: exampleId() });
       expect(set.status).toBe(200);
-      expect(set.body).toEqual({ id: data.menu.id, displayName: 'Currently On Tap', internalName: 'on-tap', defaultBreweryId: zymos() });
-      expect(await defaultOf()).toBe(zymos());
+      expect(set.body).toEqual({ id: data.menu.id, displayName: 'Currently On Tap', internalName: 'on-tap', defaultBreweryId: exampleId() });
+      expect(await defaultOf()).toBe(exampleId());
 
       const cleared = await request(app).patch(`/api/menus/${data.menu.id}`).send({ defaultBreweryId: null });
       expect(cleared.status).toBe(200);
@@ -140,10 +140,10 @@ describe('menus', () => {
     });
 
     it('is left alone by a rename, and a rename by setting it', async () => {
-      await request(app).patch(`/api/menus/${data.menu.id}`).send({ defaultBreweryId: zymos() });
+      await request(app).patch(`/api/menus/${data.menu.id}`).send({ defaultBreweryId: exampleId() });
       const renamed = await request(app).patch(`/api/menus/${data.menu.id}`).send({ displayName: 'On Tap Now' });
-      expect(renamed.body.defaultBreweryId).toBe(zymos());
-      expect(await defaultOf()).toBe(zymos());
+      expect(renamed.body.defaultBreweryId).toBe(exampleId());
+      expect(await defaultOf()).toBe(exampleId());
 
       const both = await request(app).patch(`/api/menus/${data.menu.id}`).send({ displayName: 'Taps', defaultBreweryId: null });
       expect(both.body).toEqual({ id: data.menu.id, displayName: 'Taps', internalName: 'on-tap', defaultBreweryId: null });
@@ -152,19 +152,19 @@ describe('menus', () => {
     });
 
     it('is left alone when uploading or removing the logo', async () => {
-      await request(app).patch(`/api/menus/${data.menu.id}`).send({ defaultBreweryId: zymos() });
+      await request(app).patch(`/api/menus/${data.menu.id}`).send({ defaultBreweryId: exampleId() });
       expect((await request(app).put(`/api/menus/${data.menu.id}/logo`).send({ logo: TINY_PNG })).status).toBe(200);
-      expect(await defaultOf()).toBe(zymos());
+      expect(await defaultOf()).toBe(exampleId());
       expect((await request(app).delete(`/api/menus/${data.menu.id}/logo`)).status).toBe(204);
-      expect(await defaultOf()).toBe(zymos());
+      expect(await defaultOf()).toBe(exampleId());
     });
 
     it('404s for a brewery that does not exist, and changes nothing', async () => {
-      await request(app).patch(`/api/menus/${data.menu.id}`).send({ defaultBreweryId: zymos() });
+      await request(app).patch(`/api/menus/${data.menu.id}`).send({ defaultBreweryId: exampleId() });
       const res = await request(app).patch(`/api/menus/${data.menu.id}`).send({ displayName: 'Nope', defaultBreweryId: 'nope' });
       expect(res.status).toBe(404);
       expect(res.text).toBe('Brewery not found');
-      expect(await defaultOf()).toBe(zymos());
+      expect(await defaultOf()).toBe(exampleId());
       expect((await provider.getMenu(data.menu.id!))?.displayName).toBe('Currently On Tap');
     });
 
@@ -174,7 +174,7 @@ describe('menus', () => {
     });
 
     it('treats an empty ID as none', async () => {
-      await request(app).patch(`/api/menus/${data.menu.id}`).send({ defaultBreweryId: zymos() });
+      await request(app).patch(`/api/menus/${data.menu.id}`).send({ defaultBreweryId: exampleId() });
       expect((await request(app).patch(`/api/menus/${data.menu.id}`).send({ defaultBreweryId: '' })).status).toBe(200);
       expect(await defaultOf()).toBeNull();
     });
@@ -349,8 +349,8 @@ describe('sections', () => {
             id: data.items.hazy.id,
             displayName: 'Hazy Sequence',
             internalName: 'hazy-sequence',
-            breweryId: data.breweries.zymos.id,
-            breweryName: 'Zymos Brewing',
+            breweryId: data.breweries.example.id,
+            breweryName: 'Example Brewery',
             style: 'NEIPA',
             abv: 6.5,
             description: 'Juicy',
@@ -443,7 +443,7 @@ describe('adding items to a section', () => {
     const res = await request(app)
       .post(`/api/sections/${data.sections.drafts.id}/items`)
       .send({
-        item: { displayName: 'Dark Lager', breweryId: data.breweries.zymos.id, style: 'Schwarzbier', abv: '5.1', description: '  Roasty  ' },
+        item: { displayName: 'Dark Lager', breweryId: data.breweries.example.id, style: 'Schwarzbier', abv: '5.1', description: '  Roasty  ' },
         pours: [{ containerId: data.containers.fullPour.id, price: 7.255 }, { containerId: data.containers.taster.id, price: '2.5' }],
       });
     expect(res.status).toBe(201);
@@ -452,7 +452,7 @@ describe('adding items to a section', () => {
     expect(item).toMatchObject({
       displayName: 'Dark Lager',
       internalName: 'dark-lager',
-      breweryId: data.breweries.zymos.id,
+      breweryId: data.breweries.example.id,
       style: 'Schwarzbier',
       abv: 5.1,
       description: 'Roasty',
@@ -532,7 +532,7 @@ describe('menu items', () => {
       menuItemId: data.menuItems.hazyOnDrafts.id,
       section: { id: data.sections.drafts.id, displayName: 'Drafts' },
       menu: { id: data.menu.id, displayName: 'Currently On Tap' },
-      item: { displayName: 'Hazy Sequence', breweryName: 'Zymos Brewing' },
+      item: { displayName: 'Hazy Sequence', breweryName: 'Example Brewery' },
       pours: [{ displayName: 'Taster', price: 3 }, { displayName: 'Full Pour', price: 8 }],
       otherPlacementCount: 1,
     });
@@ -603,7 +603,7 @@ describe('item images', () => {
     request(app).put(`/api/menu-items/${menuItemId}/logo`).send(body as object);
 
   it('has no image of its own to start with, reporting what it falls back to', async () => {
-    // Hazy Sequence is Zymos's (no logo), so it falls back to the menu's; Guest Sour to its brewery's
+    // Hazy Sequence is Example Brewery's (no logo), so it falls back to the menu's; Guest Sour to its brewery's
     const hazy = await request(app).get(`/api/menu-items/${data.menuItems.hazyOnDrafts.id}`);
     expect(hazy.body).toMatchObject({ logo: null, logoFallback: 'menu' });
     const sour = await request(app).get(`/api/menu-items/${data.menuItems.sourOnGuest.id}`);
@@ -728,8 +728,8 @@ describe('library', () => {
       id: data.items.hazy.id,
       displayName: 'Hazy Sequence',
       internalName: 'hazy-sequence',
-      breweryId: data.breweries.zymos.id,
-      breweryName: 'Zymos Brewing',
+      breweryId: data.breweries.example.id,
+      breweryName: 'Example Brewery',
       style: 'NEIPA',
       abv: 6.5,
     });
@@ -749,14 +749,14 @@ describe('library items', () => {
   it('adds an item to the library without placing it on a menu', async () => {
     const res = await request(app)
       .post('/api/items')
-      .send({ displayName: ' Cold IPA ', breweryId: data.breweries.zymos.id, style: 'IPA', abv: '6.8', description: '' });
+      .send({ displayName: ' Cold IPA ', breweryId: data.breweries.example.id, style: 'IPA', abv: '6.8', description: '' });
     expect(res.status).toBe(201);
     expect(res.body).toEqual({
       id: expect.any(String),
       displayName: 'Cold IPA',
       internalName: 'cold-ipa',
-      breweryId: data.breweries.zymos.id,
-      breweryName: 'Zymos Brewing',
+      breweryId: data.breweries.example.id,
+      breweryName: 'Example Brewery',
       style: 'IPA',
       abv: 6.8,
       description: null,
@@ -775,7 +775,7 @@ describe('library items', () => {
   it('shows an item with how many menus it is on', async () => {
     const res = await request(app).get(`/api/items/${data.items.hazy.id}`);
     expect(res.status).toBe(200);
-    expect(res.body).toMatchObject({ id: data.items.hazy.id, displayName: 'Hazy Sequence', breweryName: 'Zymos Brewing', placementCount: 1 });
+    expect(res.body).toMatchObject({ id: data.items.hazy.id, displayName: 'Hazy Sequence', breweryName: 'Example Brewery', placementCount: 1 });
     expect(res.body.placements).toEqual([
       { menuItemId: data.menuItems.hazyOnDrafts.id, active: true, menuId: data.menu.id, menuName: 'Currently On Tap', sectionId: data.sections.drafts.id, sectionName: 'Drafts' },
     ]);
@@ -881,8 +881,8 @@ describe('breweries', () => {
   it('lists breweries alphabetically', async () => {
     const res = await request(app).get('/api/breweries');
     expect(res.body).toEqual([
+      { id: data.breweries.example.id, name: 'Example Brewery', location: 'Nowhere, US', hasLogo: false },
       { id: data.breweries.guestCo.id, name: 'Guest Co', location: null, hasLogo: true },
-      { id: data.breweries.zymos.id, name: 'Zymos Brewing', location: 'Littleton, CO', hasLogo: false },
     ]);
   });
 
@@ -897,12 +897,12 @@ describe('breweries', () => {
   });
 
   it('shows a brewery with its beers', async () => {
-    const res = await request(app).get(`/api/breweries/${data.breweries.zymos.id}`);
+    const res = await request(app).get(`/api/breweries/${data.breweries.example.id}`);
     expect(res.status).toBe(200);
     expect(res.body).toEqual({
-      id: data.breweries.zymos.id,
-      name: 'Zymos Brewing',
-      location: 'Littleton, CO',
+      id: data.breweries.example.id,
+      name: 'Example Brewery',
+      location: 'Nowhere, US',
       logo: null,
       items: [
         { id: data.items.hazy.id, displayName: 'Hazy Sequence', style: 'NEIPA', abv: 6.5 },
@@ -925,32 +925,32 @@ describe('breweries', () => {
   });
 
   it('requires a name when updating', async () => {
-    const res = await request(app).patch(`/api/breweries/${data.breweries.zymos.id}`).send({ location: 'Denver' });
+    const res = await request(app).patch(`/api/breweries/${data.breweries.example.id}`).send({ location: 'Denver' });
     expect(res.status).toBe(422);
-    expect((await provider.getBrewery(data.breweries.zymos.id!))?.location).toBe('Littleton, CO');
+    expect((await provider.getBrewery(data.breweries.example.id!))?.location).toBe('Nowhere, US');
   });
 
   it('sets and removes a brewery logo', async () => {
-    const put = await request(app).put(`/api/breweries/${data.breweries.zymos.id}/logo`).send({ logo: TINY_PNG });
+    const put = await request(app).put(`/api/breweries/${data.breweries.example.id}/logo`).send({ logo: TINY_PNG });
     expect(put.status).toBe(200);
     expect(put.body.logo).toBe(`data:image/png;base64,${TINY_PNG}`);
-    expect((await provider.getBrewery(data.breweries.zymos.id!))?.defaultLogo).toBe(TINY_PNG);
+    expect((await provider.getBrewery(data.breweries.example.id!))?.defaultLogo).toBe(TINY_PNG);
 
-    const del = await request(app).delete(`/api/breweries/${data.breweries.zymos.id}/logo`);
+    const del = await request(app).delete(`/api/breweries/${data.breweries.example.id}/logo`);
     expect(del.status).toBe(204);
-    const brewery = await provider.getBrewery(data.breweries.zymos.id!);
-    expect(brewery).toMatchObject({ name: 'Zymos Brewing', location: 'Littleton, CO', defaultLogo: null });
+    const brewery = await provider.getBrewery(data.breweries.example.id!);
+    expect(brewery).toMatchObject({ name: 'Example Brewery', location: 'Nowhere, US', defaultLogo: null });
   });
 
   it('rejects a GIF brewery logo', async () => {
-    const res = await request(app).put(`/api/breweries/${data.breweries.zymos.id}/logo`).send({ logo: GIF_HEADER });
+    const res = await request(app).put(`/api/breweries/${data.breweries.example.id}/logo`).send({ logo: GIF_HEADER });
     expect(res.status).toBe(400);
   });
 });
 
 describe('menu designs', () => {
   const url = () => `/api/menus/${data.menu.id}/design/print`;
-  const withFooter = { design: { footer: { show: true, text: 'WiFi: Zymos' } } };
+  const withFooter = { design: { footer: { show: true, text: 'WiFi: Example' } } };
 
   it('lists the fonts a design can use, with what each offers', async () => {
     const res = await request(app).get('/api/design/fonts');
@@ -976,7 +976,7 @@ describe('menu designs', () => {
     const saved = await request(app).put(url()).send(withFooter);
     expect(saved.status).toBe(200);
     expect(saved.body.isDefault).toBe(false);
-    expect(saved.body.design.footer).toMatchObject({ show: true, text: 'WiFi: Zymos', bottomIn: 0.3 });
+    expect(saved.body.design.footer).toMatchObject({ show: true, text: 'WiFi: Example', bottomIn: 0.3 });
     expect(saved.body.design.columns).toEqual(defaultPrintDesign().columns);
     expect(saved.body.updatedAt).toEqual(expect.any(String));
 
@@ -987,7 +987,7 @@ describe('menu designs', () => {
   it('stores the whole design, so a later change to the defaults leaves it alone', async () => {
     await request(app).put(url()).send(withFooter);
     const stored = await provider.getMenuDesign(data.menu.id!, 'print');
-    expect(stored!.spec).toEqual({ ...defaultPrintDesign(), footer: { ...defaultPrintDesign().footer, show: true, text: 'WiFi: Zymos' } });
+    expect(stored!.spec).toEqual({ ...defaultPrintDesign(), footer: { ...defaultPrintDesign().footer, show: true, text: 'WiFi: Example' } });
   });
 
   it('saves over the previous design', async () => {
@@ -1023,7 +1023,7 @@ describe('menu designs', () => {
     expect(res.status).toBe(400);
     expect(res.body.error).toEqual(expect.any(String));
     expect(res.body.issues).toEqual(expect.arrayContaining([expect.objectContaining({ path, message: expect.any(String) })]));
-    expect((await request(app).get(url())).body.design.footer.text).toBe('WiFi: Zymos');
+    expect((await request(app).get(url())).body.design.footer.text).toBe('WiFi: Example');
   });
 
   it('refuses a design that is too large', async () => {
@@ -1043,7 +1043,7 @@ describe('menu designs', () => {
     expect(res.status).toBe(200);
     expect(res.type).toBe('text/html');
     expect(res.text).toContain('Hazy Sequence');
-    expect(res.text).toContain('WiFi: Zymos');
+    expect(res.text).toContain('WiFi: Example');
     expect(res.text).toContain('id="menuRoot"');
     expect(res.headers['content-security-policy']).toMatch(/sandbox/);
     expect(await provider.getMenuDesign(data.menu.id!, 'print')).toBeNull();

@@ -275,12 +275,13 @@
   var CONFIG = {
     // Base URL of the taproom-offering-engine server.
     // Right now this points at your local dev server. Once the
-    // server has a real domain (e.g. https://menu.zymosbrewing.com),
+    // server has a real domain (e.g. https://menu.yourbrewery.com),
     // change this one line and nothing else needs to move.
     API_BASE_URL: "http://localhost:3000",
 
-    // The id of the menu to display. This is the seed/dev "Zymos
-    // Current Menu" id — swap it for your production menu's id.
+    // The id of the menu to display. This is a sample id from the
+    // development data — swap it for your own menu's id (it's the long code
+    // in the admin app's address bar: /admin/menus/<id>).
     MENU_ID: "537e5b47-eaf0-4aa0-a6f0-ef58e4ca40ff",
 
     // How often to silently re-fetch and redraw, in milliseconds.

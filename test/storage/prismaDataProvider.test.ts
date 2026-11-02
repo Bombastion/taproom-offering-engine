@@ -63,17 +63,17 @@ async function expectProviderError(promise: Promise<unknown>, statusCode: number
 }
 
 describe('breweries', () => {
-  const original = { id: 'b1', name: 'Zymos', location: 'Littleton', defaultLogo: 'logo' };
+  const original = { id: 'b1', name: 'Example Brewery', location: 'Nowhere', defaultLogo: 'logo' };
 
   it('creates a brewery', async () => {
-    await provider.addBrewery(new Brewery(null, 'Zymos', 'logo', 'Littleton'));
-    expect(prisma.brewery.create).toHaveBeenCalledWith({ data: { ownerId: OWNER, name: 'Zymos', defaultLogo: 'logo', location: 'Littleton' } });
+    await provider.addBrewery(new Brewery(null, 'Example Brewery', 'logo', 'Nowhere'));
+    expect(prisma.brewery.create).toHaveBeenCalledWith({ data: { ownerId: OWNER, name: 'Example Brewery', defaultLogo: 'logo', location: 'Nowhere' } });
   });
 
   it('replace sets every field exactly, so values can be cleared', async () => {
     prisma.brewery.findFirst.mockResolvedValue(original);
-    await provider.replaceBrewery('b1', new Brewery(null, 'Zymos', null, null));
-    expect(prisma.brewery.update).toHaveBeenCalledWith({ where: { ownerId: OWNER, id: 'b1' }, data: { name: 'Zymos', location: null, defaultLogo: null } });
+    await provider.replaceBrewery('b1', new Brewery(null, 'Example Brewery', null, null));
+    expect(prisma.brewery.update).toHaveBeenCalledWith({ where: { ownerId: OWNER, id: 'b1' }, data: { name: 'Example Brewery', location: null, defaultLogo: null } });
   });
 
   it('replace requires a name', async () => {

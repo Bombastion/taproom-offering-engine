@@ -109,9 +109,9 @@ describe("someone else's data", () => {
     ['read an item', 'get', `/api/items/${a.items.hazy.id}`, undefined, 404],
     ['change an item', 'put', `/api/items/${a.items.hazy.id}`, { displayName: 'Hacked' }, 404],
     ['delete an item', 'delete', `/api/items/${a.items.pretzel.id}`, undefined, 404],
-    ['read a brewery', 'get', `/api/breweries/${a.breweries.zymos.id}`, undefined, 404],
-    ['change a brewery', 'patch', `/api/breweries/${a.breweries.zymos.id}`, { name: 'Hacked' }, 404],
-    ['set a brewery logo', 'put', `/api/breweries/${a.breweries.zymos.id}/logo`, { logo: TINY_PNG }, 404],
+    ['read a brewery', 'get', `/api/breweries/${a.breweries.example.id}`, undefined, 404],
+    ['change a brewery', 'patch', `/api/breweries/${a.breweries.example.id}`, { name: 'Hacked' }, 404],
+    ['set a brewery logo', 'put', `/api/breweries/${a.breweries.example.id}/logo`, { logo: TINY_PNG }, 404],
     ['remove a brewery logo', 'delete', `/api/breweries/${a.breweries.guestCo.id}/logo`, undefined, 404],
     ['change a pour size', 'patch', `/api/containers/${a.containers.taster.id}`, { displayName: 'Hacked' }, 404],
     ['see where a pour size is used', 'get', `/api/containers/${a.containers.taster.id}/uses`, undefined, 404],
@@ -149,11 +149,11 @@ describe("someone else's data", () => {
     const before = await snapshot(alice);
     const mine = await snapshot(bob);
     const attempts: Array<[string, 'post' | 'put' | 'patch', string, object]> = [
-      ['an item at their brewery', 'post', '/api/items', { displayName: 'Mine', breweryId: a.breweries.zymos.id }],
-      ['an item moved to their brewery', 'put', `/api/items/${b.items.hazy.id}`, { displayName: 'Hazy', breweryId: a.breweries.zymos.id }],
+      ['an item at their brewery', 'post', '/api/items', { displayName: 'Mine', breweryId: a.breweries.example.id }],
+      ['an item moved to their brewery', 'put', `/api/items/${b.items.hazy.id}`, { displayName: 'Hazy', breweryId: a.breweries.example.id }],
       ['their item on my menu', 'post', `/api/sections/${b.sections.drafts.id}/items`, { itemId: a.items.hazy.id, pours: [] }],
       ['a price in their pour size', 'post', `/api/sections/${b.sections.drafts.id}/items`, { item: { displayName: 'Mine' }, pours: [{ containerId: a.containers.taster.id, price: 3 }] }],
-      ['their brewery as my menu\'s default brewery', 'patch', `/api/menus/${b.menu.id}`, { defaultBreweryId: a.breweries.zymos.id }],
+      ['their brewery as my menu\'s default brewery', 'patch', `/api/menus/${b.menu.id}`, { defaultBreweryId: a.breweries.example.id }],
       ['a menu item priced in their pour size', 'put', `/api/menu-items/${b.menuItems.hazyOnDrafts.id}`, { pours: [{ containerId: a.containers.taster.id, price: 3 }] }],
     ];
     for (const [what, method, url, body] of attempts) {
@@ -282,7 +282,7 @@ describe('what leaves the server', () => {
       `/api/sections/${a.sections.drafts.id}`, `/api/sections/${a.sections.empty.id}`,
       `/api/menu-items/${a.menuItems.hazyOnDrafts.id}`,
       '/api/items', `/api/items/${a.items.hazy.id}`,
-      '/api/breweries', `/api/breweries/${a.breweries.zymos.id}`,
+      '/api/breweries', `/api/breweries/${a.breweries.example.id}`,
       '/api/containers', `/api/containers/${a.containers.taster.id}/uses`,
       `/api/menus/${a.menu.id}/design/print`, `/api/menus/${a.menu.id}/design/board`, '/api/design/fonts', '/api/design/presets',
       '/api/design/fonts?view=board', '/api/design/presets?view=board',

@@ -12,8 +12,8 @@ const NOW = new Date('2026-03-05T12:00:00Z');
 
 function item(overrides: Partial<PrintItem> = {}): PrintItem {
   return {
-    breweryName: 'Zymos Brewing',
-    breweryLocation: 'Littleton, CO',
+    breweryName: 'Example Brewery',
+    breweryLocation: 'Nowhere, US',
     displayName: 'Hazy Sequence',
     style: 'NEIPA',
     abv: 6.5,
@@ -61,8 +61,8 @@ const textOf = (html: string) => bodyOf(html).replace(/<[^>]+>/g, '|').replace(/
 describe('the default design', () => {
   it('prints the item on one line, the description under it and a price under each size', () => {
     const html = render();
-    expect(html).toContain('Zymos Brewing');
-    expect(bodyOf(html)).toMatch(/Zymos Brewing[^]*? &#xb7; <span class="ts\d+">Hazy Sequence<\/span> &#xb7; NEIPA &#xb7; 6.5%</);
+    expect(html).toContain('Example Brewery');
+    expect(bodyOf(html)).toMatch(/Example Brewery[^]*? &#xb7; <span class="ts\d+">Hazy Sequence<\/span> &#xb7; NEIPA &#xb7; 6.5%</);
     expect(bodyOf(html)).toContain('Juicy');
     expect(bodyOf(html)).toMatch(/<th class="containerName ts\d+">Taster<\/th><th class="containerName ts\d+">Full Pour<\/th>/);
     expect(bodyOf(html)).toMatch(/containerPriceCell ts\d+">\$3.00<\/td><td class="containerPriceCell ts\d+">\$8.00<\/td>/);
@@ -146,9 +146,9 @@ describe('the footer', () => {
     render(model(), changed((d) => { d.footer.show = true; d.footer.text = text; more(d); }));
 
   it('prints each line of its text', () => {
-    const html = footer('WiFi: Zymos\nPassword: hops');
+    const html = footer('WiFi: Example\nPassword: hops');
     expect(html.match(/class="pageFooterText/g)).toHaveLength(2);
-    expect(html).toContain('WiFi: Zymos');
+    expect(html).toContain('WiFi: Example');
     expect(html).toContain('Password: hops');
   });
 
@@ -252,7 +252,7 @@ describe('lines of item text', () => {
         ],
       }];
     });
-    expect(textOf(render(model(), d))).toContain('[NEIPA] / Draft! / Littleton, CO / beer');
+    expect(textOf(render(model(), d))).toContain('[NEIPA] / Draft! / Nowhere, US / beer');
   });
 
   it('puts a value in whole, even if it looks like a replacement pattern', () => {

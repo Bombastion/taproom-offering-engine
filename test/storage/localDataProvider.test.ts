@@ -34,7 +34,7 @@ describe('loading from a data folder', () => {
   });
 
   it('loads every file, keeping IDs and mapping JSON field names onto the models', async () => {
-    write('breweries.json', [{ id: 'b1', name: 'Zymos', location: 'Littleton', b64EncodedLogo: 'logo' }]);
+    write('breweries.json', [{ id: 'b1', name: 'Example Brewery', location: 'Nowhere', b64EncodedLogo: 'logo' }]);
     write('items.json', [{ id: 'i1', internalName: 'pils', displayName: 'Pils', breweryId: 'b1', style: 'Pilsner', abv: 4.8, description: null, category: 'beer' }]);
     write('containers.json', [{ id: 'c1', containerName: 'Pint', displayName: 'Full Pour', order: 1 }]);
     write('menus.json', [{ id: 'm1', internalName: 'beer', displayName: 'Beer', logo: null }]);
@@ -43,7 +43,7 @@ describe('loading from a data folder', () => {
     write('saleContainers.json', [{ id: 'sc1', containerId: 'c1', menuItemId: 'mi1', price: 7 }]);
 
     const provider = new LocalDataProvider(folder);
-    expect(await provider.getBrewery('b1')).toEqual(new Brewery('b1', 'Zymos', 'logo', 'Littleton'));
+    expect(await provider.getBrewery('b1')).toEqual(new Brewery('b1', 'Example Brewery', 'logo', 'Nowhere'));
     expect((await provider.getItem('i1'))?.displayName).toBe('Pils');
     expect((await provider.getContainer('c1'))?.displayName).toBe('Full Pour');
     expect((await provider.getSubMenusForMenu('m1')).map((s) => s.id)).toEqual(['s1']);
@@ -52,7 +52,7 @@ describe('loading from a data folder', () => {
   });
 
   it('ignores files it does not know and tolerates missing ones', async () => {
-    write('breweries.json', [{ id: 'b1', name: 'Zymos' }]);
+    write('breweries.json', [{ id: 'b1', name: 'Example Brewery' }]);
     write('notes.json', [{ anything: true }]);
     const provider = new LocalDataProvider(folder);
     expect(await provider.getBreweries()).toHaveLength(1);
@@ -194,9 +194,9 @@ describe('updating', () => {
 
   it('replace sets every field exactly, so values can be cleared', async () => {
     const provider = memoryProvider();
-    await provider.addBrewery(new Brewery('b1', 'Zymos', 'logo', 'Littleton'));
-    await provider.replaceBrewery('b1', new Brewery(null, 'Zymos', null, null));
-    expect(await provider.getBrewery('b1')).toEqual(new Brewery('b1', 'Zymos', null, null));
+    await provider.addBrewery(new Brewery('b1', 'Example Brewery', 'logo', 'Nowhere'));
+    await provider.replaceBrewery('b1', new Brewery(null, 'Example Brewery', null, null));
+    expect(await provider.getBrewery('b1')).toEqual(new Brewery('b1', 'Example Brewery', null, null));
 
     await provider.addItem(new Item('i1', 'pils', 'Pils', 'b1', 'Pilsner', 4.8, 'Crisp', 'beer'));
     await provider.replaceItem('i1', new Item(null, 'pils', 'Pils', null, null, 0, null, null));
@@ -398,7 +398,7 @@ describe('limited to one user (forOwner)', () => {
   it('only sees what it made itself', async () => {
     const mine = provider.forOwner(alice);
     const theirs = provider.forOwner(bob);
-    const brewery = await mine.addBrewery(new Brewery(null, 'Zymos', null, null));
+    const brewery = await mine.addBrewery(new Brewery(null, 'Example Brewery', null, null));
     expect(await mine.getBrewery(brewery.id!)).not.toBeNull();
     expect(await theirs.getBrewery(brewery.id!)).toBeNull();
     expect(await theirs.getBreweries()).toEqual([]);
@@ -422,7 +422,7 @@ describe('limited to one user (forOwner)', () => {
   it('refuses links to what it cannot see, as if they did not exist', async () => {
     const mine = provider.forOwner(alice);
     const theirs = provider.forOwner(bob);
-    const brewery = await mine.addBrewery(new Brewery(null, 'Zymos', null, null));
+    const brewery = await mine.addBrewery(new Brewery(null, 'Example Brewery', null, null));
     const menu = await mine.addMenu(new Menu(null, 'a', 'A', null));
     const container = await mine.addContainer(new ItemContainer(null, 'Pint', 'Pint', 1));
     const item = await mine.addItem(new Item(null, 'x', 'X', brewery.id, null, null, null, 'beer'));

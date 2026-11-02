@@ -213,7 +213,7 @@ describe('MenuPage', () => {
       const select = await screen.findByRole('combobox', { name: 'Default brewery' });
       await waitFor(() => expect(select).toBeEnabled());
       expect(select).toHaveValue('');
-      expect([...select.querySelectorAll('option')].map((o) => o.textContent)).toEqual(['None — name every brewery', 'Zymos Brewing', 'Guest Co']);
+      expect([...select.querySelectorAll('option')].map((o) => o.textContent)).toEqual(['None — name every brewery', 'Example Brewery', 'Guest Co']);
       expect(screen.getByText(/left off the print view and menu board/)).toBeInTheDocument();
     });
 
@@ -239,8 +239,8 @@ describe('MenuPage', () => {
       const select = await screen.findByRole('combobox', { name: 'Default brewery' });
       await waitFor(() => expect(select).toBeEnabled());
 
-      await user.selectOptions(select, 'Zymos Brewing');
-      expect(await screen.findByText('Zymos Brewing is now the default brewery')).toBeInTheDocument();
+      await user.selectOptions(select, 'Example Brewery');
+      expect(await screen.findByText('Example Brewery is now the default brewery')).toBeInTheDocument();
       expect(server.calls('PATCH', '/api/menus/m1')[0].body).toEqual({ defaultBreweryId: 'b1' });
       await waitFor(() => expect(select).toHaveValue('b1'));
 

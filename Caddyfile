@@ -38,7 +38,7 @@
 	import app
 }
 
-# Internal-only names (e.g. a DNS entry on your router such as zymos.brew). Let's Encrypt can't
+# Internal-only names (e.g. a DNS entry on your router such as taproom.lan). Let's Encrypt can't
 # issue for names that don't end in a real public suffix, and Caddy only falls back to its local CA
 # on its own for localhost/IPs, so these must be asked for explicitly. Keep them out of DOMAIN:
 # DOMAIN is served with Let's Encrypt, and listing an internal name there makes issuance fail with

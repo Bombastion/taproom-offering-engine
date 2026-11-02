@@ -56,7 +56,7 @@ describe('the default print design', () => {
 
   it('has nothing in it that belongs to one brewery', () => {
     for (const design of [defaultPrintDesign(), ...printDesignPresets().map((preset) => preset.design)]) {
-      expect(JSON.stringify(design)).not.toMatch(/zymos|wifi|password/i);
+      expect(JSON.stringify(design)).not.toMatch(/wifi|password/i);
     }
   });
 

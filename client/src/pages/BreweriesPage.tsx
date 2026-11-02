@@ -48,7 +48,7 @@ export function BreweriesPage() {
         <NameSheet
           title="New brewery"
           label="Brewery name"
-          placeholder="e.g. Zymos Brewing"
+          placeholder="e.g. Example Brewery"
           submitLabel="Create brewery"
           onClose={() => setCreating(false)}
           onSubmit={async (name) => {
