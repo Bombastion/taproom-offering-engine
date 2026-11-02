@@ -1,4 +1,5 @@
 import { SessionUser, setSignedOut } from './auth';
+import type { BoardDesign, BoardDesignState } from './boardDesign';
 import type { DesignIssue, DesignPreset, FontInfo, PrintDesign, PrintDesignState } from './design';
 
 // ---- Shapes returned by the server's /api routes (routes/api.ts) ----
@@ -334,6 +335,16 @@ export const api = {
   // The menu drawn with a design that hasn't been saved: a complete HTML page
   previewPrintDesign: (menuId: string, design: PrintDesign, signal?: AbortSignal) =>
     request<string>('POST', `/menus/${encodeURIComponent(menuId)}/design/print/preview`, { design }, { signal, as: 'text' }),
+  // The same for the menu board (the fonts and presets are the ones the board can use)
+  boardDesignFonts: () => request<FontInfo[]>('GET', '/design/fonts?view=board'),
+  boardDesignPresets: () => request<DesignPreset<BoardDesign>[]>('GET', '/design/presets?view=board'),
+  boardDesign: (menuId: string) => request<BoardDesignState>('GET', `/menus/${encodeURIComponent(menuId)}/design/board`),
+  saveBoardDesign: (menuId: string, design: BoardDesign) =>
+    request<BoardDesignState>('PUT', `/menus/${encodeURIComponent(menuId)}/design/board`, { design }),
+  resetBoardDesign: (menuId: string) => request<void>('DELETE', `/menus/${encodeURIComponent(menuId)}/design/board`),
+  // The menu board drawn with a design that hasn't been saved: each page as a PNG data URL, at half size
+  previewBoardDesign: (menuId: string, design: BoardDesign, signal?: AbortSignal) =>
+    request<{ pages: string[] }>('POST', `/menus/${encodeURIComponent(menuId)}/design/board/preview`, { design }, { signal }),
 };
 
 export function errorMessage(error: unknown): string {

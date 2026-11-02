@@ -1,3 +1,4 @@
+import type { BoardDesign, BoardDesignState, BoardTextStyle } from '../src/boardDesign';
 import type { FontInfo, PrintDesign, PrintDesignState, TextStyle } from '../src/design';
 import type { Brewery, BreweryDetail, Container, ContainerUse, LibraryItem, LibraryItemDetail, MenuDetail, MenuItemDetail, MenuSummary, SectionDetail } from '../src/api';
 
@@ -191,3 +192,82 @@ export const designFonts: FontInfo[] = [
 ];
 
 export const previewPage = '<html><body><div id="menuRoot">Hazy Sequence</div></body></html>';
+
+// Menu board designs, shaped like what routes/api.ts answers with (the board as it has always looked)
+
+const boardText: BoardTextStyle = { font: 'fira-sans', sizePx: 52.5, weight: 400, italic: false, color: '#f3f3f3', align: 'left', transform: 'none', letterSpacingEm: 0 };
+
+export const boardDesign: BoardDesign = {
+  version: 1,
+  canvas: { background: '#175a6c', safeMarginPx: 40 },
+  header: {
+    logo: { show: true, sizePx: 150, align: 'center', fit: 'stretch' },
+    title: { show: false, text: '{menu.name}', gapAbovePx: 0, style: { ...boardText, sizePx: 60, color: '#ffffff', align: 'center' } },
+    gapBelowPx: 0,
+  },
+  sections: {
+    gapPx: 30,
+    bar: {
+      heightPx: 52.5,
+      marginTopPx: 10,
+      insetPx: 5,
+      textTopPx: 2.5,
+      background: '#2b2b2b',
+      radiusPx: 0,
+      continuedSuffix: ', Continued',
+      style: { ...boardText, sizePx: 42.5, color: '#ffffff' },
+    },
+  },
+  items: {
+    gapPx: 10,
+    logo: { show: true, sizePx: 52.5, shape: 'circle', source: 'item-then-menu' },
+    lines: [
+      {
+        style: boardText,
+        parts: [
+          { field: 'breweryName', before: '', format: '{value}' },
+          { field: 'displayName', before: ' ', format: '{value}' },
+          { field: 'style', before: '  ', format: '{value}', style: { color: '#9d9d9d' } },
+          { field: 'abv', before: '  ', format: '{value}%', style: { color: '#9d9d9d' } },
+        ],
+      },
+    ],
+  },
+};
+
+export const defaultBoardState: BoardDesignState = { design: boardDesign, isDefault: true, updatedAt: null };
+
+export const savedBoardState: BoardDesignState = {
+  design: { ...boardDesign, canvas: { ...boardDesign.canvas, background: '#101010' } },
+  isDefault: false,
+  updatedAt: '2026-11-01T12:00:00.000Z',
+};
+
+// Only the fonts the board can draw, with the weights and slants it has
+export const boardFonts: FontInfo[] = [
+  { id: 'fira-sans', label: 'Fira Sans', category: 'sans', weights: [400, 700], italic: true },
+  { id: 'montserrat', label: 'Montserrat', category: 'sans', weights: [400, 700], italic: true },
+  { id: 'bebas-neue', label: 'Bebas Neue', category: 'display', weights: [400], italic: false },
+];
+
+const PAGE_IMAGE = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+export const boardPages = { pages: [PAGE_IMAGE, PAGE_IMAGE.replace('iVBOR', 'iVBOS')] };
+
+export const boardPresets = [
+  { id: 'classic', name: 'Classic', description: 'Blue background with dark section bars.', design: boardDesign },
+  {
+    id: 'dark',
+    name: 'Dark',
+    description: 'Near-black background with amber section bars.',
+    design: {
+      ...boardDesign,
+      canvas: { background: '#141414', safeMarginPx: 12 },
+      header: {
+        ...boardDesign.header,
+        logo: { ...boardDesign.header.logo, show: false },
+        title: { ...boardDesign.header.title, show: true, text: 'The preset’s title' },
+      },
+      sections: { ...boardDesign.sections, bar: { ...boardDesign.sections.bar, background: '#e0a526', heightPx: 60 } },
+    },
+  },
+];

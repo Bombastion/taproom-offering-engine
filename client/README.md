@@ -48,6 +48,7 @@ test:watch` re-runs them as you edit. See `TESTING.md` at the repo root for runn
   - `/admin/items` the item library, and `/admin/items/:itemId` to edit one (`/new` to create)
   - `/admin/pour-sizes` pour sizes (added, renamed, reordered and deleted in place)
   - `/admin/menus/:menuId/design/print` the print menu designer (see below)
+  - `/admin/menus/:menuId/design/board` the menu board designer (see "The menu board designer")
 - `src/api.ts`: typed API calls. `src/auth.ts`: the stored sign-in. `src/usePendingUsers.ts`: the
   admin user list that the Users screen and the "waiting for approval" dot share.
 - Accounts: `/signup` (request an account), `/account` (change password, sign out) and `/users`
@@ -113,3 +114,24 @@ it doesn't), and `{type: 'toe-preview-pick'}` when something is clicked. Parts o
 (`header`, `headings`, `rows`, `footer`, `column:<id>`), and clicking one opens the group (and column) that
 changes it. The frame is given the page once when it first loads; writing a page into it loads it again, so
 sending on every load would rewrite it for ever (`DesignPreview.tsx` has a test for this).
+
+## The menu board designer
+
+`pages/BoardDesignPage.tsx` edits how a menu's board (the 1080x1920 pictures a TV shows) looks. It is the
+print designer's twin, and shares its parts: the draft and its Undo/Redo (`useDesignHistory.ts`, generic over
+the kind of design), the leave warning and Ctrl+Z keys (`useDesignGuards.ts`), the accordion (`Group.tsx`),
+the text style editor (`StyleEditor.tsx`, which shows sizes in px for the board's kind of style), the lines
+and parts editor (`lines.tsx`, also used for the print columns) and the preset sheet (`PresetSheet.tsx`,
+given `view="board"`). The board's types and helpers are in `boardDesign.ts`; the server's
+`models/boardDesign.ts` decides what is valid.
+
+Its groups (`components/design/boardGroups.tsx`) are Background and margin, Logo and title, Section bars and
+Items. All sizes are pixels of the picture, and a part of an item line has no size or alignment of its own
+(the line is drawn at one size, and text printed before a part is drawn in that part's style).
+
+The preview (`BoardPreview.tsx`) is the pictures themselves: after a short pause in the editing the draft is
+sent to `POST /api/menus/:id/design/board/preview`, which draws every page with the code that makes the real
+board and answers with PNG data URLs (the admin's content policy allows `data:` images). The last pictures
+that worked stay up if a newer draft can't be drawn. A dotted guide shows the safe margin. Unlike the print
+preview, a click on the picture can't open the group that draws what was clicked, as the server sends no
+picture of where things are.

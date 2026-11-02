@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { json, mockApi, renderApp, status } from '../utils';
 import { breweries, menu } from '../fixtures';
 
@@ -51,6 +51,75 @@ describe('MenuPage', () => {
     await screen.findByRole('heading', { name: 'Currently On Tap' });
     expect(screen.queryByRole('link', { name: 'Menu board images' })).not.toBeInTheDocument();
     expect(screen.getByText('No logo yet')).toBeInTheDocument();
+  });
+
+  it('offers the board designer, whether or not there is a logo', async () => {
+    mockApi({ 'GET /api/menus/m1': json({ ...menu, hasLogo: false, logo: null }) });
+    renderApp('/menus/m1');
+    await screen.findByRole('heading', { name: 'Currently On Tap' });
+    expect(screen.getByRole('link', { name: 'Design menu board' })).toHaveAttribute('href', '/menus/m1/design/board');
+  });
+
+  it('groups the chips into titled rows', async () => {
+    mockApi({ 'GET /api/menus/m1': json(menu) });
+    renderApp('/menus/m1');
+    await screen.findByRole('heading', { name: 'Currently On Tap' });
+    const names = (title: string) => [...screen.getByRole('region', { name: title }).querySelectorAll('.chip')].map((el) => el.textContent);
+    expect(names('Menu management')).toEqual(['Rename', 'Reorder']);
+    expect(names('Print menu')).toEqual(['Design print menu', 'Print view']);
+    expect(names('Digital menu')).toEqual(['Design menu board', 'Menu board images']);
+  });
+
+  it('leaves out only the chips that do not apply, not their rows', async () => {
+    mockApi({ 'GET /api/menus/m1': json({ ...menu, hasLogo: false, logo: null, sections: [menu.sections[0]] }) });
+    renderApp('/menus/m1');
+    await screen.findByRole('heading', { name: 'Currently On Tap' });
+    expect(within(screen.getByRole('region', { name: 'Menu management' })).getAllByRole('button').map((b) => b.textContent)).toEqual(['Rename']);
+    expect(within(screen.getByRole('region', { name: 'Digital menu' })).getAllByRole('link').map((b) => b.textContent)).toEqual(['Design menu board']);
+  });
+
+  describe('a row of chips that is wider than the screen', () => {
+    // jsdom has no layout, so say how wide the row and what is in it are
+    function size(row: HTMLElement, { scrollWidth, clientWidth }: { scrollWidth: number; clientWidth: number }) {
+      Object.defineProperty(row, 'scrollWidth', { configurable: true, value: scrollWidth });
+      Object.defineProperty(row, 'clientWidth', { configurable: true, value: clientWidth });
+      row.scrollBy = ((options: ScrollToOptions) => {
+        row.scrollLeft += options.left ?? 0;
+        fireEvent.scroll(row);
+      }) as typeof row.scrollBy;
+    }
+    const rowOf = (title: string) => within(screen.getByRole('region', { name: title })).getByRole('button', { name: 'Rename' }).parentElement!;
+
+    it('has no arrows when everything fits', async () => {
+      mockApi({ 'GET /api/menus/m1': json(menu) });
+      renderApp('/menus/m1');
+      await screen.findByRole('heading', { name: 'Currently On Tap' });
+      expect(screen.queryByRole('button', { name: /^Show (more|earlier)/ })).not.toBeInTheDocument();
+    });
+
+    it('shows an arrow toward what is out of sight, and scrolls that way when it is pressed', async () => {
+      mockApi({ 'GET /api/menus/m1': json(menu) });
+      renderApp('/menus/m1');
+      await screen.findByRole('heading', { name: 'Currently On Tap' });
+      const row = rowOf('Menu management');
+      size(row, { scrollWidth: 600, clientWidth: 300 });
+
+      fireEvent.scroll(row);
+      const more = await screen.findByRole('button', { name: 'Show more Menu management options' });
+      expect(screen.queryByRole('button', { name: 'Show earlier Menu management options' })).not.toBeInTheDocument();
+      // Only the row that is too wide has one
+      expect(screen.queryByRole('button', { name: /Print menu options/ })).not.toBeInTheDocument();
+
+      fireEvent.click(more);
+      // Now in the middle: more both ways
+      expect(await screen.findByRole('button', { name: 'Show earlier Menu management options' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Show more Menu management options' })).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Show more Menu management options' }));
+      await waitFor(() => expect(screen.queryByRole('button', { name: 'Show more Menu management options' })).not.toBeInTheDocument());
+      fireEvent.click(screen.getByRole('button', { name: 'Show earlier Menu management options' }));
+      expect(row.scrollLeft).toBeLessThan(600 - 300);
+    });
   });
 
   it('shows an error for a menu that does not exist', async () => {

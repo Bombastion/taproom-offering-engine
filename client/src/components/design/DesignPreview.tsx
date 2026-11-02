@@ -10,7 +10,7 @@ const PAUSE_MS = 300;
 const FRAME_URL = `${import.meta.env.BASE_URL}preview-frame.html`;
 
 // What to say when the server turns a design down: the first thing wrong with it, where
-function problemText(e: unknown): string {
+export function problemText(e: unknown): string {
   if (e instanceof ApiError && e.issues && e.issues.length > 0) {
     const [first] = e.issues;
     return first.path ? `${first.path}: ${first.message}` : first.message;

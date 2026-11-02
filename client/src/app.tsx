@@ -9,6 +9,7 @@ import { UsersPage } from './pages/UsersPage';
 import { Loading, LoadError } from './components/QueryState';
 import { HomePage } from './pages/HomePage';
 import { MenuPage } from './pages/MenuPage';
+import { BoardDesignPage } from './pages/BoardDesignPage';
 import { PrintDesignPage } from './pages/PrintDesignPage';
 import { SectionPage } from './pages/SectionPage';
 import { ItemEditorPage } from './pages/ItemEditorPage';
@@ -67,6 +68,7 @@ export const routes: RouteObject[] = [
       { path: '/', element: <HomePage /> },
       { path: '/menus/:menuId', element: <MenuPage /> },
       { path: '/menus/:menuId/design/print', element: <PrintDesignPage /> },
+      { path: '/menus/:menuId/design/board', element: <BoardDesignPage /> },
       { path: '/menus/:menuId/sections/:sectionId', element: <SectionPage /> },
       { path: '/menus/:menuId/sections/:sectionId/items/new', element: <ItemEditorPage /> },
       { path: '/menus/:menuId/sections/:sectionId/items/:menuItemId', element: <ItemEditorPage /> },

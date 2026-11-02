@@ -45,17 +45,18 @@ export const ITEM_FIELDS: { value: ItemField; label: string }[] = [
 ];
 
 // One thing printed on a line: a field of the item, with what comes before it and how it is written
-export type Part = {
+// (The menu board's lines and parts are the same, with its own kind of text style: see boardDesign.ts)
+export type Part<S = TextStyle> = {
   field: ItemField;
   // Only for the 'text' field
   text?: string;
   before: string;
   format: string;
   // What differs from the line's own style (the item name is bold by default)
-  style?: Partial<TextStyle>;
+  style?: Partial<S>;
 };
 
-export type Line = { style: TextStyle; parts: Part[] };
+export type Line<S = TextStyle> = { style: S; parts: Part<S>[] };
 
 export type FieldsColumn = { id: string; type: 'fields'; widthPct: number | null; lines: Line[]; belowLines: Line[] };
 
@@ -137,7 +138,7 @@ const FIELD_NAMES: Record<ItemField, string> = {
 };
 
 // What a line prints, in words ("brewery, name, style, ABV")
-export function describeLine(line: Line): string {
+export function describeLine(line: Line<unknown>): string {
   return line.parts.map((part) => FIELD_NAMES[part.field] ?? part.field).join(', ');
 }
 
@@ -205,40 +206,42 @@ export function newLine(column: FieldsColumn, below: boolean): Line {
 }
 
 // The next part for a line: a field it doesn't print yet, if any is left
-export function newPart(line: Line): Part {
+// `separator` is what is printed before it when it isn't the first
+export function newPart<S>(line: Line<S>, separator = ' • '): Part<S> {
   const used = new Set(line.parts.map((part) => part.field));
   const field = ITEM_FIELDS.find((f) => f.value !== 'text' && !used.has(f.value))?.value ?? 'text';
-  return { field, ...(field === 'text' ? { text: 'Text' } : {}), before: line.parts.length > 0 ? ' • ' : '', format: '{value}' };
+  return { field, ...(field === 'text' ? { text: 'Text' } : {}), before: line.parts.length > 0 ? separator : '', format: '{value}' };
 }
 
 // Only the settings of `style` that are different from `base`
-export function styleDifferences(base: TextStyle, style: TextStyle): Partial<TextStyle> {
-  const changes: Partial<TextStyle> = {};
-  for (const key of Object.keys(style) as (keyof TextStyle)[]) {
-    if (style[key] !== base[key]) (changes as Record<string, unknown>)[key] = style[key];
+export function styleDifferences<S extends object>(base: S, style: S): Partial<S> {
+  const changes: Partial<S> = {};
+  for (const key of Object.keys(style) as (keyof S)[]) {
+    if (style[key] !== base[key]) changes[key] = style[key];
   }
   return changes;
 }
 
 // A menu's design as the server answers for it
-export type PrintDesignState = {
-  design: PrintDesign;
+export type DesignState<D = PrintDesign> = {
+  design: D;
   // Nothing has been saved for this menu, so this is the standard design
   isDefault: boolean;
   updatedAt: string | null;
   // What was saved could no longer be read, so the standard design is shown in its place
   storedDesignInvalid?: boolean;
 };
+export type PrintDesignState = DesignState<PrintDesign>;
 
 // What the server says is wrong with a design
 export type DesignIssue = { path: string; message: string };
 
 // A design to start from (GET /api/design/presets)
-export type DesignPreset = {
+export type DesignPreset<D = PrintDesign> = {
   id: string;
   name: string;
   description: string;
-  design: PrintDesign;
+  design: D;
 };
 
 export type FontInfo = {
@@ -280,7 +283,7 @@ export function setIn<T>(value: T, path: Path, replacement: unknown): T {
   return copy;
 }
 
-export function sameDesign(a: PrintDesign, b: PrintDesign): boolean {
+export function sameDesign(a: unknown, b: unknown): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
@@ -295,7 +298,7 @@ export function nearestWeight(weights: number[], wanted: number): number {
 }
 
 // What changing a text style's font means for the rest of it: the weight and italic have to be ones the new font has
-export function styleForFont(style: TextStyle, font: FontInfo): TextStyle {
+export function styleForFont<S extends { font: string; weight: number; italic: boolean }>(style: S, font: FontInfo): S {
   return {
     ...style,
     font: font.id,

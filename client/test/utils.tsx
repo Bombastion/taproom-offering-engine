@@ -10,6 +10,7 @@ import { ToastProvider } from '../src/components/Toast';
 export type RecordedRequest = {
   method: string;
   path: string;
+  search: string;
   headers: Record<string, string>;
   body: unknown;
 };
@@ -47,7 +48,7 @@ export function mockApi(handlers: Record<string, Handler>) {
     const method = (init?.method ?? 'GET').toUpperCase();
     const headers = Object.fromEntries(new Headers(init?.headers).entries());
     const body = typeof init?.body === 'string' ? JSON.parse(init.body) : undefined;
-    const recorded = { method, path: url.pathname, headers, body };
+    const recorded = { method, path: url.pathname, search: url.search, headers, body };
     requests.push(recorded);
 
     const handler = handlers[`${method} ${url.pathname}`];

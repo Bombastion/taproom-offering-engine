@@ -5,26 +5,19 @@ import {
   columnTitle,
   columnWidth,
   describeColumn,
-  describeLine,
   FieldsColumn,
   FontInfo,
-  ITEM_FIELDS,
-  ItemField,
-  Line,
   MAX_COLUMNS,
   MAX_LINES,
-  MAX_PARTS,
   newColumn,
   newLine,
-  newPart,
-  Part,
   PricesColumn,
   PrintDesign,
-  styleDifferences,
   ThumbnailColumn,
   widthLeft,
 } from '../../design';
 import { MoveButtons, moved } from '../Reorder';
+import { LineList } from './lines';
 import { PlusIcon, TrashIcon } from '../Icons';
 import { Choice, NumberField, SwitchRow, TextField } from './controls';
 import { Change } from './groups';
@@ -49,15 +42,6 @@ function columnLabel(columns: Column[], index: number): string {
   const column = columns[index];
   const same = columns.filter((other) => other.type === column.type);
   return same.length > 1 ? `${columnTitle(column)} ${same.indexOf(column) + 1}` : columnTitle(column);
-}
-
-// Where an open entry is after `from` has been moved to `to`
-function followMove(open: number | null, from: number, to: number): number | null {
-  if (open === null) return null;
-  if (open === from) return to;
-  if (from < to && open > from && open <= to) return open - 1;
-  if (from > to && open >= to && open < from) return open + 1;
-  return open;
 }
 
 export function ColumnsGroup({ design, fonts, containers, change, focus, onFocused }: Props) {
@@ -175,185 +159,18 @@ function FieldsEditor({ column, index, columns, fonts, change }: { column: Field
     <>
       <WidthControl columns={columns} index={index} change={change} />
       {(['lines', 'belowLines'] as ListKey[]).map((list) => (
-        <LineList key={list} list={list} column={column} index={index} fonts={fonts} change={change} />
+        <LineList
+          key={list}
+          names={LIST_NAMES[list]}
+          lines={column[list]}
+          path={['columns', index, list]}
+          fonts={fonts}
+          change={change}
+          max={MAX_LINES}
+          newLine={() => newLine(column, list === 'belowLines')}
+        />
       ))}
     </>
-  );
-}
-
-function LineList({ list, column, index, fonts, change }: { list: ListKey; column: FieldsColumn; index: number; fonts: FontInfo[]; change: Change }) {
-  const lines = column[list];
-  const names = LIST_NAMES[list];
-  const [open, setOpen] = useState<number | null>(null);
-
-  return (
-    <div className="stack-sm">
-      <div className="eyebrow">{names.title}</div>
-      <span className="muted-sm">{names.hint}</span>
-      {lines.map((line, lineIndex) => {
-        const label = `${names.noun} ${lineIndex + 1}`;
-        return (
-          <Fold
-            key={lineIndex}
-            title={`${names.noun[0].toUpperCase()}${names.noun.slice(1)} ${lineIndex + 1}`}
-            summary={describeLine(line)}
-            open={open === lineIndex}
-            onToggle={() => setOpen(open === lineIndex ? null : lineIndex)}
-            actions={
-              <>
-                <MoveButtons
-                  label={label}
-                  index={lineIndex}
-                  count={lines.length}
-                  onMove={(from, to) => {
-                    change(['columns', index, list], moved(lines, from, to));
-                    setOpen(followMove(open, from, to));
-                  }}
-                />
-                <button
-                  type="button"
-                  className="icon-btn icon-btn-sm"
-                  aria-label={`Remove ${label}`}
-                  onClick={() => {
-                    change(['columns', index, list], lines.filter((_, i) => i !== lineIndex));
-                    setOpen(null);
-                  }}
-                >
-                  <TrashIcon />
-                </button>
-              </>
-            }
-          >
-            <LineEditor label={label} line={line} path={['columns', index, list, lineIndex]} fonts={fonts} change={change} />
-          </Fold>
-        );
-      })}
-      <div>
-        <button
-          type="button"
-          className="btn-secondary"
-          disabled={lines.length >= MAX_LINES}
-          onClick={() => {
-            change(['columns', index, list], [...lines, newLine(column, list === 'belowLines')]);
-            setOpen(lines.length);
-          }}
-        >
-          <PlusIcon /> Add a {names.noun}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function LineEditor({ label, line, path, fonts, change }: { label: string; line: Line; path: (string | number)[]; fonts: FontInfo[]; change: Change }) {
-  return (
-    <>
-      <StyleEditor label={`Style of ${label}`} style={line.style} fonts={fonts} onChange={(style) => change([...path, 'style'], style)} />
-      <div className="stack-sm">
-        <div className="eyebrow">What it prints</div>
-        <span className="muted-sm">A line is left out for an item that has nothing to print on it. Text before a part is only printed when the part has something to show and something comes first.</span>
-        {line.parts.map((part, partIndex) => (
-          <PartEditor
-            key={partIndex}
-            number={partIndex + 1}
-            part={part}
-            line={line}
-            count={line.parts.length}
-            path={[...path, 'parts', partIndex]}
-            fonts={fonts}
-            onMove={(to) => change([...path, 'parts'], moved(line.parts, partIndex, to))}
-            onRemove={() => change([...path, 'parts'], line.parts.filter((_, i) => i !== partIndex))}
-            change={change}
-          />
-        ))}
-        <div>
-          <button type="button" className="btn-secondary" disabled={line.parts.length >= MAX_PARTS} onClick={() => change([...path, 'parts'], [...line.parts, newPart(line)])}>
-            <PlusIcon /> Add to this line
-          </button>
-        </div>
-      </div>
-    </>
-  );
-}
-
-function PartEditor(props: {
-  number: number;
-  part: Part;
-  line: Line;
-  count: number;
-  path: (string | number)[];
-  fonts: FontInfo[];
-  onMove: (to: number) => void;
-  onRemove: () => void;
-  change: Change;
-}) {
-  const { number, part, line, count, path, fonts, onMove, onRemove, change } = props;
-  const set = (changes: Partial<Part>) => change(path, { ...part, ...changes });
-  const label = `Part ${number}`;
-
-  const setField = (field: ItemField) => {
-    const next: Part = { ...part, field };
-    if (field === 'text') next.text = part.text || 'Text';
-    else delete next.text;
-    change(path, next);
-  };
-
-  return (
-    <div className="part" role="group" aria-label={label}>
-      <div className="part-head">
-        <strong>{label}</strong>
-        <div className="fold-actions">
-          <MoveButtons label={label.toLowerCase()} index={number - 1} count={count} onMove={(_from, to) => onMove(to)} />
-          <button type="button" className="icon-btn icon-btn-sm" aria-label={`Remove ${label.toLowerCase()}`} disabled={count === 1} onClick={onRemove}>
-            <TrashIcon />
-          </button>
-        </div>
-      </div>
-
-      <label className="field-label">
-        Field
-        <select className="field" value={part.field} onChange={(e) => setField(e.target.value as ItemField)}>
-          {ITEM_FIELDS.map((field) => (
-            <option key={field.value} value={field.value}>{field.label}</option>
-          ))}
-        </select>
-      </label>
-      {part.field === 'text' && (
-        <TextField label="Text" value={part.text ?? ''} maxLength={100} validate={(v) => (v.trim() === '' ? 'Type the text to print' : null)} onChange={(text) => set({ text })} />
-      )}
-      <div className="grid-2">
-        <TextField label="Printed before" value={part.before} maxLength={20} onChange={(before) => set({ before })} />
-        <TextField
-          label="Format"
-          value={part.format}
-          maxLength={60}
-          validate={(v) => (v.includes('{value}') ? null : 'Include {value} where the value goes')}
-          onChange={(format) => set({ format })}
-        />
-      </div>
-
-      <label className="check-row">
-        <input
-          type="checkbox"
-          checked={part.style !== undefined}
-          onChange={(e) => {
-            const next: Part = { ...part };
-            if (e.target.checked) next.style = {};
-            else delete next.style;
-            change(path, next);
-          }}
-        />
-        Style this part differently
-      </label>
-      {part.style !== undefined && (
-        <StyleEditor
-          label={`Style of ${label.toLowerCase()}`}
-          style={{ ...line.style, ...part.style }}
-          fonts={fonts}
-          onChange={(style) => set({ style: styleDifferences(line.style, style) })}
-        />
-      )}
-    </div>
   );
 }
 

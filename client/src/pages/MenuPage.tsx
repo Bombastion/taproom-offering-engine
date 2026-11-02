@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, errorMessage, hiddenOnText, MenuDetail, plural } from '../api';
 import { PageHeader, Screen } from '../components/Screen';
 import { ChevronRight, DesignIcon, PencilIcon, PlusIcon, PrintIcon, ReorderIcon, ScreenIcon } from '../components/Icons';
+import { ChipSection } from '../components/ChipSection';
 import { Loading, LoadError } from '../components/QueryState';
 import { NameSheet } from '../components/Sheet';
 import { useToast } from '../components/Toast';
@@ -59,26 +60,35 @@ export function MenuPage() {
           <>
             <PageHeader eyebrow="Menu" title={menu.data.displayName} mono={menu.data.internalName} />
 
-            <div className="chip-row">
-              <button type="button" className="chip" onClick={() => setSheet('rename')}>
-                <PencilIcon />Rename
-              </button>
-              {menu.data.sections.length > 1 && (
-                <button type="button" className={`chip${reordering ? ' chip-on' : ''}`} aria-pressed={reordering} onClick={() => setReordering((r) => !r)}>
-                  <ReorderIcon />{reordering ? 'Done' : 'Reorder'}
+            <div className="chip-sections">
+              <ChipSection title="Menu management">
+                <button type="button" className="chip" onClick={() => setSheet('rename')}>
+                  <PencilIcon />Rename
                 </button>
-              )}
-              <a className="chip" href={`/menus/${menuId}?format=print`} target="_blank" rel="noopener">
-                <PrintIcon />Print view
-              </a>
-              <Link className="chip" to={`/menus/${menuId}/design/print`}>
-                <DesignIcon />Design print menu
-              </Link>
-              {menu.data.hasLogo && (
-                <a className="chip" href={`/menus/${menuId}?format=digital`} target="_blank" rel="noopener">
-                  <ScreenIcon />Menu board images
+                {menu.data.sections.length > 1 && (
+                  <button type="button" className={`chip${reordering ? ' chip-on' : ''}`} aria-pressed={reordering} onClick={() => setReordering((r) => !r)}>
+                    <ReorderIcon />{reordering ? 'Done' : 'Reorder'}
+                  </button>
+                )}
+              </ChipSection>
+              <ChipSection title="Print menu">
+                <Link className="chip" to={`/menus/${menuId}/design/print`}>
+                  <DesignIcon />Design print menu
+                </Link>
+                <a className="chip" href={`/menus/${menuId}?format=print`} target="_blank" rel="noopener">
+                  <PrintIcon />Print view
                 </a>
-              )}
+              </ChipSection>
+              <ChipSection title="Digital menu">
+                <Link className="chip" to={`/menus/${menuId}/design/board`}>
+                  <DesignIcon />Design menu board
+                </Link>
+                {menu.data.hasLogo && (
+                  <a className="chip" href={`/menus/${menuId}?format=digital`} target="_blank" rel="noopener">
+                    <ScreenIcon />Menu board images
+                  </a>
+                )}
+              </ChipSection>
             </div>
 
             <LogoEditor
