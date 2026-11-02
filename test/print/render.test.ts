@@ -62,7 +62,7 @@ describe('the default design', () => {
   it('prints the item on one line, the description under it and a price under each size', () => {
     const html = render();
     expect(html).toContain('Zymos Brewing');
-    expect(bodyOf(html)).toMatch(/Zymos Brewing[^]*? &#x2022; <span class="ts\d+">Hazy Sequence<\/span> &#x2022; NEIPA &#x2022; 6.5% ABV/);
+    expect(bodyOf(html)).toMatch(/Zymos Brewing[^]*? &#xb7; <span class="ts\d+">Hazy Sequence<\/span> &#xb7; NEIPA &#xb7; 6.5%</);
     expect(bodyOf(html)).toContain('Juicy');
     expect(bodyOf(html)).toMatch(/<th class="containerName ts\d+">Taster<\/th><th class="containerName ts\d+">Full Pour<\/th>/);
     expect(bodyOf(html)).toMatch(/containerPriceCell ts\d+">\$3.00<\/td><td class="containerPriceCell ts\d+">\$8.00<\/td>/);
@@ -83,7 +83,7 @@ describe('the default design', () => {
     const html = render();
     expect(html).toContain('id="menuRoot"');
     expect(html).toContain('data-page-height-px="1056"');
-    expect(html).toContain('data-top-px="48"');
+    expect(html).toContain('data-top-px="57.6"');
     expect(html).toContain('data-bottom-px="72"');
     expect(html).toContain('data-max-pages="2"');
     expect(html).toContain('data-fit="shrink-to-pages"');
@@ -189,7 +189,7 @@ describe('sections', () => {
       d.sections.heading.style.font = 'oswald';
       d.sections.heading.style.sizePt = 30;
       d.sections.heading.style.transform = 'uppercase';
-      d.sections.heading.box.border.color = '#FF0000';
+      d.sections.heading.box.border = { widthPx: 3, style: 'solid', color: '#FF0000' };
       d.sections.heading.box.background = '#00ff00';
     })));
     expect(css).toContain('Oswald');
@@ -206,22 +206,23 @@ describe('lines of item text', () => {
   it('leaves out a field the item does not have, along with the separator before it', () => {
     const html = render(model({}, [item({ breweryName: null, style: null })]));
     expect(bodyOf(html)).toContain('><span class="ts');
-    expect(textOf(html)).toContain('|Hazy Sequence| &#x2022; 6.5% ABV|');
-    expect(textOf(html)).not.toMatch(/&#x2022;\s*\|?\s*&#x2022;/);
+    expect(textOf(html)).toContain('|Hazy Sequence| &#xb7; 6.5%|');
+    expect(textOf(html)).not.toMatch(/&#xb7;\s*\|?\s*&#xb7;/);
   });
 
   it('starts the line with no separator when the first fields are missing', () => {
     const html = render(model({}, [item({ breweryName: null })]));
-    expect(bodyOf(html)).not.toMatch(/<div class="ts\d+"> &#x2022;/);
+    expect(bodyOf(html)).not.toMatch(/<div class="ts\d+"> &#xb7;/);
+    expect(textOf(html)).toContain('|Hazy Sequence|');
   });
 
   it('prints an ABV of 0 and leaves out a missing one', () => {
-    expect(render(model({}, [item({ abv: 0 })]))).toContain('0% ABV');
-    expect(render(model({}, [item({ abv: null })]))).not.toContain('ABV');
+    expect(textOf(render(model({}, [item({ abv: 0 })])))).toContain('NEIPA &#xb7; 0%|');
+    expect(textOf(render(model({}, [item({ abv: null })])))).not.toMatch(/\d%/);
   });
 
   it('treats blank text as missing', () => {
-    expect(render(model({}, [item({ style: '   ' })]))).not.toMatch(/&#x2022; &#x2022;/);
+    expect(render(model({}, [item({ style: '   ' })]))).not.toMatch(/&#xb7; &#xb7;/);
   });
 
   it('leaves out a whole line when every part of it is empty', () => {
@@ -269,8 +270,9 @@ describe('lines of item text', () => {
   it('gives the same style one class, however many lines use it', () => {
     const m = model({}, [item(), item({ displayName: 'Pils' }), item({ displayName: 'Stout' })]);
     const classes = [...bodyOf(render(m)).matchAll(/<span class="(ts\d+)">/g)].map((match) => match[1]);
-    expect(classes).toHaveLength(3);
-    expect(new Set(classes).size).toBe(1);
+    // The brewery's span and the name's span each have a style, the same for every item
+    expect(classes).toHaveLength(6);
+    expect(new Set(classes).size).toBe(2);
   });
 });
 
@@ -339,7 +341,7 @@ describe('thumbnails', () => {
 
 describe('item rows', () => {
   it('can have a divider under each item', () => {
-    expect(bodyOf(render())).not.toContain('itemDivider');
+    expect(bodyOf(render(model(), changed((d) => { d.rows.divider.show = false; })))).not.toContain('itemDivider');
     const html = render(model(), changed((d) => { d.rows.divider.show = true; d.rows.divider.color = '#ABCDEF'; }));
     expect(bodyOf(html)).toContain('<tr class="itemDivider"><td colspan="2"></td></tr>');
     expect(styleOf(html)).toContain('#abcdef');
@@ -482,8 +484,8 @@ describe('the presets', () => {
       expect(html).toContain('$8.00');
     }
     expect(new Set(pages).size).toBe(pages.length);
-    expect(pages[1]).toContain('Montserrat');
-    expect(pages[2]).toContain('Playfair Display');
+    expect(pages[0]).toContain('Montserrat');
+    expect(pages[1]).toContain('Playfair Display');
   });
 });
 
@@ -496,7 +498,7 @@ describe('the preview version', () => {
     const html = preview(withFooter);
     expect(html).toContain('data-preview="1"');
     expect(html).toMatch(/data-page-width-px="816"/);
-    expect(html).toMatch(/data-left-px="28\.8"/);
+    expect(html).toMatch(/data-left-px="48"/);
     expect(html).toMatch(/data-footer-bottom-px="28\.8"/);
     expect(html.match(/<script/g)).toHaveLength(2);
     // Taking the additions away leaves the page the print view is

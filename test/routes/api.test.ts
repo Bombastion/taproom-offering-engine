@@ -960,7 +960,7 @@ describe('menu designs', () => {
   it('lists the designs to start from', async () => {
     const res = await request(app).get('/api/design/presets');
     expect(res.status).toBe(200);
-    expect(res.body.map((preset: { id: string }) => preset.id)).toEqual(['classic', 'modern', 'rustic', 'compact']);
+    expect(res.body.map((preset: { id: string }) => preset.id)).toEqual(['modern', 'rustic', 'compact']);
     expect(res.body[0].design.version).toBe(1);
   });
 

@@ -38,18 +38,26 @@ describe('the default print design', () => {
     expect(defaultPrintDesign().page.maxPages).toBe(2);
   });
 
-  it("has today's print menu in it", () => {
+  it('is the Modern design: sans-serif type, a dark band behind headings, dividers, and no footer', () => {
     const design = defaultPrintDesign();
-    expect(design.page).toMatchObject({ size: 'letter', maxPages: 2, fit: 'shrink-to-pages', marginsIn: { top: 0.5, right: 0.3, bottom: 0.75, left: 0.3 } });
-    expect(design.sections.heading.style).toMatchObject({ font: 'roboto', sizePt: 18, color: '#3f3f3f', align: 'center' });
-    expect(design.sections.heading.box.border).toEqual({ widthPx: 3, style: 'solid', color: '#949494' });
+    expect(design.page).toMatchObject({ size: 'letter', maxPages: 2, fit: 'shrink-to-pages', marginsIn: { top: 0.6, right: 0.5, bottom: 0.75, left: 0.5 } });
+    expect(design.sections.heading.style).toMatchObject({ font: 'montserrat', sizePt: 15, color: '#ffffff', transform: 'uppercase' });
+    expect(design.sections.heading.box).toMatchObject({ background: '#2b2d42', border: { widthPx: 0, style: 'none' } });
     expect(design.columns.map((column) => column.type)).toEqual(['fields', 'prices']);
+    expect(design.rows.divider.show).toBe(true);
     expect(design.footer.show).toBe(false);
+    expect(design.footer.text).toBe('');
   });
 
-  it('is offered as the Classic preset', () => {
-    expect(printDesignPresets().map((preset) => preset.id)).toEqual(['classic', 'modern', 'rustic', 'compact']);
+  it('is offered as the Modern preset, first, with the other presets after it', () => {
+    expect(printDesignPresets().map((preset) => preset.id)).toEqual(['modern', 'rustic', 'compact']);
     expect(printDesignPresets()[0].design).toEqual(defaultPrintDesign());
+  });
+
+  it('has nothing in it that belongs to one brewery', () => {
+    for (const design of [defaultPrintDesign(), ...printDesignPresets().map((preset) => preset.design)]) {
+      expect(JSON.stringify(design)).not.toMatch(/zymos|wifi|password/i);
+    }
   });
 
   it('offers presets that are all valid, different from each other, and use only fonts the server has', () => {
@@ -73,7 +81,7 @@ describe('the default print design', () => {
 
   it('uses only fonts the server has', () => {
     for (const id of designFonts(defaultPrintDesign())) expect(getFont(id)).toBeDefined();
-    expect([...designFonts(defaultPrintDesign())].sort()).toEqual(['roboto', 'system-serif']);
+    expect([...designFonts(defaultPrintDesign())].sort()).toEqual(['montserrat']);
   });
 });
 
@@ -258,5 +266,25 @@ describe('design views', () => {
   it('recognizes only the views that can be designed', () => {
     for (const view of DESIGN_VIEWS) expect(isDesignView(view)).toBe(true);
     for (const other of ['widget', 'PRINT', '', 'constructor', null, undefined, 1, {}]) expect(isDesignView(other)).toBe(false);
+  });
+});
+
+// The database migrations can't be run here (no Postgres), so this only checks their text
+describe('the footer that was once given to every existing menu', () => {
+  const migration = (name: string) => fs.readFileSync(path.join(repoRoot, 'prisma/migrations', name, 'migration.sql'), 'utf8');
+  const spec = (sql: string) => sql.match(/'(\{"version"[^']*\})'::jsonb/)![1];
+
+  it('is removed by a later migration, for exactly the rows the first one made', () => {
+    const added = migration('20261027140000_menu_designs');
+    const removed = migration('20261101230000_remove_backfilled_footer');
+    expect(removed).toMatch(/DELETE FROM "MenuDesign"/);
+    expect(removed).toContain(`"view" = 'print'`);
+    expect(JSON.parse(spec(removed))).toEqual(JSON.parse(spec(added)));
+    // Only whole-spec equality: a design that has been saved from the designer is not matched
+    expect(removed).toMatch(/"spec" = '/);
+  });
+
+  it('is not built into the default design any more', () => {
+    expect(defaultPrintDesign().footer).toMatchObject({ show: false, text: '' });
   });
 });

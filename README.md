@@ -233,9 +233,10 @@ formats are unaffected.
 
 How the print menu looks (fonts, sizes, colors, which fields appear in which columns, page size and
 margins, a footer) is described by a **design**: a JSON document per menu, validated by
-`models/menuDesign.ts` and drawn by `print/render.ts`. A menu with no saved design prints exactly
-as it always has. Existing menus were given the Zymos WiFi footer when designs were introduced.
-A design only needs to hold what differs from the default. Fonts come from a fixed list the server
+`models/menuDesign.ts` and drawn by `print/render.ts`. A menu with no saved design prints with the
+default design (the Modern preset, which has no footer). The designer saves a whole design, so changing
+the default later doesn't change a menu that has been saved. A design only needs to hold what differs
+from the default. Fonts come from a fixed list the server
 hosts itself (`models/fonts.ts`, files and licences in `public/fonts`).
 
 The admin API (all under `/api`, signed in):

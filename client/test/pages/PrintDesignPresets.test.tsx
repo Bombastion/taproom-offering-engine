@@ -16,7 +16,7 @@ modern = setIn(modern, ['header', 'title', 'text'], 'The preset’s title');
 modern = setIn(modern, ['header', 'logo', 'show'], false);
 
 const presets = [
-  { id: 'classic', name: 'Classic', description: 'The print menu as it has always looked.', design: printDesign },
+  { id: 'standard', name: 'Standard', description: 'The standard look.', design: printDesign },
   { id: 'modern', name: 'Modern', description: 'Clean sans-serif type.', design: modern },
 ];
 
@@ -53,7 +53,7 @@ describe('presets', () => {
     await user.click(screen.getByRole('button', { name: 'Presets' }));
     const sheet = await screen.findByRole('dialog', { name: 'Start from a design' });
     expect(await screen.findByText('Clean sans-serif type.')).toBeInTheDocument();
-    expect(sheet).toHaveTextContent('Classic');
+    expect(sheet).toHaveTextContent('Standard');
     expect(sheet).toHaveTextContent('Modern');
   });
 
