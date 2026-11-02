@@ -129,11 +129,10 @@ For development on the server. You need a running Postgres and a `DATABASE_URL` 
 ```sh
 npm install                  # also generates the Prisma client into generated/
 npx prisma migrate deploy    # creates the tables
-npm run copy-files           # copies public/ to dist/ (the server renders views from dist/public/views)
 npm start                    # http://localhost:3000
 ```
 
-Re-run `npm run copy-files` after changing anything in `public/`, and `npm run generate` after
+Run `npm run generate` after
 changing `prisma/schema.prisma`. To create a new migration during development, use
 `npx prisma migrate dev --name <what-changed>`.
 
@@ -229,25 +228,33 @@ A menu can have a **default brewery** (set on its screen in the admin app). The 
 board leave that brewery's name off its beers and still name every other brewery. The widget and JSON
 formats are unaffected.
 
-### Print menu designs
+### Menu designs
 
-How the print menu looks (fonts, sizes, colors, which fields appear in which columns, page size and
-margins, a footer) is described by a **design**: a JSON document per menu, validated by
-`models/menuDesign.ts` and drawn by `print/render.ts`. A menu with no saved design prints with the
-default design (the Modern preset, which has no footer). The designer saves a whole design, so changing
-the default later doesn't change a menu that has been saved. A design only needs to hold what differs
-from the default. Fonts come from a fixed list the server
-hosts itself (`models/fonts.ts`, files and licences in `public/fonts`).
+How a menu looks on its two designable views is described by a **design**: a JSON document per
+menu and view, validated on the way in and again whenever it is read, with a default for anything it
+leaves out. A menu with no saved design looks like the default. The designer saves a whole design, so
+changing the defaults later doesn't change a menu that has been saved. Fonts come from a fixed list the
+server hosts itself (`models/fonts.ts`, files and licences in `public/fonts`).
 
-The admin API (all under `/api`, signed in):
+- **Print** (`models/menuDesign.ts`, drawn by `print/render.ts` as an HTML page): fonts, sizes, colors,
+  which fields appear in which columns, page size and margins, a footer. The default is the Modern preset.
+- **Board** (`models/boardDesign.ts`, drawn by `board/render.ts` as a PDF that is turned into one PNG per
+  screenful): background and safe margin, the logo and an optional title at the top, section bars, and
+  item rows made of a picture and lines of text built from the item's fields. The default is the board's
+  original look (blue background, dark bars, Fira Sans). Every size is in pixels of the 1080×1920 picture,
+  and the board shows no prices. pdfkit can't use the web fonts, so the board draws with static
+  regular/bold files in `public/fonts/board` (and `FiraSans-Regular.ttf`); a font is offered on the
+  board only if it has them (`boardFiles` in `models/fonts.ts`).
+
+The admin API (all under `/api`, signed in), where `<view>` is `print` or `board`:
 
 | Request | Does |
 | ------- | ---- |
-| `GET /design/fonts`, `GET /design/presets` | The fonts and starting designs on offer |
-| `GET /menus/<menuId>/design/print` | The menu's design, or the default (`isDefault: true`) |
-| `PUT /menus/<menuId>/design/print` with `{ "design": {...} }` | Validates and saves it (400 with `issues`, one per bad field, if not) |
-| `DELETE /menus/<menuId>/design/print` | Goes back to the default |
-| `POST /menus/<menuId>/design/print/preview` with `{ "design": {...} }` | The menu as HTML with that design, without saving |
+| `GET /design/fonts`, `GET /design/presets` | The fonts and starting designs on offer for the print view; add `?view=board` for the board's |
+| `GET /menus/<menuId>/design/<view>` | The menu's design, or the default (`isDefault: true`) |
+| `PUT /menus/<menuId>/design/<view>` with `{ "design": {...} }` | Validates and saves it (400 with `issues`, one per bad field, if not) |
+| `DELETE /menus/<menuId>/design/<view>` | Goes back to the default |
+| `POST /menus/<menuId>/design/<view>/preview` with `{ "design": {...} }` | Draws the view with that design, without saving: the print menu as HTML, the board as `{ "pages": [PNG data URLs] }` at half size |
 
 These are public and need no login. The menu board and print formats are rate limited (10 requests per minute per IP).
 The admin API under `/api` always requires a signed-in user.
@@ -281,9 +288,10 @@ scripts/                Commands run on the server (reset-password)
 middleware/             Session check, same-origin check and rate limits
 storage/providers.ts    Data layer: Prisma/Postgres, plus an in-memory provider used by tests
 prisma/                 Schema and migrations
-print/                  The print menu: what it shows (model.ts), how it looks (css.ts) and the page itself (render.ts)
-models/menuDesign.ts    The design format, its defaults and validation; models/fonts.ts is the font list
-public/                 Fonts (and the old print template, no longer used)
+print/                  The print menu: what it shows (model.ts, shared with the board), how it looks (css.ts) and the page itself (render.ts)
+board/                  The menu board: layout as a PDF, rendered to PNGs (render.ts)
+models/menuDesign.ts    The print design format, its defaults and validation, and the pieces the board design shares; models/boardDesign.ts is the board's; models/fonts.ts is the font list
+public/                 Fonts
 data/                   Sample JSON data loaded by the in-memory provider (tests only)
 client/                 Admin app
 wix-widget/             Wix embed

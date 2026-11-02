@@ -49,9 +49,16 @@ export interface PrintModel {
   sections: PrintSection[];
 }
 
-// Collects what the print view of a menu shows: the sections not hidden from it that have something
+export interface ModelOptions {
+  // Which view's section visibility applies (see SubMenu.hiddenOn)
+  view?: 'print' | 'board';
+  // Look up prices and pour sizes; the menu board doesn't show them
+  prices?: boolean;
+}
+
+// Collects what a view of a menu (the print menu by default, or the menu board) shows: the sections not hidden from it that have something
 // active on them, each with its items in order and the pour sizes they are priced in.
-export async function buildPrintModel(dataProvider: DataProvider, menu: Menu): Promise<PrintModel> {
+export async function buildPrintModel(dataProvider: DataProvider, menu: Menu, { view = 'print', prices: withPrices = true }: ModelOptions = {}): Promise<PrintModel> {
   // The same item, brewery or pour size comes up many times in one menu
   const items = new Map<string, Item | null>();
   const breweries = new Map<string, Brewery | null>();
@@ -69,7 +76,7 @@ export async function buildPrintModel(dataProvider: DataProvider, menu: Menu): P
     return containers.get(id)!;
   };
 
-  const subMenus = (await dataProvider.getSubMenusForMenu(menu.id!)).filter(subMenuShownOn('print')).sort(byOrder);
+  const subMenus = (await dataProvider.getSubMenusForMenu(menu.id!)).filter(subMenuShownOn(view)).sort(byOrder);
   const sections = new Map<string, PrintSection>();
   const sizeOrders = new Map<string, Map<string, PrintSize>>();
   for (const subMenu of subMenus) {
@@ -92,7 +99,7 @@ export async function buildPrintModel(dataProvider: DataProvider, menu: Menu): P
 
     const prices = new Map<string, string>();
     const sizes = sizeOrders.get(menuItem.subMenuId!)!;
-    for (const saleContainer of await dataProvider.getSaleContainersForMenuItem(menuItem.id!)) {
+    for (const saleContainer of withPrices ? await dataProvider.getSaleContainersForMenuItem(menuItem.id!) : []) {
       const container = await getContainer(saleContainer.containerId);
       if (!container) continue;
       // A pour size with no display name still needs a column of its own

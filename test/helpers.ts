@@ -1,3 +1,4 @@
+import zlib from 'zlib';
 import express, { Express } from 'express';
 import { DataProvider, LocalDataProvider } from '../storage/providers';
 import { Brewery } from '../models/breweries';
@@ -14,6 +15,41 @@ export const TINY_PNG =
 // Just enough of a JPEG/GIF header for the server's file-type sniffing.
 export const JPEG_HEADER = '/9j/4AAQSkZJRgABAQ==';
 export const GIF_HEADER = 'R0lGODlhAQABAAAAACw=';
+
+// A real PNG of one flat color (bare base64, like logos are stored), for tests that look at pixels
+export function solidPng(width: number, height: number, [r, g, b]: [number, number, number]): string {
+  const crcTable = Array.from({ length: 256 }, (_, n) => {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    return c >>> 0;
+  });
+  const crc32 = (buf: Buffer) => {
+    let crc = 0xffffffff;
+    for (const byte of buf) crc = crcTable[(crc ^ byte) & 0xff] ^ (crc >>> 8);
+    return (crc ^ 0xffffffff) >>> 0;
+  };
+  const chunk = (type: string, body: Buffer) => {
+    const length = Buffer.alloc(4);
+    length.writeUInt32BE(body.length);
+    const typed = Buffer.concat([Buffer.from(type), body]);
+    const crc = Buffer.alloc(4);
+    crc.writeUInt32BE(crc32(typed));
+    return Buffer.concat([length, typed, crc]);
+  };
+  const header = Buffer.alloc(13);
+  header.writeUInt32BE(width, 0);
+  header.writeUInt32BE(height, 4);
+  header[8] = 8; // bits per channel
+  header[9] = 2; // RGB
+  const row = Buffer.concat([Buffer.from([0]), Buffer.from(Array.from({ length: width }, () => [r, g, b]).flat())]);
+  const raw = Buffer.concat(Array.from({ length: height }, () => row));
+  return Buffer.concat([
+    Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
+    chunk('IHDR', header),
+    chunk('IDAT', zlib.deflateSync(raw)),
+    chunk('IEND', Buffer.alloc(0)),
+  ]).toString('base64');
+}
 
 // The in-memory provider, pointed at a folder that doesn't exist so it starts out empty.
 export function memoryProvider(): LocalDataProvider {

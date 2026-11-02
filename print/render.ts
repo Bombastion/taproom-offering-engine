@@ -1,8 +1,9 @@
 import { fontFaceCss } from '../models/fonts';
-import { Column, ItemField, Line, parsePrintDesign, PrintDesign, TextStyle } from '../models/menuDesign';
+import { Column, Line, parsePrintDesign, PrintDesign, TextStyle } from '../models/menuDesign';
 import { designCss, ImageRegistry, num, pageDimensions, previewCss, StyleRegistry } from './css';
 import { FIT_SCRIPT } from './fitScript';
 import { PREVIEW_SCRIPT } from './previewScript';
+import { applyFormat, fieldValue } from './fields';
 import { PrintItem, PrintModel, PrintSection } from './model';
 
 /*
@@ -45,24 +46,6 @@ export function imageDataUrl(base64: string | null | undefined): string | null {
   return `data:${mime};base64,${clean}`;
 }
 
-function fieldValue(item: PrintItem, field: ItemField, fixedText: string | undefined): string | null {
-  let value: string | null;
-  switch (field) {
-    case 'breweryName': value = item.breweryName; break;
-    case 'breweryLocation': value = item.breweryLocation; break;
-    case 'displayName': value = item.displayName; break;
-    case 'style': value = item.style; break;
-    // An ABV of 0 is a real value and is shown
-    case 'abv': value = item.abv === null || item.abv === undefined ? null : String(item.abv); break;
-    case 'description': value = item.description; break;
-    case 'category': value = item.category; break;
-    case 'text': value = fixedText ?? null; break;
-  }
-  if (value === null || value === undefined) return null;
-  const trimmed = String(value).trim();
-  return trimmed === '' ? null : trimmed;
-}
-
 export interface RenderOptions {
   // The date for {date} in the title and footer; now by default
   now?: Date;
@@ -95,8 +78,7 @@ export function renderPrintMenu(model: PrintModel, design: PrintDesign, options:
     for (const part of line.parts) {
       const value = fieldValue(item, part.field, part.text);
       if (value === null) continue;
-      // Split and join rather than replace, so a value with "$&" in it stays as it is
-      const text = part.format.split('{value}').join(value);
+      const text = applyFormat(part.format, value);
       if (printed && part.before) html += escapeHtml(part.before);
       html += part.style
         ? `<span class="${styles.classFor({ ...line.style, ...part.style } as TextStyle)}">${escapeHtml(text)}</span>`

@@ -1,14 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import fs from 'fs';
-import os from 'os';
-import path from 'path';
 import request from 'supertest';
 import express, { Express } from 'express';
 import { LocalDataProvider } from '../../storage/providers';
 import pdfkit from 'pdfkit';
 import { unzipSync } from 'fflate';
 import * as mupdf from 'mupdf';
-import { BOARD_SAFE_MARGIN, BOARD_SECTION_GAP, BOARD_SIZE_SCALE, MenusRoutes } from '../../routes/menus';
+import { MenusRoutes } from '../../routes/menus';
+import { defaultBoardDesign } from '../../models/boardDesign';
 import { Item } from '../../models/items';
 import { Menu, MenuItem, SubMenu } from '../../models/menus';
 import { addUser, Fixture, memoryProvider, seed, TINY_PNG } from '../helpers';
@@ -16,7 +14,9 @@ import { addUser, Fixture, memoryProvider, seed, TINY_PNG } from '../helpers';
 // The public, read-only menu formats: the JSON the Wix widget polls (?format=widget), the
 // printable HTML menu (?format=print) and the menu board images (?format=digital).
 
-const repoRoot = path.resolve(import.meta.dirname, '../..');
+// The menu board's default design is how it looked before designs existed
+const BOARD_SAFE_MARGIN = defaultBoardDesign().canvas.safeMarginPx;
+const BOARD_SECTION_GAP = defaultBoardDesign().sections.gapPx;
 
 // ---- Reading the print view ----
 // The tests look at what the page says, not at the tags it is written with.
@@ -257,25 +257,10 @@ describe('?format=print', () => {
   });
 });
 
-// The menu board code loads its font from dist/public/fonts relative to the working directory
-// (that's where `npm run build` puts it). Call this inside a describe to point a scratch working
-// directory at the repo's public/ folder for each test instead of requiring a build.
-function inBoardWorkingDirectory() {
-  let originalCwd: string;
-  let scratch: string;
-
-  beforeEach(() => {
-    originalCwd = process.cwd();
-    scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'toe-board-'));
-    fs.mkdirSync(path.join(scratch, 'dist'));
-    fs.symlinkSync(path.join(repoRoot, 'public'), path.join(scratch, 'dist/public'));
-    process.chdir(scratch);
-  });
-
+// Call this inside a describe that spies on pdfkit, so each test starts with the real thing
+function restoringPdfkit() {
   afterEach(() => {
     vi.restoreAllMocks();
-    process.chdir(originalCwd);
-    fs.rmSync(scratch, { recursive: true, force: true });
   });
 }
 
@@ -319,18 +304,22 @@ describe('items missing a style or an ABV', () => {
   });
 
   describe('on the menu board', () => {
-    inBoardWorkingDirectory();
+    restoringPdfkit();
 
     it('leaves out a missing ABV or style, and shows an ABV of 0', async () => {
       await addDrafts(...ITEMS);
       const drawn = await textDrawnOnBoard();
-      // The name is drawn first, then its details in a second colour
-      const detailsOf = (name: string) => drawn[drawn.indexOf(`Zymos Brewing ${name}`) + 1];
-      expect(detailsOf('Hazy Sequence')).toBe('  NEIPA  6.5%');
-      expect(detailsOf('Style Only')).toBe('  Stout');
-      expect(detailsOf('ABV Only')).toBe('  4.8%');
-      expect(detailsOf('Bare')).toBe('');
-      expect(detailsOf('Zero')).toBe('  NA Lager  0%');
+      // The name is drawn first, then its details in a second colour. A missing detail is left out
+      // entirely; one that is there is set off by two spaces.
+      const detailAfter = (name: string) => {
+        const after = drawn[drawn.indexOf(`Zymos Brewing ${name}`) + 1];
+        return typeof after === 'string' && after.startsWith('  ') ? after : '';
+      };
+      expect(detailAfter('Hazy Sequence')).toBe('  NEIPA  6.5%');
+      expect(detailAfter('Style Only')).toBe('  Stout');
+      expect(detailAfter('ABV Only')).toBe('  4.8%');
+      expect(detailAfter('Bare')).toBe('');
+      expect(detailAfter('Zero')).toBe('  NA Lager  0%');
       expect(drawn.filter((text) => /null|undefined/.test(String(text)))).toEqual([]);
     });
 
@@ -386,7 +375,7 @@ describe('sections hidden from some views', () => {
   });
 
   describe('on the menu board', () => {
-    inBoardWorkingDirectory();
+    restoringPdfkit();
 
     it('still draws a section that is only hidden from the print view', async () => {
       await hide(['print', 'widget']);
@@ -439,7 +428,7 @@ describe('the default brewery', () => {
   });
 
   describe('on the menu board', () => {
-    inBoardWorkingDirectory();
+    restoringPdfkit();
 
     it('names every brewery when the menu has no default brewery', async () => {
       const drawn = await textDrawnOnBoard();
@@ -460,36 +449,15 @@ describe('the default brewery', () => {
 });
 
 describe('?format=digital', () => {
-  // The menu board code loads its font from dist/public/fonts relative to the working directory (that's
-  // where `npm run build` puts it). Point a scratch working directory at the repo's public/
-  // folder instead of requiring a build.
-  let originalCwd: string;
-  let scratch: string;
-
-  beforeEach(() => {
-    originalCwd = process.cwd();
-    scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'toe-pdf-'));
-    fs.mkdirSync(path.join(scratch, 'dist'));
-    fs.symlinkSync(path.join(repoRoot, 'public'), path.join(scratch, 'dist/public'));
-    process.chdir(scratch);
-  });
-
-  afterEach(() => {
-    process.chdir(originalCwd);
-    fs.rmSync(scratch, { recursive: true, force: true });
-  });
+  restoringPdfkit();
 
   it("draws each section's items in their configured order", async () => {
     await swapDrafts();
-    const getItem = vi.spyOn(provider, 'getItem');
-    await request(app).get(`/menus/${data.menu.id}?format=digital`).buffer(true).parse((response, callback) => {
-      response.on('data', () => {});
-      response.on('end', () => callback(null, null));
-    });
-    // Each item is looked up as it's drawn (the first in a section is also looked up once more
-    // to measure it), so the order of first lookups is the order on the board
-    const drawn = [...new Set(getItem.mock.calls.map(([id]) => id))];
-    expect(drawn).toEqual([data.items.pils.id, data.items.hazy.id, data.items.sour.id]);
+    const drawn = await textDrawnOnBoard();
+    const at = (text: string) => drawn.indexOf(text);
+    expect(at('Zymos Brewing Pils')).toBeGreaterThan(-1);
+    expect(at('Zymos Brewing Pils')).toBeLessThan(at('Zymos Brewing Hazy Sequence'));
+    expect(at('Zymos Brewing Hazy Sequence')).toBeLessThan(at('Guest Co Guest Sour'));
   });
 
   // Fetches a response body as raw bytes
@@ -572,6 +540,52 @@ describe('?format=digital', () => {
     expect((await request(app).get(`/menus/${data.menu.id}?format=digital&page=2`)).status).toBe(404);
   });
 
+  describe('with a stored design', () => {
+    // Designs belong to a user, like the menu they are for
+    beforeEach(async () => {
+      const shared = memoryProvider();
+      const owner = await addUser(shared);
+      provider = shared.forOwner(owner.id) as LocalDataProvider;
+      data = await seed(provider);
+      app = express();
+      app.use('/menus', new MenusRoutes(shared).router);
+    });
+
+    const firstPage = async () => decode(unzipSync(new Uint8Array((await binary(`/menus/${data.menu.id}?format=digital`)).body as Buffer))['menu-board-1.png']);
+
+    it('draws the board the way the menu\'s board design says', async () => {
+      await provider.setMenuDesign(data.menu.id!, 'board', { version: 1, canvas: { background: '#101010', safeMarginPx: 100 }, sections: { bar: { background: '#e0a526' } } });
+      const image = await firstPage();
+      // (Colors come out of the PDF renderer within a shade of what was asked for)
+      const close = (actual: number[], expected: number[]) => expect(actual.map((value, i) => Math.abs(value - expected[i])).every((diff) => diff <= 1)).toBe(true);
+      close(image.at(2, 2), [0x10, 0x10, 0x10]);
+      // The bar is inside the bigger margin, in its new color
+      close(image.at(99, 100 + 150 + 10 + 20), [0x10, 0x10, 0x10]);
+      close(image.at(101, 100 + 150 + 10 + 20), [0xe0, 0xa5, 0x26]);
+    });
+
+    it('is not affected by the print design', async () => {
+      await provider.setMenuDesign(data.menu.id!, 'print', { version: 1, page: { background: '#ff0000' } });
+      expect((await firstPage()).at(2, 2)).toEqual(BOARD_BLUE);
+    });
+
+    it('falls back to the default, and says why, when the stored design can no longer be read', async () => {
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      await provider.setMenuDesign(data.menu.id!, 'board', { version: 1, canvas: { background: 'not a color' } });
+      const res = await binary(`/menus/${data.menu.id}?format=digital`);
+      expect(res.status).toBe(200);
+      expect(decode(unzipSync(new Uint8Array(res.body as Buffer))['menu-board-1.png']).at(2, 2)).toEqual(BOARD_BLUE);
+      expect(error).toHaveBeenCalledWith(expect.stringContaining(`menu ${data.menu.id}`), expect.anything());
+    });
+
+    it('still leaves off a section that is hidden from the board', async () => {
+      await provider.updateSubMenu(data.sections.guestTaps.id!, new SubMenu(null, null, null, null, null, ['board']));
+      await provider.setMenuDesign(data.menu.id!, 'board', { version: 1, canvas: { background: '#101010' } });
+      const drawn = await textDrawnOnBoard();
+      expect(drawn).not.toContain('Guest Taps');
+    });
+  });
+
   it('leaves the margins on every side of every page as plain background', async () => {
     await fillDrafts(40);
     const files = unzipSync(new Uint8Array((await binary(`/menus/${data.menu.id}?format=digital`)).body as Buffer));
@@ -582,7 +596,6 @@ describe('?format=digital', () => {
   });
 
   it('draws the section bars 5% bigger than the original 50px', async () => {
-    expect(BOARD_SIZE_SCALE).toBe(1.05);
     const image = decode(unzipSync(new Uint8Array((await binary(`/menus/${data.menu.id}?format=digital`)).body as Buffer))['menu-board-1.png']);
     const top = BOARD_SAFE_MARGIN + 150 + 10;
     const x = BOARD_SAFE_MARGIN + 2;

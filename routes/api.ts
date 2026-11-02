@@ -6,7 +6,9 @@ import { Menu, MENU_VIEWS, MenuItem, SubMenu } from '../models/menus';
 import { Item } from '../models/items';
 import { Brewery } from '../models/breweries';
 import { ItemContainer, SaleContainer } from '../models/containers';
-import { defaultPrintDesign, DesignIssue, parsePrintDesign, printDesignPresets, StoredMenuDesign } from '../models/menuDesign';
+import { defaultPrintDesign, DesignIssue, PrintDesign, DesignPreset, DesignView, isDesignView, ParsedDesign, parsePrintDesign, printDesignPresets, StoredMenuDesign } from '../models/menuDesign';
+import { boardDesignPresets, defaultBoardDesign, BoardDesign, parseBoardDesign } from '../models/boardDesign';
+import { renderBoardPages } from '../board/render';
 import { describeFonts } from '../models/fonts';
 import { buildPrintModel } from '../print/model';
 import { renderPrintMenu } from '../print/render';
@@ -134,14 +136,29 @@ function parseHiddenOn(body: any): string[] | null {
   return MENU_VIEWS.filter((view) => value.includes(view));
 }
 
+// What each designable view needs to read, default and offer designs (see models/menuDesign.ts and
+// models/boardDesign.ts)
+const DESIGN_KINDS: Record<DesignView, { parse: (raw: unknown) => ParsedDesign<unknown>; defaults: () => unknown; presets: () => DesignPreset<unknown>[] }> = {
+  print: { parse: parsePrintDesign, defaults: defaultPrintDesign, presets: printDesignPresets },
+  board: { parse: parseBoardDesign, defaults: defaultBoardDesign, presets: boardDesignPresets },
+};
+
+// The view named in a request's URL (?view=board or /design/:view), which is the print view when it
+// isn't named; anything else is a 404
+function designViewOf(value: unknown, fallback: DesignView | null = 'print'): DesignView {
+  const view = value === undefined ? fallback : value;
+  if (!isDesignView(view)) throw notFound('Design view');
+  return view;
+}
+
 // Reads the design out of a request body ({ design: {...} }), filling in the default for anything it
 // leaves out. Sends the problems back, field by field, if it isn't a valid design.
-function parseDesignBody(body: any, res: Response) {
+function parseDesignBody(body: any, res: Response, view: DesignView) {
   if (body?.design === undefined || body.design === null) {
     res.status(400).json({ error: 'design is required', issues: [{ path: 'design', message: 'Send the design as { "design": { ... } }' }] });
     return null;
   }
-  const parsed = parsePrintDesign(body.design);
+  const parsed = DESIGN_KINDS[view].parse(body.design);
   if (!parsed.ok) {
     const first = parsed.issues.slice(0, 3).map((issue: DesignIssue) => (issue.path ? `${issue.path}: ${issue.message}` : issue.message));
     res.status(400).json({ error: `The design has problems. ${first.join('; ')}`, issues: parsed.issues });
@@ -152,13 +169,14 @@ function parseDesignBody(body: any, res: Response) {
 
 // What the designer is shown for a menu's stored design. Nothing stored (or something that can no
 // longer be read) is the default design.
-function designResponse(stored: StoredMenuDesign | null) {
+function designResponse(stored: StoredMenuDesign | null, view: DesignView) {
+  const kind = DESIGN_KINDS[view];
   if (stored) {
-    const parsed = parsePrintDesign(stored.spec);
+    const parsed = kind.parse(stored.spec);
     if (parsed.ok) return { design: parsed.design, isDefault: false, updatedAt: stored.updatedAt };
-    return { design: defaultPrintDesign(), isDefault: true, updatedAt: null, storedDesignInvalid: true };
+    return { design: kind.defaults(), isDefault: true, updatedAt: null, storedDesignInvalid: true };
   }
-  return { design: defaultPrintDesign(), isDefault: true, updatedAt: null };
+  return { design: kind.defaults(), isDefault: true, updatedAt: null };
 }
 
 type PourInput = { containerId: string; price: number };
@@ -319,50 +337,61 @@ export class ApiRoutes extends Routes {
       res.sendStatus(204);
     }));
 
-    // ---- Menu designs: how the print view looks (see models/menuDesign.ts) ----
+    // ---- Menu designs: how a menu looks on its print view and its menu board (see models/menuDesign.ts and models/boardDesign.ts) ----
 
-    // The fonts and starting designs the designer offers
-    this.router.get('/design/fonts', handle(async (_req, res) => {
-      res.json(describeFonts());
+    // The fonts and starting designs the designer offers (for the print view, or ?view=board)
+    this.router.get('/design/fonts', handle(async (req, res) => {
+      res.json(describeFonts(designViewOf(req.query.view)));
     }));
 
-    this.router.get('/design/presets', handle(async (_req, res) => {
-      res.json(printDesignPresets());
+    this.router.get('/design/presets', handle(async (req, res) => {
+      res.json(DESIGN_KINDS[designViewOf(req.query.view)].presets());
     }));
 
-    // A menu's print design: the stored one, or the default if it has none
-    this.router.get('/menus/:menuId/design/print', handle(async (req, res) => {
+    // A menu's design for a view: the stored one, or the default if it has none
+    this.router.get('/menus/:menuId/design/:view', handle(async (req, res) => {
+      const view = designViewOf(req.params.view, null);
       const menu = await this.data.getMenu(req.params.menuId as string);
       if (!menu) throw notFound('Menu');
-      res.json(designResponse(await this.data.getMenuDesign(menu.id!, 'print')));
+      res.json(designResponse(await this.data.getMenuDesign(menu.id!, view), view));
     }));
 
-    // Saves { design } as the menu's print design. Anything the design leaves out is the default, and
-    // the full design is what gets stored and returned.
-    this.router.put('/menus/:menuId/design/print', handle(async (req, res) => {
+    // Saves { design } as the menu's design for a view. Anything the design leaves out is the default,
+    // and the full design is what gets stored and returned.
+    this.router.put('/menus/:menuId/design/:view', handle(async (req, res) => {
+      const view = designViewOf(req.params.view, null);
       const menu = await this.data.getMenu(req.params.menuId as string);
       if (!menu) throw notFound('Menu');
-      const design = parseDesignBody(req.body, res);
+      const design = parseDesignBody(req.body, res, view);
       if (!design) return;
-      res.json(designResponse(await this.data.setMenuDesign(menu.id!, 'print', design)));
+      res.json(designResponse(await this.data.setMenuDesign(menu.id!, view, design), view));
     }));
 
     // Goes back to the default design
-    this.router.delete('/menus/:menuId/design/print', handle(async (req, res) => {
+    this.router.delete('/menus/:menuId/design/:view', handle(async (req, res) => {
+      const view = designViewOf(req.params.view, null);
       const menu = await this.data.getMenu(req.params.menuId as string);
       if (!menu) throw notFound('Menu');
-      await this.data.deleteMenuDesign(menu.id!, 'print');
+      await this.data.deleteMenuDesign(menu.id!, view);
       res.sendStatus(204);
     }));
 
-    // The print view of this menu drawn with { design } instead of the stored one, as an HTML page,
-    // without saving anything. This is what the designer's live preview shows.
-    this.router.post('/menus/:menuId/design/print/preview', handle(async (req, res) => {
+    // The view of this menu drawn with { design } instead of the stored one, without saving anything:
+    // what the designer's live preview shows. The print view comes back as an HTML page; the menu board
+    // as { pages: [...] }, each page a PNG data URL at half size.
+    this.router.post('/menus/:menuId/design/:view/preview', handle(async (req, res) => {
+      const view = designViewOf(req.params.view, null);
       const menu = await this.data.getMenu(req.params.menuId as string);
       if (!menu) throw notFound('Menu');
-      const design = parseDesignBody(req.body, res);
+      const design = parseDesignBody(req.body, res, view);
       if (!design) return;
-      const html = renderPrintMenu(await buildPrintModel(this.data, menu), design, { preview: true });
+      if (view === 'board') {
+        const model = await buildPrintModel(this.data, menu, { view: 'board', prices: false });
+        const pages = await renderBoardPages(model, design as BoardDesign, { scale: 0.5 });
+        res.json({ pages: pages.map((png) => `data:image/png;base64,${Buffer.from(png).toString('base64')}`) });
+        return;
+      }
+      const html = renderPrintMenu(await buildPrintModel(this.data, menu), design as PrintDesign, { preview: true });
       // A page, not data: if anyone opens it directly it may run its own layout script and nothing else
       res.set('Content-Security-Policy', "sandbox allow-scripts; default-src 'none'; img-src data:; font-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'");
       res.type('html').send(html);
