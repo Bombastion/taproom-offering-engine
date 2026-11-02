@@ -1,0 +1,4 @@
+# Default owner for everything in the repository.
+# Add more owners (or per-path rules below) as the team grows;
+# the last matching pattern takes precedence.
+* @Bombastion
