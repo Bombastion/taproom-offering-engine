@@ -22,7 +22,7 @@ const ITEM_LOGO = solidPng(40, 40, [30, 90, 200]);
 
 function item(overrides: Partial<PrintItem> = {}): PrintItem {
   return {
-    breweryName: 'Zymos Brewing', breweryLocation: 'Littleton, CO', displayName: 'Hazy Sequence', style: 'NEIPA', abv: 6.5,
+    breweryName: 'Example Brewery', breweryLocation: 'Nowhere, US', displayName: 'Hazy Sequence', style: 'NEIPA', abv: 6.5,
     description: 'Juicy and soft', category: 'beer', itemLogo: null, breweryLogo: null, prices: new Map(), ...overrides,
   };
 }
@@ -268,7 +268,7 @@ describe('section bars', () => {
 describe('item rows', () => {
   it('put the brewery, name, style and ABV on one line, the details quieter', async () => {
     const calls = (await textDrawn(modelOf())).map((call) => call.drawn);
-    expect(calls).toContain('Zymos Brewing Hazy Sequence');
+    expect(calls).toContain('Example Brewery Hazy Sequence');
     expect(calls).toContain('  NEIPA  6.5%');
   });
 
@@ -279,20 +279,20 @@ describe('item rows', () => {
       item({ displayName: 'Blank', style: '   ', abv: null }),
     ]]]))).map((call) => call.drawn);
     expect(calls).toContain('No Brewery');
-    expect(calls).toContain('Zymos Brewing Zero');
+    expect(calls).toContain('Example Brewery Zero');
     expect(calls).toContain('  0%');
-    expect(calls).toContain('Zymos Brewing Blank');
+    expect(calls).toContain('Example Brewery Blank');
     expect(calls.filter((drawn) => /null|undefined|NaN/.test(drawn))).toEqual([]);
   });
 
   it('merge neighbours in one style into a single piece of text', async () => {
     const calls = (await textDrawn(modelOf(), changed((d) => { d.items.lines[0].parts.forEach((part: any) => delete part.style); }))).map((call) => call.drawn);
-    expect(calls).toContain('Zymos Brewing Hazy Sequence  NEIPA  6.5%');
+    expect(calls).toContain('Example Brewery Hazy Sequence  NEIPA  6.5%');
   });
 
   it('draw a part in its own style, with the separator in front of it in that style too', async () => {
     const calls = (await textDrawn(modelOf(), changed((d) => { d.items.lines[0].parts[1].style = { weight: 700 }; d.items.lines[0].parts[1].before = ' — '; }))).map((call) => call.drawn);
-    expect(calls).toContain('Zymos Brewing');
+    expect(calls).toContain('Example Brewery');
     expect(calls).toContain(' — Hazy Sequence');
   });
 
@@ -313,7 +313,7 @@ describe('item rows', () => {
     const two = await textDrawn(modelOf([['Drafts', [item(), item({ displayName: 'Second' })]]]), changed((d) => {
       d.items.lines.push({ style: { ...d.items.lines[0].style, sizePx: 30 }, parts: [{ field: 'description', before: '', format: '{value}' }] });
     }));
-    const secondY = (calls: typeof one) => calls.find((call) => call.drawn === 'Zymos Brewing Second')!.y as number;
+    const secondY = (calls: typeof one) => calls.find((call) => call.drawn === 'Example Brewery Second')!.y as number;
     expect(secondY(two)).toBeGreaterThan(secondY(one) + 25);
   });
 
@@ -363,7 +363,7 @@ describe('item rows', () => {
   it('can leave the picture out, so the text starts at the margin', async () => {
     const withLogo = await textDrawn(modelOf());
     const without = await textDrawn(modelOf(), changed((d) => { d.items.logo.show = false; }));
-    const x = (calls: typeof withLogo) => calls.find((call) => call.drawn === 'Zymos Brewing Hazy Sequence')!.x;
+    const x = (calls: typeof withLogo) => calls.find((call) => call.drawn === 'Example Brewery Hazy Sequence')!.x;
     expect(x(withLogo)).toBe(40 + 52.5 + 10);
     expect(x(without)).toBe(40);
   });
@@ -375,7 +375,7 @@ describe('item rows', () => {
 
   it('are spaced by the design\'s row gap', async () => {
     const rows = [item(), item({ displayName: 'Second' })];
-    const y = async (gapPx: number) => (await textDrawn(modelOf([['Drafts', rows]]), changed((d) => { d.items.gapPx = gapPx; }))).find((call) => call.drawn === 'Zymos Brewing Second')!.y as number;
+    const y = async (gapPx: number) => (await textDrawn(modelOf([['Drafts', rows]]), changed((d) => { d.items.gapPx = gapPx; }))).find((call) => call.drawn === 'Example Brewery Second')!.y as number;
     expect((await y(30)) - (await y(10))).toBe(20 + 10);
   });
 
@@ -384,7 +384,7 @@ describe('item rows', () => {
     const rows = [item(), item({ displayName: 'Second' })];
     const calls = await textDrawn(modelOf([['Drafts', rows]]), design);
     const y = (text: string) => calls.find((call) => call.drawn === text)!.y as number;
-    expect(y('Zymos Brewing Second') - y('Zymos Brewing Hazy Sequence')).toBeGreaterThanOrEqual(200);
+    expect(y('Example Brewery Second') - y('Example Brewery Hazy Sequence')).toBeGreaterThanOrEqual(200);
   });
 
   it('start a new page before they would run into the bottom', async () => {

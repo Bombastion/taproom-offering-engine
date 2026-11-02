@@ -128,7 +128,7 @@ function BreweryDetailsForm({ brewery, onSaved }: { brewery: BreweryDetail; onSa
       </label>
       <label className="field-label">
         Location
-        <input className="field" value={location} onChange={(e) => setLocation(e.target.value)} placeholder="e.g. Littleton, CO" maxLength={200} />
+        <input className="field" value={location} onChange={(e) => setLocation(e.target.value)} placeholder="e.g. Nowhere, US" maxLength={200} />
       </label>
       {error && <p className="form-error" role="alert">{error}</p>}
       <button type="submit" className="btn-primary" disabled={!dirty || saving}>

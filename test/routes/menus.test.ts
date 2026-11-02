@@ -84,8 +84,8 @@ describe('?format=widget', () => {
           displayName: 'Drafts',
           items: [
             {
-              breweryName: 'Zymos Brewing',
-              breweryLocation: 'Littleton, CO',
+              breweryName: 'Example Brewery',
+              breweryLocation: 'Nowhere, US',
               displayName: 'Hazy Sequence',
               style: 'NEIPA',
               abv: 6.5,
@@ -229,11 +229,11 @@ describe('?format=print', () => {
     const owned = memoryProvider();
     const owner = await addUser(owned);
     const mine = await seed(owned.forOwner(owner.id));
-    await owned.forOwner(owner.id).setMenuDesign(mine.menu.id!, 'print', { footer: { show: true, text: 'WiFi Name: Zymos Brewing / Password: @zymos_brew' } });
+    await owned.forOwner(owner.id).setMenuDesign(mine.menu.id!, 'print', { footer: { show: true, text: 'WiFi Name: Example Brewery / Password: @example_brew' } });
     const ownedApp = express();
     ownedApp.use('/menus', new MenusRoutes(owned).router);
     const html = (await request(ownedApp).get(`/menus/${mine.menu.id}?format=print`)).text;
-    expect(plain(html.slice(html.indexOf('class="pageFooter"')))).toContain('WiFi Name: Zymos Brewing / Password: @zymos_brew');
+    expect(plain(html.slice(html.indexOf('class="pageFooter"')))).toContain('WiFi Name: Example Brewery / Password: @example_brew');
     expect(html).toMatch(/\.pageFooter\{position:fixed;/);
   });
 
@@ -242,7 +242,7 @@ describe('?format=print', () => {
     expect(res.status).toBe(200);
     expect(res.headers['content-type']).toMatch(/text\/html/);
     const html = res.text;
-    for (const text of ['Drafts', 'Guest Taps', 'Hazy Sequence', 'Pils', 'Guest Sour', 'Zymos Brewing', 'NEIPA', '6.5%', 'Juicy']) {
+    for (const text of ['Drafts', 'Guest Taps', 'Hazy Sequence', 'Pils', 'Guest Sour', 'Example Brewery', 'NEIPA', '6.5%', 'Juicy']) {
       expect(html).toContain(text);
     }
     // Prices always show cents
@@ -282,10 +282,10 @@ async function textDrawnOnBoard() {
 }
 
 describe('items missing a style or an ABV', () => {
-  // Added to the end of Drafts, all at Zymos
+  // Added to the end of Drafts, all at Example Brewery
   async function addDrafts(...items: Array<[string, string | null, number | null]>) {
     for (const [i, [name, style, abv]] of items.entries()) {
-      const item = await provider.addItem(new Item(null, `extra-${i}`, name, data.breweries.zymos.id, style, abv, null, 'beer'));
+      const item = await provider.addItem(new Item(null, `extra-${i}`, name, data.breweries.example.id, style, abv, null, 'beer'));
       await provider.addMenuItem(new MenuItem(null, data.menu.id, item.id, data.sections.drafts.id, null, 10 + i));
     }
   }
@@ -300,12 +300,12 @@ describe('items missing a style or an ABV', () => {
   it('leaves out a missing ABV or style on the print view, with no blank or stray bullet', async () => {
     await addDrafts(...ITEMS);
     const lines = descriptions((await request(app).get(`/menus/${data.menu.id}?format=print`)).text);
-    expect(lines).toContain('Zymos Brewing · Style Only · Stout');
-    expect(lines).toContain('Zymos Brewing · ABV Only · 4.8%');
-    expect(lines).toContain('Zymos Brewing · Bare');
+    expect(lines).toContain('Example Brewery · Style Only · Stout');
+    expect(lines).toContain('Example Brewery · ABV Only · 4.8%');
+    expect(lines).toContain('Example Brewery · Bare');
     // A beer with no ABV set isn't the same as 0%
-    expect(lines).toContain('Zymos Brewing · Zero · NA Lager · 0%');
-    expect(lines).toContain('Zymos Brewing · Hazy Sequence · NEIPA · 6.5%');
+    expect(lines).toContain('Example Brewery · Zero · NA Lager · 0%');
+    expect(lines).toContain('Example Brewery · Hazy Sequence · NEIPA · 6.5%');
     expect(lines.filter((line) => /null|undefined|[^\d]%$/.test(line))).toEqual([]);
   });
 
@@ -318,7 +318,7 @@ describe('items missing a style or an ABV', () => {
       // The name is drawn first, then its details in a second colour. A missing detail is left out
       // entirely; one that is there is set off by two spaces.
       const detailAfter = (name: string) => {
-        const after = drawn[drawn.indexOf(`Zymos Brewing ${name}`) + 1];
+        const after = drawn[drawn.indexOf(`Example Brewery ${name}`) + 1];
         return typeof after === 'string' && after.startsWith('  ') ? after : '';
       };
       expect(detailAfter('Hazy Sequence')).toBe('  NEIPA  6.5%');
@@ -408,14 +408,14 @@ describe('the default brewery', () => {
   it('is named on the print view when the menu has no default brewery', async () => {
     const html = (await request(app).get(`/menus/${data.menu.id}?format=print`)).text;
     expect(descriptions(html).filter(Boolean)).toEqual([
-      expect.stringMatching(/^Zymos Brewing · Hazy Sequence/),
-      expect.stringMatching(/^Zymos Brewing · Pils/),
+      expect.stringMatching(/^Example Brewery · Hazy Sequence/),
+      expect.stringMatching(/^Example Brewery · Pils/),
       expect.stringMatching(/^Guest Co · Guest Sour/),
     ]);
   });
 
   it("is left off the print view, with no stray bullet, while other breweries stay", async () => {
-    await setDefault(data.breweries.zymos.id!);
+    await setDefault(data.breweries.example.id!);
     const html = (await request(app).get(`/menus/${data.menu.id}?format=print`)).text;
     const lines = descriptions(html).filter(Boolean);
     expect(lines).toEqual([
@@ -424,13 +424,13 @@ describe('the default brewery', () => {
       expect.stringMatching(/^Guest Co · Guest Sour/),
     ]);
     // Nowhere on the page is the default brewery named any more
-    expect(html).not.toContain('Zymos Brewing');
+    expect(html).not.toContain('Example Brewery');
   });
 
   it('is still named in the widget, which has its own brewery field', async () => {
-    await setDefault(data.breweries.zymos.id!);
+    await setDefault(data.breweries.example.id!);
     const res = await request(app).get(`/menus/${data.menu.id}?format=widget`);
-    expect(res.body.sections[0].items.map((item: { breweryName: string }) => item.breweryName)).toEqual(['Zymos Brewing', 'Zymos Brewing']);
+    expect(res.body.sections[0].items.map((item: { breweryName: string }) => item.breweryName)).toEqual(['Example Brewery', 'Example Brewery']);
   });
 
   describe('on the menu board', () => {
@@ -438,18 +438,18 @@ describe('the default brewery', () => {
 
     it('names every brewery when the menu has no default brewery', async () => {
       const drawn = await textDrawnOnBoard();
-      expect(drawn).toContain('Zymos Brewing Pils');
-      expect(drawn).toContain('Zymos Brewing Hazy Sequence');
+      expect(drawn).toContain('Example Brewery Pils');
+      expect(drawn).toContain('Example Brewery Hazy Sequence');
       expect(drawn).toContain('Guest Co Guest Sour');
     });
 
     it("leaves the default brewery's name off but keeps other breweries", async () => {
-      await setDefault(data.breweries.zymos.id!);
+      await setDefault(data.breweries.example.id!);
       const drawn = await textDrawnOnBoard();
       expect(drawn).toContain('Pils');
       expect(drawn).toContain('Hazy Sequence');
       expect(drawn).toContain('Guest Co Guest Sour');
-      expect(drawn.filter((text) => String(text).includes('Zymos'))).toEqual([]);
+      expect(drawn.filter((text) => String(text).includes('Example Brewery'))).toEqual([]);
     });
   });
 });
@@ -461,9 +461,9 @@ describe('?format=digital', () => {
     await swapDrafts();
     const drawn = await textDrawnOnBoard();
     const at = (text: string) => drawn.indexOf(text);
-    expect(at('Zymos Brewing Pils')).toBeGreaterThan(-1);
-    expect(at('Zymos Brewing Pils')).toBeLessThan(at('Zymos Brewing Hazy Sequence'));
-    expect(at('Zymos Brewing Hazy Sequence')).toBeLessThan(at('Guest Co Guest Sour'));
+    expect(at('Example Brewery Pils')).toBeGreaterThan(-1);
+    expect(at('Example Brewery Pils')).toBeLessThan(at('Example Brewery Hazy Sequence'));
+    expect(at('Example Brewery Hazy Sequence')).toBeLessThan(at('Guest Co Guest Sour'));
   });
 
   // Fetches a response body as raw bytes
@@ -508,7 +508,7 @@ describe('?format=digital', () => {
   async function fillDrafts(count: number) {
     for (let i = 0; i < count; i++) {
       const long = i % 5 === 0 ? ' Barrel Aged Imperial Pastry Stout With Vanilla Cocoa Nibs And Toasted Coconut' : '';
-      const item = await provider.addItem(new Item(null, `extra-${i}`, `Extra ${i}${long}`, data.breweries.zymos.id, 'Stout', 7.1, null, 'beer'));
+      const item = await provider.addItem(new Item(null, `extra-${i}`, `Extra ${i}${long}`, data.breweries.example.id, 'Stout', 7.1, null, 'beer'));
       await provider.addMenuItem(new MenuItem(null, data.menu.id, item.id, data.sections.drafts.id, null, 10 + i));
     }
   }
@@ -618,7 +618,7 @@ describe('?format=digital', () => {
   it('leaves extra room between the last item of a section and the next section header', async () => {
     // Short names, so every item here takes one line and the spacing between rows is the same
     for (let i = 0; i < 3; i++) {
-      const item = await provider.addItem(new Item(null, `short-${i}`, `S${i}`, data.breweries.zymos.id, 'Stout', 7.1, null, 'beer'));
+      const item = await provider.addItem(new Item(null, `short-${i}`, `S${i}`, data.breweries.example.id, 'Stout', 7.1, null, 'beer'));
       await provider.addMenuItem(new MenuItem(null, data.menu.id, item.id, data.sections.drafts.id, null, 10 + i));
     }
     const image = decode(unzipSync(new Uint8Array((await binary(`/menus/${data.menu.id}?format=digital`)).body as Buffer))['menu-board-1.png']);

@@ -110,9 +110,9 @@ export type Fixture = Awaited<ReturnType<typeof seed>>;
 /*
 A small but realistic menu:
 
-  Brewery: Zymos Brewing (Littleton, CO) and Guest Co (no location, with a logo)
+  Brewery: Example Brewery (Nowhere, US) and Guest Co (no location, with a logo)
   Pour sizes: Taster (order 1), Full Pour (order 2), Crowler (no order)
-  Items: Hazy Sequence (Zymos, NEIPA 6.5), Pils (Zymos, 4.8), Guest Sour (Guest Co), Pretzel (no brewery)
+  Items: Hazy Sequence (Example Brewery, NEIPA 6.5), Pils (Example Brewery, 4.8), Guest Sour (Guest Co), Pretzel (no brewery)
   Menu "Currently On Tap" (with logo)
     Section "Drafts" (order 1): Pils (order 2), Hazy Sequence (order 1)
     Section "Guest Taps" (order 2): Guest Sour
@@ -120,15 +120,15 @@ A small but realistic menu:
 */
 // Pass a provider limited to a user (provider.forOwner(user.id)) to make it that user's menu.
 export async function seed(provider: DataProvider) {
-  const zymos = await provider.addBrewery(new Brewery(null, 'Zymos Brewing', null, 'Littleton, CO'));
+  const example = await provider.addBrewery(new Brewery(null, 'Example Brewery', null, 'Nowhere, US'));
   const guestCo = await provider.addBrewery(new Brewery(null, 'Guest Co', TINY_PNG, null));
 
   const taster = await provider.addContainer(new ItemContainer(null, 'Taster glass', 'Taster', 1));
   const fullPour = await provider.addContainer(new ItemContainer(null, 'Pint glass', 'Full Pour', 2));
   const crowler = await provider.addContainer(new ItemContainer(null, 'Crowler', 'Crowler', null));
 
-  const hazy = await provider.addItem(new Item(null, 'hazy-sequence', 'Hazy Sequence', zymos.id, 'NEIPA', 6.5, 'Juicy', 'beer'));
-  const pils = await provider.addItem(new Item(null, 'pils', 'Pils', zymos.id, 'Pilsner', 4.8, null, 'beer'));
+  const hazy = await provider.addItem(new Item(null, 'hazy-sequence', 'Hazy Sequence', example.id, 'NEIPA', 6.5, 'Juicy', 'beer'));
+  const pils = await provider.addItem(new Item(null, 'pils', 'Pils', example.id, 'Pilsner', 4.8, null, 'beer'));
   const sour = await provider.addItem(new Item(null, 'guest-sour', 'Guest Sour', guestCo.id, 'Sour', 5.2, null, 'beer'));
   const pretzel = await provider.addItem(new Item(null, 'pretzel', 'Pretzel', null, null, null, 'Salty', 'snacks'));
 
@@ -148,7 +148,7 @@ export async function seed(provider: DataProvider) {
   await provider.addSaleContainer(new SaleContainer(null, crowler.id!, sourOnGuest.id!, 12));
 
   return {
-    breweries: { zymos, guestCo },
+    breweries: { example, guestCo },
     containers: { taster, fullPour, crowler },
     items: { hazy, pils, sour, pretzel },
     menu,

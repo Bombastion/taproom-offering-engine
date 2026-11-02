@@ -232,8 +232,8 @@ describe('PrintDesignPage', () => {
       expect(screen.queryByLabelText('Footer text')).not.toBeInTheDocument();
 
       await user.click(screen.getByRole('switch', { name: 'Show a footer on every page' }));
-      await user.type(screen.getByLabelText('Footer text'), 'WiFi: Zymos');
-      await waitFor(() => expect(lastPreviewDesign(server).footer).toMatchObject({ show: true, text: 'WiFi: Zymos' }));
+      await user.type(screen.getByLabelText('Footer text'), 'WiFi: Example');
+      await waitFor(() => expect(lastPreviewDesign(server).footer).toMatchObject({ show: true, text: 'WiFi: Example' }));
       expect(screen.getByRole('combobox', { name: 'Font' })).toHaveValue('roboto');
     });
 
@@ -242,12 +242,12 @@ describe('PrintDesignPage', () => {
       const { user } = await open();
       await user.click(screen.getByRole('button', { name: 'Footer' }));
       expect(screen.getByRole('switch', { name: 'Show a footer on every page' })).toBeChecked();
-      expect(screen.getByLabelText('Footer text')).toHaveValue('WiFi: Zymos');
+      expect(screen.getByLabelText('Footer text')).toHaveValue('WiFi: Example');
       await user.click(screen.getByRole('switch', { name: 'Show a footer on every page' }));
       expect(screen.queryByLabelText('Footer text')).not.toBeInTheDocument();
       await waitFor(() => expect(lastPreviewDesign(server).footer.show).toBe(false));
       // Turning it off keeps its text for turning it on again
-      expect(lastPreviewDesign(server).footer.text).toBe('WiFi: Zymos');
+      expect(lastPreviewDesign(server).footer.text).toBe('WiFi: Example');
     });
 
     it('warns about more lines than the footer can have', async () => {

@@ -16,7 +16,7 @@
   "type": "module",
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "Elastic-2.0",
   "description": "",
   "dependencies": {
     "@prisma/adapter-pg": "^7.3.0",

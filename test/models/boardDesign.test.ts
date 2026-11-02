@@ -53,11 +53,6 @@ describe('the default board design', () => {
     // Prices stay off the board
     expect(JSON.stringify(d)).not.toMatch(/price/i);
   });
-
-  it('has nothing in it that belongs to one brewery', () => {
-    expect(JSON.stringify(defaultBoardDesign())).not.toMatch(/zymos/i);
-    for (const preset of boardDesignPresets()) expect(JSON.stringify(preset.design), preset.id).not.toMatch(/zymos/i);
-  });
 });
 
 describe('reading a board design', () => {

@@ -8,11 +8,11 @@ describe('ItemsPage', () => {
     mockApi({ 'GET /api/items': json(library) });
     const { user } = renderApp('/items');
     expect(await screen.findByText('3 items. Add them to a menu from any section.')).toBeInTheDocument();
-    expect(screen.getByText('NEIPA · 6.5% · Zymos Brewing')).toBeInTheDocument();
+    expect(screen.getByText('NEIPA · 6.5% · Example Brewery')).toBeInTheDocument();
     // Nothing but a name: falls back to the internal name
     expect(screen.getByText('pretzel')).toBeInTheDocument();
 
-    await user.type(screen.getByLabelText('Search items'), 'zymos');
+    await user.type(screen.getByLabelText('Search items'), 'example');
     expect(screen.getByText('Hazy Sequence')).toBeInTheDocument();
     expect(screen.queryByText('Guest Sour')).not.toBeInTheDocument();
 
@@ -275,7 +275,7 @@ describe('BreweriesPage', () => {
   it('lists breweries, noting missing locations and logos', async () => {
     mockApi({ 'GET /api/breweries': json(breweries) });
     renderApp('/breweries');
-    expect(await screen.findByRole('link', { name: /Zymos Brewing/ })).toHaveTextContent('Littleton, CO · No logo');
+    expect(await screen.findByRole('link', { name: /Example Brewery/ })).toHaveTextContent('Nowhere, US · No logo');
     expect(screen.getByRole('link', { name: /Guest Co/ })).toHaveTextContent('No location set');
     expect(screen.getByRole('link', { name: /Guest Co/ })).not.toHaveTextContent('No logo');
     expect(screen.getByText('2 breweries')).toBeInTheDocument();
@@ -300,7 +300,7 @@ describe('BreweryPage', () => {
   it("shows the brewery and its beers", async () => {
     mockApi({ 'GET /api/breweries/b1': json(brewery) });
     renderApp('/breweries/b1');
-    expect(await screen.findByRole('heading', { name: 'Zymos Brewing' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Example Brewery' })).toBeInTheDocument();
     expect(screen.getByText('1 item in your library')).toBeInTheDocument();
     expect(screen.getByText('NEIPA · 6.5%')).toBeInTheDocument();
   });
@@ -320,7 +320,7 @@ describe('BreweryPage', () => {
     expect(save).toBeEnabled();
     await user.click(save);
     expect(await screen.findByText('Brewery saved')).toBeInTheDocument();
-    expect(server.calls('PATCH', '/api/breweries/b1')[0].body).toEqual({ name: 'Zymos Brewing', location: null });
+    expect(server.calls('PATCH', '/api/breweries/b1')[0].body).toEqual({ name: 'Example Brewery', location: null });
   });
 
   it('requires a name', async () => {
