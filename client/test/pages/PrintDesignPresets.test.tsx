@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import { json, mockApi, renderApp } from '../utils';
-import { containers, defaultDesignState, designFonts, menu, menus, previewPage, printDesign } from '../fixtures';
+import { containers, defaultDesignState, designFonts, menu, menus, previewResult, printDesign } from '../fixtures';
 import { PrintDesign, setIn } from '../../src/design';
 
 type Mock = ReturnType<typeof mockApi>;
@@ -32,7 +32,7 @@ function designer(extra: Record<string, Parameters<typeof mockApi>[0][string]> =
       design: setIn(setIn(printDesign, ['footer', 'show'], true), ['footer', 'text'], 'Our own footer'),
       isDefault: false,
     }),
-    'POST /api/menus/m1/design/print/preview': { text: previewPage },
+    'POST /api/menus/m1/design/print/preview': json(previewResult),
     ...extra,
   });
 }
@@ -43,7 +43,7 @@ const lastDesign = (server: Mock) => (previews(server).at(-1)!.body as { design:
 async function open() {
   const server = designer();
   const view = renderApp('/menus/m1/design/print');
-  await screen.findByTitle('Print menu preview');
+  await screen.findByRole('group', { name: 'Print menu preview' });
   return { server, ...view };
 }
 
@@ -96,7 +96,7 @@ describe('presets', () => {
   it('say so when they cannot be listed, and can be tried again', async () => {
     designer({ 'GET /api/design/presets': { status: 500, body: 'Nope' } });
     const { user } = renderApp('/menus/m1/design/print');
-    await screen.findByTitle('Print menu preview');
+    await screen.findByRole('group', { name: 'Print menu preview' });
     await user.click(screen.getByRole('button', { name: 'Presets' }));
     expect(await screen.findByRole('button', { name: /try again/i })).toBeInTheDocument();
   });

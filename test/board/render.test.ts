@@ -396,7 +396,7 @@ describe('item rows', () => {
 describe('type', () => {
   it('can be drawn in every font the board offers, in every weight and slant, with accents and symbols', async () => {
     const text = 'Crème Brûlée Ñandú — €5 “quoted” 🍺 ½';
-    for (const font of FONTS.filter((entry) => entry.boardFiles?.length)) {
+    for (const font of FONTS.filter((entry) => entry.files.length)) {
       for (const weight of [400, 700]) {
         for (const italic of [false, true]) {
           const design = changed((d) => {

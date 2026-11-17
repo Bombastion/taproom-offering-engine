@@ -1038,20 +1038,32 @@ describe('menu designs', () => {
     expect(res.body).toEqual({ design: defaultPrintDesign(), isDefault: true, updatedAt: null, storedDesignInvalid: true });
   });
 
-  it('draws a preview of the menu with the design given, without saving it', async () => {
+  it('draws a preview of the menu with the design given, as pictures of its pages, without saving it', async () => {
     const res = await request(app).post(`${url()}/preview`).send(withFooter);
     expect(res.status).toBe(200);
-    expect(res.type).toBe('text/html');
-    expect(res.text).toContain('Hazy Sequence');
-    expect(res.text).toContain('WiFi: Example');
-    expect(res.text).toContain('id="menuRoot"');
-    expect(res.headers['content-security-policy']).toMatch(/sandbox/);
+    expect(res.type).toBe('application/json');
+    expect(res.body.pages).toHaveLength(1);
+    expect(res.body.pages[0]).toMatch(/^data:image\/png;base64,[A-Za-z0-9+/]+=*$/);
+    const png = Buffer.from(res.body.pages[0].split(',')[1], 'base64');
+    expect([...png.subarray(0, 4)]).toEqual([0x89, 0x50, 0x4e, 0x47]);
+    // IHDR: a letter page, 612x792 points, at 1.25
+    expect([png.readUInt32BE(16), png.readUInt32BE(20)]).toEqual([765, 990]);
+    expect(res.body.info).toEqual({ pages: 1, maxPages: 2, fit: 'shrink-to-pages', fits: true, scale: 1 });
     expect(await provider.getMenuDesign(data.menu.id!, 'print')).toBeNull();
   });
 
   it('previews a design that is only part of one, as the default with those changes', async () => {
     const res = await request(app).post(`${url()}/preview`).send({ design: { page: { maxPages: 1 } } });
-    expect(res.text).toContain('data-max-pages="1"');
+    expect(res.status).toBe(200);
+    expect(res.body.info.maxPages).toBe(1);
+  });
+
+  it('says how the menu came out when it does not fit its pages', async () => {
+    const res = await request(app).post(`${url()}/preview`).send({ design: { page: { fit: 'none', maxPages: 1, marginsIn: { top: 2, right: 0.5, bottom: 2, left: 0.5 } }, header: { title: { show: true, style: { sizePt: 96 } } }, sections: { gapAboveRem: 5, heading: { style: { sizePt: 96 } } } } });
+    expect(res.status).toBe(200);
+    expect(res.body.info).toMatchObject({ maxPages: 1, fits: false, scale: 1 });
+    expect(res.body.info.pages).toBeGreaterThan(1);
+    expect(res.body.pages).toHaveLength(res.body.info.pages);
   });
 
   it('refuses to preview a design that is not valid', async () => {
@@ -1060,22 +1072,19 @@ describe('menu designs', () => {
     expect(res.body.issues[0].path).toBe('page.size');
   });
 
-  it('previews hostile text without it getting out of the page', async () => {
+  it('previews hostile text like any other', async () => {
     const hazy = data.items.hazy;
     await provider.replaceItem(hazy.id!, new Item(null, hazy.internalName, '</script><script>alert(1)</script>', hazy.breweryId, hazy.style, hazy.abv, hazy.description, hazy.category));
     const res = await request(app).post(`${url()}/preview`).send({ design: { footer: { show: true, text: '</style><script>alert(2)</script>' } } });
-    // The preview's own script and the fit script, and nothing the text could add
-    expect(res.text.match(/<script/g)).toHaveLength(2);
-    expect(res.text.match(/<\/style>/g)).toHaveLength(1);
+    expect(res.status).toBe(200);
+    expect(res.body.pages).toHaveLength(1);
   });
 
-  it('draws the preview so that its pages, footers and clicks can be shown', async () => {
-    const preview = await request(app).post(`${url()}/preview`).send(withFooter);
-    expect(preview.text).toContain('data-preview="1"');
-    expect(preview.text).toContain('toePreviewAfterFit');
-    expect(preview.text).toContain('data-pick="headings"');
-    expect(preview.text).toContain('data-pick="column:item"');
-    expect(preview.text).toContain('data-pick="footer"');
+  it('says where the parts of each page are, so a click on the preview can pick the controls for it', async () => {
+    const res = await request(app).post(`${url()}/preview`).send(withFooter);
+    const picks = new Set(res.body.marks.map((mark: { pick: string }) => mark.pick));
+    for (const pick of ['page', 'header', 'headings', 'column:item', 'column:prices', 'footer']) expect(picks, pick).toContain(pick);
+    expect(res.body.marks[0]).toEqual({ page: 1, pick: 'page', x: 0, y: 0, width: 1, height: 1 });
   });
 
   it.each([

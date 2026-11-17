@@ -1579,22 +1579,32 @@ textarea.field {
   font-size: 13px;
 }
 
-/* The page is drawn at its real size and scaled down to the room there is */
-.design-preview-holder {
-  position: relative;
-  width: 100%;
-  overflow: hidden;
-  background: #fff;
-  border: 1px solid var(--line);
+/* The pages of the PDF, one under another, each as wide as the room there is */
+.print-pages {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
-.design-preview-frame {
-  position: absolute;
-  top: 0;
-  left: 0;
-  border: 0;
-  transform-origin: top left;
+.print-page {
+  position: relative;
+  line-height: 0;
+  border: 1px solid var(--line);
   background: #fff;
+}
+
+.print-page img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* The part of the page under the pointer: clicking it picks the controls that change it */
+.print-page-hover {
+  position: absolute;
+  pointer-events: none;
+  outline: 2px solid var(--accent);
+  background: rgba(23, 90, 108, 0.08);
 }
 
 .designer-controls {

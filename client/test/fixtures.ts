@@ -185,13 +185,11 @@ export const savedDesignState: PrintDesignState = {
 };
 
 export const designFonts: FontInfo[] = [
-  { id: 'system-serif', label: 'Browser serif', category: 'system', weights: [400, 700], italic: true },
+  { id: 'system-serif', label: 'Standard serif', category: 'system', weights: [400, 700], italic: true },
   { id: 'roboto', label: 'Roboto', category: 'sans', weights: [100, 200, 300, 400, 500, 600, 700, 800, 900], italic: true },
   { id: 'fira-sans', label: 'Fira Sans', category: 'sans', weights: [400, 500, 700], italic: true },
   { id: 'bebas-neue', label: 'Bebas Neue', category: 'display', weights: [400], italic: false },
 ];
-
-export const previewPage = '<html><body><div id="menuRoot">Hazy Sequence</div></body></html>';
 
 // Menu board designs, shaped like what routes/api.ts answers with (the board as it has always looked)
 
@@ -271,3 +269,16 @@ export const boardPresets = [
     },
   },
 ];
+
+// What the server answers a print preview with: two pages, the menu fitting, and a few parts to click on
+export const previewResult = {
+  pages: [PAGE_IMAGE, PAGE_IMAGE.replace('iVBOR', 'iVBOS')],
+  info: { pages: 2, maxPages: 2, fit: 'shrink-to-pages', fits: true, scale: 1 },
+  marks: [
+    { page: 1, pick: 'page', x: 0, y: 0, width: 1, height: 1 },
+    { page: 1, pick: 'headings', x: 0.1, y: 0.1, width: 0.8, height: 0.05 },
+    { page: 1, pick: 'column:item', x: 0.1, y: 0.2, width: 0.5, height: 0.1 },
+    { page: 1, pick: 'column:prices', x: 0.65, y: 0.2, width: 0.25, height: 0.1 },
+    { page: 2, pick: 'footer', x: 0.1, y: 0.9, width: 0.8, height: 0.05 },
+  ],
+};

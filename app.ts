@@ -1,5 +1,4 @@
 import express, { Express, Request, Response, NextFunction } from 'express';
-import path from 'path';
 import { DataProvider } from './storage/providers';
 import { MenusRoutes } from './routes/menus';
 import { ApiRoutes } from './routes/api';
@@ -65,9 +64,6 @@ export function createApp(dataProvider: DataProvider): Express {
     }
     next();
   });
-
-  // The fonts menu designs can use (see models/fonts.ts). Their file names never change, so browsers may keep them.
-  app.use('/fonts', express.static(path.join(import.meta.dirname, 'public', 'fonts'), { maxAge: '30d' }));
 
   // Register routers
   // Public menu formats (JSON, widget, print, menu board images)

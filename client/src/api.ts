@@ -1,6 +1,6 @@
 import { SessionUser, setSignedOut } from './auth';
 import type { BoardDesign, BoardDesignState } from './boardDesign';
-import type { DesignIssue, DesignPreset, FontInfo, PrintDesign, PrintDesignState } from './design';
+import type { DesignIssue, DesignPreset, FontInfo, PrintDesign, PrintDesignState, PrintPreview } from './design';
 
 // ---- Shapes returned by the server's /api routes (routes/api.ts) ----
 
@@ -332,9 +332,9 @@ export const api = {
   savePrintDesign: (menuId: string, design: PrintDesign) =>
     request<PrintDesignState>('PUT', `/menus/${encodeURIComponent(menuId)}/design/print`, { design }),
   resetPrintDesign: (menuId: string) => request<void>('DELETE', `/menus/${encodeURIComponent(menuId)}/design/print`),
-  // The menu drawn with a design that hasn't been saved: a complete HTML page
+  // The menu drawn with a design that hasn't been saved: a picture of each page of the PDF
   previewPrintDesign: (menuId: string, design: PrintDesign, signal?: AbortSignal) =>
-    request<string>('POST', `/menus/${encodeURIComponent(menuId)}/design/print/preview`, { design }, { signal, as: 'text' }),
+    request<PrintPreview>('POST', `/menus/${encodeURIComponent(menuId)}/design/print/preview`, { design }, { signal }),
   // The same for the menu board (the fonts and presets are the ones the board can use)
   boardDesignFonts: () => request<FontInfo[]>('GET', '/design/fonts?view=board'),
   boardDesignPresets: () => request<DesignPreset<BoardDesign>[]>('GET', '/design/presets?view=board'),

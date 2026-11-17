@@ -11,7 +11,7 @@ import { boardDesignPresets, defaultBoardDesign, BoardDesign, parseBoardDesign }
 import { renderBoardPages } from '../board/render';
 import { describeFonts } from '../models/fonts';
 import { buildPrintModel } from '../print/model';
-import { renderPrintMenu } from '../print/render';
+import { renderPrintPages } from '../print/pdf';
 
 /*
 JSON API for the admin client app (see /client). Everything under /api requires a signed-in user
@@ -376,25 +376,26 @@ export class ApiRoutes extends Routes {
       res.sendStatus(204);
     }));
 
-    // The view of this menu drawn with { design } instead of the stored one, without saving anything:
-    // what the designer's live preview shows. The print view comes back as an HTML page; the menu board
-    // as { pages: [...] }, each page a PNG data URL at half size.
+    // The view of this menu drawn with { design } instead of the stored one, without saving anything: what
+    // the designer's live preview shows. Each page comes back as a PNG data URL. The menu board's are half
+    // size; the print menu's are drawn at 1.25 pixels to the point (765 across a letter page), with how the
+    // menu came out (page count, how far it was shrunk) and where its parts are, so a click on one can find
+    // its controls.
     this.router.post('/menus/:menuId/design/:view/preview', handle(async (req, res) => {
       const view = designViewOf(req.params.view, null);
       const menu = await this.data.getMenu(req.params.menuId as string);
       if (!menu) throw notFound('Menu');
       const design = parseDesignBody(req.body, res, view);
       if (!design) return;
+      const dataUrl = (png: Uint8Array) => `data:image/png;base64,${Buffer.from(png).toString('base64')}`;
       if (view === 'board') {
         const model = await buildPrintModel(this.data, menu, { view: 'board', prices: false });
         const pages = await renderBoardPages(model, design as BoardDesign, { scale: 0.5 });
-        res.json({ pages: pages.map((png) => `data:image/png;base64,${Buffer.from(png).toString('base64')}`) });
+        res.json({ pages: pages.map(dataUrl) });
         return;
       }
-      const html = renderPrintMenu(await buildPrintModel(this.data, menu), design as PrintDesign, { preview: true });
-      // A page, not data: if anyone opens it directly it may run its own layout script and nothing else
-      res.set('Content-Security-Policy', "sandbox allow-scripts; default-src 'none'; img-src data:; font-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'");
-      res.type('html').send(html);
+      const { pages, info, marks } = await renderPrintPages(await buildPrintModel(this.data, menu), design as PrintDesign, { scale: 1.25 });
+      res.json({ pages: pages.map(dataUrl), info, marks });
     }));
 
     // Adds a new section to the end of a menu

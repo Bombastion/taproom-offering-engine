@@ -129,7 +129,7 @@ export function PrintDesignPage() {
                 Presets
               </button>
               <a className="chip" href={`/menus/${menuId}?format=print`} target="_blank" rel="noopener">
-                Saved print view
+                Saved PDF
               </a>
               {!saved.data.isDefault && (
                 <button type="button" className="chip" onClick={() => setConfirmReset(true)}>

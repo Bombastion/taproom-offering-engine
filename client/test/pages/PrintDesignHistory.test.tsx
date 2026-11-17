@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { json, mockApi, renderApp } from '../utils';
-import { containers, defaultDesignState, designFonts, menu, menus, previewPage, printDesign } from '../fixtures';
+import { containers, defaultDesignState, designFonts, menu, menus, previewResult, printDesign } from '../fixtures';
 import { PrintDesign, setIn } from '../../src/design';
 
 type Mock = ReturnType<typeof mockApi>;
@@ -13,7 +13,7 @@ function designer(extra: Record<string, Parameters<typeof mockApi>[0][string]> =
     'GET /api/design/fonts': json(designFonts),
     'GET /api/containers': json(containers),
     'GET /api/menus/m1/design/print': json(defaultDesignState),
-    'POST /api/menus/m1/design/print/preview': { text: previewPage },
+    'POST /api/menus/m1/design/print/preview': json(previewResult),
     ...extra,
   });
 }
@@ -24,7 +24,7 @@ const lastDesign = (server: Mock) => (previews(server).at(-1)!.body as { design:
 async function open() {
   const server = designer();
   const view = renderApp('/menus/m1/design/print');
-  await screen.findByTitle('Print menu preview');
+  await screen.findByRole('group', { name: 'Print menu preview' });
   return { server, ...view };
 }
 
@@ -114,7 +114,7 @@ describe('undo and redo', () => {
     designer({ 'PUT /api/menus/m1/design/print': () => ({ body: { design: changed, isDefault: false, updatedAt: '2026-11-01T12:00:00.000Z' } }) });
     const { user } = await (async () => {
       const view = renderApp('/menus/m1/design/print');
-      await screen.findByTitle('Print menu preview');
+      await screen.findByRole('group', { name: 'Print menu preview' });
       return view;
     })();
     await user.click(screen.getByRole('radio', { name: 'Left' }));
@@ -150,7 +150,7 @@ describe('leaving with changes that are not saved', () => {
     await leave(user);
     await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Leave without saving' }));
     expect(await screen.findByText('Currently On Tap')).toBeInTheDocument();
-    expect(screen.queryByTitle('Print menu preview')).not.toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'Print menu preview' })).not.toBeInTheDocument();
   });
 
   it('does not ask when nothing has changed, or after a change was changed back', async () => {
@@ -167,7 +167,7 @@ describe('leaving with changes that are not saved', () => {
     designer({ 'PUT /api/menus/m1/design/print': () => ({ body: { design: changed, isDefault: false, updatedAt: '2026-11-01T12:00:00.000Z' } }) });
     const { user } = await (async () => {
       const view = renderApp('/menus/m1/design/print');
-      await screen.findByTitle('Print menu preview');
+      await screen.findByRole('group', { name: 'Print menu preview' });
       return view;
     })();
     await user.click(screen.getByRole('radio', { name: 'Left' }));

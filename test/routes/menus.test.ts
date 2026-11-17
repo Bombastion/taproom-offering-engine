@@ -11,9 +11,10 @@ import { blueBoardDesign } from '../board/designs';
 import { Item } from '../../models/items';
 import { Menu, MenuItem, SubMenu } from '../../models/menus';
 import { addUser, Fixture, memoryProvider, seed, TINY_PNG } from '../helpers';
+import { getPdf, pageSizes, plainText, textLines, textRows } from '../pdf';
 
 // The public, read-only menu formats: the JSON the Wix widget polls (?format=widget), the
-// printable HTML menu (?format=print) and the menu board images (?format=digital).
+// printable PDF menu (?format=print) and the menu board images (?format=digital).
 
 // Most of these tests draw the board with a design saved for the menu whose measurements they know
 // (blueBoardDesign); the ones about what a menu with no saved design gets say so
@@ -21,19 +22,19 @@ const BOARD_SAFE_MARGIN = blueBoardDesign().canvas.safeMarginPx;
 const BOARD_SECTION_GAP = blueBoardDesign().sections.gapPx;
 
 // ---- Reading the print view ----
-// The tests look at what the page says, not at the tags it is written with.
+// The tests look at what the PDF says, not at how it is drawn.
 
-// Tags removed and entities decoded: the text a reader would see
-function plain(fragment: string): string {
-  return fragment
-    .replace(/<[^>]*>/g, '')
-    .replace(/&#x([0-9a-f]+);/gi, (_match, hex: string) => String.fromCodePoint(parseInt(hex, 16)))
-    .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
+// The menu's print view: the response and the PDF in it
+const printOf = (menuId: string | null | undefined, from: Express = app) => getPdf(from, `/menus/${menuId}?format=print`);
+// All the text of the menu's print view, a line to a row
+async function printText(menuId: string | null | undefined, from: Express = app): Promise<string> {
+  return plainText((await printOf(menuId, from)).pdf);
 }
 
-// The first line of text of each item, as printed in the default design's item column (c0), in order
-function itemLines(html: string): string[] {
-  return [...html.matchAll(/<tbody class="itemGroup"><tr><td class="c0">(.*?)<\/td>/g)].map((m) => plain(m[1]));
+// The first line of text of each item, as printed in the default design's item column, in order
+async function itemLines(menuId: string | null | undefined): Promise<string[]> {
+  const { pdf } = await printOf(menuId);
+  return textRows(pdf, [0, 420]).filter((row) => row.lines[0].size > 10 && row.lines[0].size < 11).map((row) => row.text);
 }
 
 let provider: LocalDataProvider;
@@ -176,13 +177,13 @@ describe('inactive items', () => {
 
   it('leaves inactive items, and sections with nothing active, out of the print view', async () => {
     await provider.setMenuItemActive(data.menuItems.sourOnGuest.id!, false);
-    const html = (await request(app).get(`/menus/${data.menu.id}?format=print`)).text;
-    expect(html).toContain('Pils');
-    expect(html).not.toContain('Hazy Sequence');
-    expect(html).not.toContain('Guest Taps');
-    expect(html).not.toContain('Guest Sour');
+    const text = await printText(data.menu.id);
+    expect(text).toContain('Pils');
+    expect(text).not.toContain('Hazy Sequence');
+    expect(text).not.toContain('GUEST TAPS');
+    expect(text).not.toContain('Guest Sour');
     // Only the inactive Hazy Sequence had a Taster price
-    expect(html).not.toContain('Taster');
+    expect(text).not.toContain('TASTER');
   });
 });
 
@@ -192,39 +193,31 @@ async function swapDrafts() {
 }
 
 describe('?format=print', () => {
-  it('has nothing in it that is only for the designer\'s preview', async () => {
-    const html = (await request(app).get(`/menus/${data.menu.id}?format=print`)).text;
-    expect(html).not.toContain('data-pick');
-    expect(html).not.toContain('data-preview');
-    expect(html).not.toContain('toe-preview');
+  it('is a PDF the browser shows in place, named after the menu', async () => {
+    const { res, pdf } = await printOf(data.menu.id);
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toMatch(/^application\/pdf/);
+    expect(res.headers['content-disposition']).toBe('inline; filename="currently-on-tap.pdf"');
+    expect(Buffer.from(pdf.subarray(0, 5)).toString()).toBe('%PDF-');
   });
 
   it("lists each section's items in their configured order", async () => {
     await swapDrafts();
-    const html = (await request(app).get(`/menus/${data.menu.id}?format=print`)).text;
-    expect(html.indexOf('Pils')).toBeGreaterThan(-1);
-    expect(html.indexOf('Pils')).toBeLessThan(html.indexOf('Hazy Sequence'));
+    const lines = await itemLines(data.menu.id);
+    const [pils, hazy] = [lines.findIndex((line) => line.includes('Pils')), lines.findIndex((line) => line.includes('Hazy Sequence'))];
+    expect(pils).toBeGreaterThan(-1);
+    expect(pils).toBeLessThan(hazy);
   });
 
-  it('sizes the printable menu to fit two letter-size pages', async () => {
-    const html = (await request(app).get(`/menus/${data.menu.id}?format=print`)).text;
-    // Items are individual table bodies so a row and its description are never split by a page break
-    expect(html).toContain('class="itemGroup"');
-    // The inline script scales the root font size to fit; the page tells it how many pages
-    expect(html).toContain('data-max-pages="2"');
-    expect(html).toContain('data-fit="shrink-to-pages"');
-    expect(html).toContain('data-page-height-px="1056"');
-    // The stylesheet sets up letter paper with no page margin (the margins are rebuilt by the script)
-    expect(html).toMatch(/@page\{size:letter;margin:0\}/);
+  it('is drawn on letter-size paper, as the default design says', async () => {
+    expect(pageSizes((await printOf(data.menu.id)).pdf)).toEqual([{ width: 612, height: 792 }]);
   });
 
   it('has no footer unless the design asks for one', async () => {
-    const html = (await request(app).get(`/menus/${data.menu.id}?format=print`)).text;
-    expect(html).not.toContain('class="pageFooter"');
-    expect(html).not.toContain('WiFi');
+    expect(await printText(data.menu.id)).not.toContain('WiFi');
   });
 
-  it('prints the footer from the stored design, fixed so browsers repeat it on every page', async () => {
+  it('prints the footer from the stored design', async () => {
     // Designs belong to a user, like the menu they are for
     const owned = memoryProvider();
     const owner = await addUser(owned);
@@ -232,34 +225,34 @@ describe('?format=print', () => {
     await owned.forOwner(owner.id).setMenuDesign(mine.menu.id!, 'print', { footer: { show: true, text: 'WiFi Name: Example Brewery / Password: @example_brew' } });
     const ownedApp = express();
     ownedApp.use('/menus', new MenusRoutes(owned).router);
-    const html = (await request(ownedApp).get(`/menus/${mine.menu.id}?format=print`)).text;
-    expect(plain(html.slice(html.indexOf('class="pageFooter"')))).toContain('WiFi Name: Example Brewery / Password: @example_brew');
-    expect(html).toMatch(/\.pageFooter\{position:fixed;/);
+    expect(await printText(mine.menu.id, ownedApp)).toContain('WiFi Name: Example Brewery / Password: @example_brew');
   });
 
-  it('renders the printable menu with each section, its pour-size columns and prices', async () => {
-    const res = await request(app).get(`/menus/${data.menu.id}?format=print`);
+  it('falls back to the default design, and says why, when the stored design can no longer be read', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    await provider.setMenuDesign(data.menu.id!, 'print', { version: 1, page: { background: 'not a color' } });
+    const { res, pdf } = await printOf(data.menu.id);
     expect(res.status).toBe(200);
-    expect(res.headers['content-type']).toMatch(/text\/html/);
-    const html = res.text;
-    for (const text of ['Drafts', 'Guest Taps', 'Hazy Sequence', 'Pils', 'Guest Sour', 'Example Brewery', 'NEIPA', '6.5%', 'Juicy']) {
-      expect(html).toContain(text);
+    expect(plainText(pdf)).toContain('Hazy Sequence');
+    expect(error).toHaveBeenCalledWith(expect.stringContaining(`menu ${data.menu.id}`), expect.anything());
+    error.mockRestore();
+  });
+
+  it('draws each section, its pour-size columns and prices', async () => {
+    const { pdf } = await printOf(data.menu.id);
+    const text = plainText(pdf);
+    for (const expected of ['DRAFTS', 'GUEST TAPS', 'Hazy Sequence', 'Pils', 'Guest Sour', 'Example Brewery', 'NEIPA', '6.5%', 'Juicy']) {
+      expect(text).toContain(expected);
     }
     // Prices always show cents
-    expect(html).toContain('>$8.00<');
-    expect(html).toContain('>$6.50<');
-    expect(html).toContain('>$12.00<');
+    for (const price of ['$8.00', '$6.50', '$12.00', '$3.00']) expect(text).toContain(price);
     // A size an item doesn't come in leaves its cell empty, with no stray $
-    const hazy = html.slice(html.indexOf('Hazy Sequence'), html.indexOf('Pils'));
-    expect(hazy).toMatch(/containerPriceCell ts\d+">\$3\.00<\/td>/);
-    expect(html).toMatch(/<td class="containerPriceCell ts\d+"><\/td>/);
-    expect(html.match(/\$/g)).toHaveLength(4);
+    expect(text.match(/\$/g)).toHaveLength(4);
     // Pour-size columns follow the containers' order within a section
-    const drafts = html.slice(html.indexOf('Drafts'), html.indexOf('Guest Taps'));
-    expect(drafts.indexOf('Taster')).toBeGreaterThan(-1);
-    expect(drafts.indexOf('Taster')).toBeLessThan(drafts.indexOf('Full Pour'));
-    expect(drafts).not.toContain('Crowler');
-    expect(html).toContain(TINY_PNG);
+    const lines = textLines(pdf);
+    const x = (heading: string) => lines.find((line) => line.text === heading)!.x;
+    expect(x('TASTER')).toBeLessThan(x('FULL POUR'));
+    expect(text.slice(0, text.indexOf('GUEST TAPS'))).not.toContain('CROWLER');
   });
 });
 
@@ -289,7 +282,6 @@ describe('items missing a style or an ABV', () => {
       await provider.addMenuItem(new MenuItem(null, data.menu.id, item.id, data.sections.drafts.id, null, 10 + i));
     }
   }
-  const descriptions = itemLines;
   const ITEMS: Array<[string, string | null, number | null]> = [
     ['Style Only', 'Stout', null],
     ['ABV Only', null, 4.8],
@@ -299,7 +291,7 @@ describe('items missing a style or an ABV', () => {
 
   it('leaves out a missing ABV or style on the print view, with no blank or stray bullet', async () => {
     await addDrafts(...ITEMS);
-    const lines = descriptions((await request(app).get(`/menus/${data.menu.id}?format=print`)).text);
+    const lines = await itemLines(data.menu.id);
     expect(lines).toContain('Example Brewery · Style Only · Stout');
     expect(lines).toContain('Example Brewery · ABV Only · 4.8%');
     expect(lines).toContain('Example Brewery · Bare');
@@ -342,25 +334,25 @@ describe('items missing a style or an ABV', () => {
 describe('sections hidden from some views', () => {
   const hide = (hiddenOn: string[]) => provider.updateSubMenu(data.sections.guestTaps.id!, new SubMenu(null, null, null, null, null, hiddenOn));
   const sectionNames = async (format: string) => {
-    const res = await request(app).get(`/menus/${data.menu.id}?format=${format}`);
-    return format === 'widget' ? res.body.sections.map((s: { displayName: string }) => s.displayName) : res.text;
+    if (format === 'print') return printText(data.menu.id);
+    return (await request(app).get(`/menus/${data.menu.id}?format=${format}`)).body.sections.map((s: { displayName: string }) => s.displayName);
   };
 
   it('shows every section on every view by default', async () => {
     expect(await sectionNames('widget')).toEqual(['Drafts', 'Guest Taps']);
-    const html = await sectionNames('print');
-    expect(html).toContain('Guest Taps');
-    expect(html).toContain('Guest Sour');
+    const text = await sectionNames('print');
+    expect(text).toContain('GUEST TAPS');
+    expect(text).toContain('Guest Sour');
   });
 
   it('leaves a section, its heading and its items off the print view only', async () => {
     await hide(['print']);
-    const html = await sectionNames('print');
-    expect(html).toContain('Drafts');
-    expect(html).toContain('Hazy Sequence');
-    expect(html).not.toContain('Guest Taps');
-    expect(html).not.toContain('Guest Sour');
-    expect(html).not.toContain('Guest Co');
+    const text = await sectionNames('print');
+    expect(text).toContain('DRAFTS');
+    expect(text).toContain('Hazy Sequence');
+    expect(text).not.toContain('GUEST TAPS');
+    expect(text).not.toContain('Guest Sour');
+    expect(text).not.toContain('Guest Co');
     // Still on the widget
     expect(await sectionNames('widget')).toEqual(['Drafts', 'Guest Taps']);
   });
@@ -374,10 +366,10 @@ describe('sections hidden from some views', () => {
   it('copes with every section being hidden from the print view', async () => {
     await provider.updateSubMenu(data.sections.drafts.id!, new SubMenu(null, null, null, null, null, ['print']));
     await hide(['print']);
-    const res = await request(app).get(`/menus/${data.menu.id}?format=print`);
+    const { res, pdf } = await printOf(data.menu.id);
     expect(res.status).toBe(200);
-    expect(res.text).not.toContain('Hazy Sequence');
-    expect(res.text).not.toContain('Guest Sour');
+    expect(plainText(pdf)).not.toContain('Hazy Sequence');
+    expect(plainText(pdf)).not.toContain('Guest Sour');
   });
 
   describe('on the menu board', () => {
@@ -403,11 +395,9 @@ describe('sections hidden from some views', () => {
 describe('the default brewery', () => {
   const setDefault = (breweryId: string | null) =>
     provider.replaceMenu(data.menu.id!, new Menu(null, data.menu.internalName, data.menu.displayName, data.menu.logo, breweryId));
-  const descriptions = itemLines;
 
   it('is named on the print view when the menu has no default brewery', async () => {
-    const html = (await request(app).get(`/menus/${data.menu.id}?format=print`)).text;
-    expect(descriptions(html).filter(Boolean)).toEqual([
+    expect((await itemLines(data.menu.id)).filter(Boolean)).toEqual([
       expect.stringMatching(/^Example Brewery · Hazy Sequence/),
       expect.stringMatching(/^Example Brewery · Pils/),
       expect.stringMatching(/^Guest Co · Guest Sour/),
@@ -416,15 +406,14 @@ describe('the default brewery', () => {
 
   it("is left off the print view, with no stray bullet, while other breweries stay", async () => {
     await setDefault(data.breweries.example.id!);
-    const html = (await request(app).get(`/menus/${data.menu.id}?format=print`)).text;
-    const lines = descriptions(html).filter(Boolean);
+    const lines = (await itemLines(data.menu.id)).filter(Boolean);
     expect(lines).toEqual([
       expect.stringMatching(/^Hazy Sequence · NEIPA · 6.5%/),
       expect.stringMatching(/^Pils · Pilsner · 4.8%/),
       expect.stringMatching(/^Guest Co · Guest Sour/),
     ]);
     // Nowhere on the page is the default brewery named any more
-    expect(html).not.toContain('Example Brewery');
+    expect(await printText(data.menu.id)).not.toContain('Example Brewery');
   });
 
   it('is still named in the widget, which has its own brewery field', async () => {

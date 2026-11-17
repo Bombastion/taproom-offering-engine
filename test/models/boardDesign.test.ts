@@ -150,11 +150,11 @@ describe('board design presets', () => {
 
 describe('fonts on the board', () => {
   it('only includes fonts that have static files on disk', () => {
-    const boardFonts = FONTS.filter((font) => font.boardFiles?.length);
+    const boardFonts = FONTS.filter((font) => font.files.length);
     expect(boardFonts.map((font) => font.id)).toContain('fira-sans');
     expect(boardFonts.map((font) => font.id)).not.toContain('system-serif');
     for (const font of boardFonts) {
-      for (const file of font.boardFiles!) {
+      for (const file of font.files) {
         expect(fs.existsSync(path.join(fontsFolder, file.file)), `${font.id}: ${file.file}`).toBe(true);
         // pdfkit can't embed WOFF2 or variable fonts
         expect(file.file, font.id).toMatch(/\.(woff|ttf)$/);

@@ -28,8 +28,7 @@ npm install
 npm run dev        # http://localhost:5173/admin/
 ```
 
-The dev server proxies `/api` (and `/fonts`, which the print menu designer's preview loads its
-fonts from) to `http://localhost:3000`; set `TOE_API_TARGET` to point it somewhere else.
+The dev server proxies `/api` to `http://localhost:3000`; set `TOE_API_TARGET` to point it somewhere else.
 
 `npm run build` type-checks and writes the production build to `dist/`.
 
@@ -74,11 +73,10 @@ and nothing is kept until Save. The preview is the real print view, drawn by the
 (`POST /api/menus/:id/design/print/preview`) after a short pause in the editing, so it is always what will
 print.
 
-The preview is shown in an iframe on `public/preview-frame.html`, which is handed the page by
-`postMessage` and writes it in. It can't be a `srcdoc` iframe: that would inherit the app's strict
-content policy (no inline style or script) and would not be in quirks mode, which the print page needs.
-The frame page is served sandboxed with a policy of its own (`docker/security-headers-preview.conf`, wired
-up in `docker/nginx.conf`). After changing any of these, check it in a real browser; jsdom can't.
+The preview is a picture of each page of the PDF (the server draws the PDF, and answers with PNGs of its pages
+and where each part of the menu is on them: `components/design/DesignPreview.tsx`). Clicking a part of a page
+opens the controls that change it. The pictures are plain images, so nothing in the preview runs scripts or
+needs a policy of its own.
 
 The controls are one group per part of the menu (Page, Logo and title, Section headings, Columns, Rows,
 Footer), in `components/design/groups.tsx` and `columns.tsx`; only one is open at a time. A group is given the
@@ -105,15 +103,11 @@ uses `createBrowserRouter`), and closing the tab asks through `beforeunload`.
 Presets (`GET /api/design/presets`, `PresetSheet.tsx`) replace the look of the draft but keep what belongs to
 the menu: whether the logo, title and footer show, their words, and the paper size (`applyPreset`).
 
-The preview page tells the designer back what the browser made of it, by `postMessage` (only messages whose
-`source` is the preview frame are listened to). The server adds some extras to the page it draws for the
-preview (`print/previewScript.ts`; the saved print view doesn't have them): page starts moved to the tops of
-their pages, the footer on every page, guides for the page edges and margins, `{type: 'toe-preview-info'}` with
-the page count, how far the text was shrunk and whether it fits (shown above the preview, with a warning when
-it doesn't), and `{type: 'toe-preview-pick'}` when something is clicked. Parts of the menu carry `data-pick`
-(`header`, `headings`, `rows`, `footer`, `column:<id>`), and clicking one opens the group (and column) that
-changes it. The frame is given the page once when it first loads; writing a page into it loads it again, so
-sending on every load would rewrite it for ever (`DesignPreview.tsx` has a test for this).
+The server answers a preview with `{ pages, info, marks }` (`print/pdf.ts`): a PNG data URL for each page of the
+PDF, how it came out (`info`: the page count, how far the text was shrunk and whether it fits; shown above the
+preview, with a warning when it doesn't), and `marks`, boxes (as fractions of a page) for the parts of the menu,
+each named by the group it belongs to (`header`, `headings`, `rows`, `footer`, `column:<id>`). A click on a page
+finds the smallest mark under it (`markAt`) and opens the group (and column) that changes it.
 
 ## The menu board designer
 

@@ -1,13 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { api, ApiError } from '../../api';
-import { PAGE_PX, PrintDesign } from '../../design';
+import { PrintDesign, PrintPreview, PrintPreviewInfo, PrintPreviewMark } from '../../design';
 
 // How long the design has to stop changing before the preview is asked for again
 const PAUSE_MS = 300;
-
-// Where the preview is drawn: a page of its own (client/public/preview-frame.html), because the
-// print menu can't be shown in an iframe's srcdoc. See that file for why.
-const FRAME_URL = `${import.meta.env.BASE_URL}preview-frame.html`;
 
 // What to say when the server turns a design down: the first thing wrong with it, where
 export function problemText(e: unknown): string {
@@ -18,31 +14,21 @@ export function problemText(e: unknown): string {
   return e instanceof Error ? e.message : 'Something went wrong.';
 }
 
-// What the menu page says about itself once it has laid itself out (see print/previewScript.ts)
-type PreviewInfo = {
-  pages: number;
-  maxPages: number | null;
-  // The size the text ended up at, and the normal size, in px
-  fontPx: number;
-  normalPx: number;
-  fit: 'shrink-to-pages' | 'none';
-  fits: boolean;
-  // The height of all of its pages, at full size
-  heightPx: number;
-};
-
-function readInfo(data: Record<string, unknown>): PreviewInfo | null {
-  const { pages, maxPages, fontPx, normalPx, fit, fits, heightPx } = data;
-  const positive = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value) && value > 0;
-  if (!positive(pages) || !positive(fontPx) || !positive(normalPx) || !positive(heightPx) || typeof fits !== 'boolean') return null;
-  if (maxPages !== null && !positive(maxPages)) return null;
-  return { pages, maxPages: maxPages as number | null, fontPx, normalPx, fit: fit === 'none' ? 'none' : 'shrink-to-pages', fits, heightPx };
+// How far the text was shrunk, as a percentage (null when it wasn't)
+export function shrunkTo(info: PrintPreviewInfo): number | null {
+  const percent = Math.round(info.scale * 100);
+  return percent < 100 ? percent : null;
 }
 
-// How far the text was shrunk, as a percentage (null when it wasn't)
-export function shrunkTo(info: PreviewInfo): number | null {
-  const percent = Math.round((info.fontPx / info.normalPx) * 100);
-  return info.fontPx < info.normalPx - 0.05 && percent < 100 ? percent : null;
+// The part of a page that was pointed at: of the marks the point is inside, the smallest one, and the
+// one drawn last if two are the same size
+export function markAt(marks: PrintPreviewMark[], page: number, x: number, y: number): PrintPreviewMark | null {
+  let found: PrintPreviewMark | null = null;
+  for (const mark of marks) {
+    if (mark.page !== page || x < mark.x || x > mark.x + mark.width || y < mark.y || y > mark.y + mark.height) continue;
+    if (!found || mark.width * mark.height <= found.width * found.height) found = mark;
+  }
+  return found;
 }
 
 const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? '' : 's'}`;
@@ -54,20 +40,15 @@ type Props = {
   onPick?: (pick: string) => void;
 };
 
-// The menu as the design draws it, from the same code that draws the print view. It follows the
-// design as it is edited, and keeps showing the last drawing that worked if a newer one can't be made.
+// The menu as the design draws it: a picture of each page of the PDF the print view makes, drawn by
+// the same code. It follows the design as it is edited, and keeps showing the last drawing that worked
+// if a newer one can't be made. Clicking a part of a page picks the controls that change it.
 export function DesignPreview({ menuId, design, onPick }: Props) {
-  const [html, setHtml] = useState<string | null>(null);
+  const [preview, setPreview] = useState<PrintPreview | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [updating, setUpdating] = useState(false);
-  const [width, setWidth] = useState(0);
-  const [info, setInfo] = useState<PreviewInfo | null>(null);
-  const holder = useRef<HTMLDivElement>(null);
-  const frame = useRef<HTMLIFrameElement>(null);
-  const frameLoaded = useRef(false);
+  const [hover, setHover] = useState<PrintPreviewMark | null>(null);
   const drawn = useRef(false);
-  const picked = useRef(onPick);
-  picked.current = onPick;
 
   const designKey = JSON.stringify(design);
 
@@ -78,9 +59,9 @@ export function DesignPreview({ menuId, design, onPick }: Props) {
     const timer = window.setTimeout(async () => {
       setUpdating(true);
       try {
-        const page = await api.previewPrintDesign(menuId, JSON.parse(designKey) as PrintDesign, controller.signal);
+        const result = await api.previewPrintDesign(menuId, JSON.parse(designKey) as PrintDesign, controller.signal);
         drawn.current = true;
-        setHtml(page);
+        setPreview(result);
         setProblem(null);
       } catch (e) {
         if (controller.signal.aborted) return;
@@ -94,59 +75,33 @@ export function DesignPreview({ menuId, design, onPick }: Props) {
     };
   }, [menuId, designKey]);
 
-  // Hand the page to the frame, once it is there to take it
-  const send = (page: string | null) => {
-    if (page !== null && frameLoaded.current) frame.current?.contentWindow?.postMessage({ type: 'toe-preview', html: page }, '*');
+  // Where on a page, as fractions of it, a mouse event was
+  const pointOf = (event: React.MouseEvent<HTMLDivElement>) => {
+    const box = event.currentTarget.getBoundingClientRect();
+    if (box.width === 0 || box.height === 0) return null;
+    return { x: (event.clientX - box.left) / box.width, y: (event.clientY - box.top) / box.height };
   };
-  useEffect(() => send(html), [html]);
+  const markUnder = (event: React.MouseEvent<HTMLDivElement>, page: number) => {
+    const point = pointOf(event);
+    return point && preview ? markAt(preview.marks, page, point.x, point.y) : null;
+  };
 
-  // What the page says back: how it came out, and what was clicked. Only from the frame itself.
-  useEffect(() => {
-    const onMessage = (event: MessageEvent) => {
-      if (!frame.current || event.source !== frame.current.contentWindow) return;
-      const data = event.data as Record<string, unknown> | null;
-      if (!data || typeof data !== 'object') return;
-      if (data.type === 'toe-preview-info') {
-        const next = readInfo(data);
-        if (next) setInfo(next);
-      } else if (data.type === 'toe-preview-pick' && typeof data.pick === 'string') {
-        picked.current?.(data.pick);
-      }
-    };
-    window.addEventListener('message', onMessage);
-    return () => window.removeEventListener('message', onMessage);
-  }, []);
-
-  // Scale the page to the room there is
-  useEffect(() => {
-    const element = holder.current;
-    if (!element) return;
-    setWidth(element.getBoundingClientRect().width);
-    if (typeof ResizeObserver === 'undefined') return;
-    const observer = new ResizeObserver(([entry]) => setWidth(entry.contentRect.width));
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, []);
-
-  const page = PAGE_PX[design.page.size];
-  // All of the pages, once the page has said how many there are (until then, as many as it may have)
-  const frameHeight = info?.heightPx ?? page.height * Math.max(1, design.page.maxPages ?? 2);
-  const scale = width > 0 ? width / page.width : 1;
+  const info = preview?.info ?? null;
   const shrunk = info ? shrunkTo(info) : null;
 
   return (
-    <div className="design-preview">
+    <div className="design-preview" role="group" aria-label="Print menu preview">
       <div className="design-preview-status">
         {problem ? (
           <div className="preview-problem" role="alert">
             <strong>The preview couldn't update.</strong> {problem}
-            {html !== null && ' Showing the last version that worked.'}
+            {preview !== null && ' Showing the last version that worked.'}
           </div>
         ) : (
-          <span className="muted-sm" role="status">{updating || html === null ? 'Updating preview…' : 'Preview is up to date'}</span>
+          <span className="muted-sm" role="status">{updating || preview === null ? 'Updating preview…' : 'Preview is up to date'}</span>
         )}
         {info && (
-          <span className="muted-sm design-preview-readout" title="The dotted lines show the margins. They are only a guide and are not printed.">
+          <span className="muted-sm design-preview-readout">
             {plural(info.pages, 'page')}
             {shrunk !== null && ` · text shrunk to ${shrunk}%`}
           </span>
@@ -159,26 +114,40 @@ export function DesignPreview({ menuId, design, onPick }: Props) {
             : `At these sizes the menu runs to ${plural(info.pages, 'page')}, and ${info.maxPages} ${info.maxPages === 1 ? 'is' : 'are'} allowed. Allow more pages, make the text smaller, or choose Shrink to fit.`}
         </div>
       )}
-      <div ref={holder} className="design-preview-holder" style={{ height: frameHeight * scale }}>
-        <iframe
-          ref={frame}
-          className="design-preview-frame"
-          title="Print menu preview"
-          src={FRAME_URL}
-          // Scripts so the menu can fit itself to its pages; nothing else (no access to this app)
-          sandbox="allow-scripts"
-          width={page.width}
-          height={frameHeight}
-          style={{ transform: `scale(${scale})` }}
-          onLoad={() => {
-            // Writing a page into the frame loads it again, so only the first time is the frame
-            // arriving; sending again here would write the page again, without end
-            if (frameLoaded.current) return;
-            frameLoaded.current = true;
-            send(html);
-          }}
-        />
-      </div>
+      {preview && (
+        <div className="print-pages">
+          {preview.pages.map((picture, index) => {
+            const page = index + 1;
+            return (
+              <div
+                key={index}
+                className="print-page"
+                data-testid="print-page"
+                style={hover && hover.page === page ? { cursor: 'pointer' } : undefined}
+                onClick={(event) => {
+                  const mark = markUnder(event, page);
+                  if (mark) onPick?.(mark.pick);
+                }}
+                onMouseMove={(event) => {
+                  const mark = markUnder(event, page);
+                  setHover((current) => (current === mark ? current : mark));
+                }}
+                onMouseLeave={() => setHover(null)}
+              >
+                <img src={picture} alt={`Print menu, page ${page} of ${preview.pages.length}`} draggable={false} />
+                {hover && hover.page === page && hover.pick !== 'page' && (
+                  <div
+                    className="print-page-hover"
+                    data-testid="print-page-hover"
+                    aria-hidden="true"
+                    style={{ left: `${hover.x * 100}%`, top: `${hover.y * 100}%`, width: `${hover.width * 100}%`, height: `${hover.height * 100}%` }}
+                  />
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

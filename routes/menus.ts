@@ -8,12 +8,18 @@ import { defaultBoardDesign, parseBoardDesign } from '../models/boardDesign';
 import { byOrder, subMenuShownOn } from './viewHelpers';
 import { defaultPrintDesign, parsePrintDesign } from '../models/menuDesign';
 import { buildPrintModel } from '../print/model';
-import { renderPrintMenu } from '../print/render';
+import { renderPrintPdf } from '../print/pdf';
+
+// The name the print menu PDF is saved under: the menu's name, plain letters and digits only
+function pdfFileName(menu: Menu): string {
+  const name = (menu.displayName ?? menu.internalName ?? '').normalize('NFKD').replace(/[^A-Za-z0-9]+/g, '-').replace(/^-+|-+$/g, '').toLowerCase();
+  return `${name || 'menu'}.pdf`;
+}
 
 // The public, read-only menu formats (no login): the raw menu as JSON, the nested JSON the Wix
-// widget polls (?format=widget), the printable HTML menu (?format=print) and the menu board images
-// (?format=digital: a ZIP of one PNG per page, or a single PNG with &page=N). All editing goes
-// through the admin JSON API in api.ts.
+// widget polls (?format=widget), the printable menu as a PDF (?format=print, shown in the browser's own PDF
+// viewer) and the menu board images (?format=digital: a ZIP of one PNG per page, or a single PNG with
+// &page=N). All editing goes through the admin JSON API in api.ts.
 //
 // Inactive menu items (see MenuItem.active) are left out of all of these, and a section with no
 // active items is skipped entirely.
@@ -142,7 +148,11 @@ export class MenusRoutes extends Routes {
           }
         }
         const model = await buildPrintModel(this.dataProvider, result);
-        res.type('html').send(renderPrintMenu(model, design));
+        const { pdf } = await renderPrintPdf(model, design);
+        // Inline, so the browser's PDF viewer opens it (with its own print and download buttons)
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `inline; filename="${pdfFileName(result)}"`);
+        res.send(pdf);
         return
       }
       
