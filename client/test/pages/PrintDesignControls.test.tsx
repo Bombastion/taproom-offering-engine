@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { json, mockApi, renderApp } from '../utils';
-import { containers, defaultDesignState, designFonts, menu, previewPage, printDesign } from '../fixtures';
+import { containers, defaultDesignState, designFonts, menu, previewResult, printDesign } from '../fixtures';
 import { PrintDesign, setIn } from '../../src/design';
 
 type Mock = ReturnType<typeof mockApi>;
@@ -13,7 +13,7 @@ function designer(design: PrintDesign = printDesign) {
     'GET /api/design/fonts': json(designFonts),
     'GET /api/containers': json(containers),
     'GET /api/menus/m1/design/print': json({ ...defaultDesignState, design }),
-    'POST /api/menus/m1/design/print/preview': { text: previewPage },
+    'POST /api/menus/m1/design/print/preview': json(previewResult),
   });
 }
 
@@ -23,7 +23,7 @@ const lastDesign = (server: Mock) => (previews(server).at(-1)!.body as { design:
 async function open(group?: string, design?: PrintDesign) {
   const server = designer(design);
   const view = renderApp('/menus/m1/design/print');
-  await screen.findByTitle('Print menu preview');
+  await screen.findByRole('group', { name: 'Print menu preview' });
   if (group) await view.user.click(screen.getByRole('button', { name: group }));
   return { server, ...view };
 }

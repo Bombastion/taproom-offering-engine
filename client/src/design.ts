@@ -253,12 +253,23 @@ export type FontInfo = {
   italic: boolean;
 };
 
-// How big a page is on screen, in CSS pixels at 96 per inch (the same sizes the server's print page uses)
-export const PAGE_PX: Record<PageSize, { width: number; height: number }> = {
-  letter: { width: 816, height: 1056 },
-  legal: { width: 816, height: 1344 },
-  a4: { width: 794, height: 1123 },
+// How the menu came out in the PDF (see print/pdf.ts on the server)
+export type PrintPreviewInfo = {
+  pages: number;
+  maxPages: number | null;
+  fit: 'shrink-to-pages' | 'none';
+  // Whether the menu is within its page limit (always true when there is no limit)
+  fits: boolean;
+  // How much the text was shrunk to fit: 1 is full size
+  scale: number;
 };
+
+// A part of the menu on a page, as fractions of the page. `pick` names the controls that change it:
+// 'page', 'header', 'headings', 'rows', 'footer' or 'column:<ID>'.
+export type PrintPreviewMark = { page: number; pick: string; x: number; y: number; width: number; height: number };
+
+// What the server answers a preview with: a PNG data URL for each page
+export type PrintPreview = { pages: string[]; info: PrintPreviewInfo; marks: PrintPreviewMark[] };
 
 export const WEIGHT_NAMES: Record<number, string> = {
   100: 'Thin',

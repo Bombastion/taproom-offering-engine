@@ -18,7 +18,7 @@ describe('MenuPage', () => {
     expect(drafts).toHaveTextContent('Hazy Sequence, Pils');
     expect(screen.getByRole('link', { name: /Empty/ })).toHaveTextContent('Empty — tap to add items');
     expect(screen.getByText('3 sections')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Print view' })).toHaveAttribute('href', '/menus/m1?format=print');
+    expect(screen.getByRole('link', { name: 'Print menu (PDF)' })).toHaveAttribute('href', '/menus/m1?format=print');
     expect(screen.getByRole('link', { name: 'Menu board images' })).toHaveAttribute('href', '/menus/m1?format=digital');
     expect(screen.getByRole('navigation', { name: 'Breadcrumb' })).toHaveTextContent('Menus');
   });
@@ -66,7 +66,7 @@ describe('MenuPage', () => {
     await screen.findByRole('heading', { name: 'Currently On Tap' });
     const names = (title: string) => [...screen.getByRole('region', { name: title }).querySelectorAll('.chip')].map((el) => el.textContent);
     expect(names('Menu management')).toEqual(['Rename', 'Reorder']);
-    expect(names('Print menu')).toEqual(['Design print menu', 'Print view']);
+    expect(names('Print menu')).toEqual(['Design print menu', 'Print menu (PDF)']);
     expect(names('Digital menu')).toEqual(['Design menu board', 'Menu board images']);
   });
 

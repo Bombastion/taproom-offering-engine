@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { api, ApiError, errorMessage, formatPrice, plural } from '../src/api';
 import { getSession, setSignedIn } from '../src/auth';
 import { ADMIN, json, mockApi, status } from './utils';
+import { previewResult } from './fixtures';
 
 describe('requests', () => {
   it('asks for JSON and lets the browser send the session cookie, with no credentials of its own', async () => {
@@ -68,10 +69,9 @@ describe('print designs', () => {
     expect(server.calls('PUT', '/api/menus/m1/design/print')[0].body).toEqual({ design });
   });
 
-  it('gets the preview as text, with the design in the body', async () => {
-    const server = mockApi({ 'POST /api/menus/m1/design/print/preview': { text: '<html>page</html>' } });
-    await expect(api.previewPrintDesign('m1', design)).resolves.toBe('<html>page</html>');
-    expect(server.requests[0].headers.accept).toBe('text/html');
+  it('gets the preview as pictures of the pages, with the design in the body', async () => {
+    const server = mockApi({ 'POST /api/menus/m1/design/print/preview': json(previewResult) });
+    await expect(api.previewPrintDesign('m1', design)).resolves.toEqual(previewResult);
     expect(server.requests[0].body).toEqual({ design });
   });
 

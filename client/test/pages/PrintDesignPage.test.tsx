@@ -1,18 +1,18 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { json, mockApi, renderApp, status } from '../utils';
-import { defaultDesignState, designFonts, menu, previewPage, printDesign, savedDesignState } from '../fixtures';
+import { defaultDesignState, designFonts, menu, previewResult, printDesign, savedDesignState } from '../fixtures';
 import { setIn } from '../../src/design';
 
 type Mock = ReturnType<typeof mockApi>;
 
-// The server as the designer sees it: a menu, the fonts, the stored design and a preview page
+// The server as the designer sees it: a menu, the fonts, the stored design and a preview
 function designer(overrides: Record<string, Parameters<typeof mockApi>[0][string]> = {}) {
   return mockApi({
     'GET /api/menus/m1': json(menu),
     'GET /api/design/fonts': json(designFonts),
     'GET /api/menus/m1/design/print': json(defaultDesignState),
-    'POST /api/menus/m1/design/print/preview': { text: previewPage },
+    'POST /api/menus/m1/design/print/preview': json(previewResult),
     ...overrides,
   });
 }
@@ -23,7 +23,7 @@ const lastPreviewDesign = (server: Mock) => (previews(server).at(-1)!.body as { 
 async function open() {
   const view = renderApp('/menus/m1/design/print');
   // The heading is there at once; the controls and preview come with the design
-  await screen.findByTitle('Print menu preview');
+  await screen.findByRole('group', { name: 'Print menu preview' });
   return view;
 }
 
@@ -53,30 +53,15 @@ describe('PrintDesignPage', () => {
     expect(await screen.findByRole('link', { name: 'Design print menu' })).toHaveAttribute('href', '/menus/m1/design/print');
   });
 
-  it('draws the preview in the sandboxed preview page, handing it the menu once it has loaded', async () => {
+  it('draws the preview as a picture of each page of the PDF', async () => {
     const server = designer();
     await open();
-    const frame = screen.getByTitle('Print menu preview') as HTMLIFrameElement;
-    expect(frame).toHaveAttribute('sandbox', 'allow-scripts');
-    expect(frame.getAttribute('src')).toMatch(/preview-frame\.html$/);
-
     await waitFor(() => expect(previews(server)).toHaveLength(1));
     expect(previews(server)[0].body).toEqual({ design: printDesign });
-
-    const post = vi.spyOn(frame.contentWindow!, 'postMessage');
-    fireEvent.load(frame);
-    await waitFor(() => expect(post).toHaveBeenCalledWith({ type: 'toe-preview', html: previewPage }, '*'));
+    const pages = await screen.findAllByRole('img', { name: /^Print menu, page \d of 2$/ });
+    expect(pages).toHaveLength(2);
+    expect(pages[0]).toHaveAttribute('src', previewResult.pages[0]);
     expect(await screen.findByText('Preview is up to date')).toBeInTheDocument();
-  });
-
-  it('hands the menu over when it arrives after the preview page has loaded, too', async () => {
-    designer();
-    await open();
-    const frame = screen.getByTitle('Print menu preview') as HTMLIFrameElement;
-    const post = vi.spyOn(frame.contentWindow!, 'postMessage');
-    fireEvent.load(frame);
-    expect(post).not.toHaveBeenCalled();
-    await waitFor(() => expect(post).toHaveBeenCalledWith({ type: 'toe-preview', html: previewPage }, '*'));
   });
 
   it('asks for a new preview, after a pause, when the design changes, and saves nothing', async () => {
@@ -278,7 +263,7 @@ describe('PrintDesignPage', () => {
     it('keeps showing the last preview that worked', async () => {
       let calls = 0;
       const server = designer({
-        'POST /api/menus/m1/design/print/preview': () => (++calls === 1 ? { text: previewPage } : { status: 500, text: 'boom' }),
+        'POST /api/menus/m1/design/print/preview': () => (++calls === 1 ? json(previewResult) : { status: 500, text: 'boom' }),
       });
       const { user } = await open();
       await screen.findByText('Preview is up to date');
@@ -287,13 +272,13 @@ describe('PrintDesignPage', () => {
       expect(alert).toHaveTextContent('Something went wrong on the server');
       expect(alert).toHaveTextContent('Showing the last version that worked.');
       expect(previews(server)).toHaveLength(2);
-      expect(screen.getByTitle('Print menu preview')).toBeInTheDocument();
+      expect(screen.getByRole('group', { name: 'Print menu preview' })).toBeInTheDocument();
     });
 
     it('recovers when the next design is fine', async () => {
       let calls = 0;
       designer({
-        'POST /api/menus/m1/design/print/preview': () => (++calls === 2 ? { status: 400, text: 'No' } : { text: previewPage }),
+        'POST /api/menus/m1/design/print/preview': () => (++calls === 2 ? { status: 400, text: 'No' } : json(previewResult)),
       });
       const { user } = await open();
       await screen.findByText('Preview is up to date');
@@ -352,7 +337,7 @@ describe('PrintDesignPage', () => {
   it('links to the saved print view', async () => {
     designer();
     await open();
-    expect(screen.getByRole('link', { name: 'Saved print view' })).toHaveAttribute('href', '/menus/m1?format=print');
+    expect(screen.getByRole('link', { name: 'Saved PDF' })).toHaveAttribute('href', '/menus/m1?format=print');
   });
 
   it('shows an error for a menu that does not exist', async () => {

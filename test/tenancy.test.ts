@@ -8,6 +8,7 @@ import { ApiRoutes } from '../routes/api';
 import { LocalDataProvider } from '../storage/providers';
 import { User } from '../models/users';
 import { addUser, Fixture, memoryProvider, seed, sessionCookieFor, TINY_PNG } from './helpers';
+import { getPdf, plainText } from './pdf';
 
 /*
 Who can see and change whose data. Two users each have a full menu (the same fixture, so the same
@@ -180,12 +181,12 @@ describe("someone else's data", () => {
 describe('menu designs', () => {
   it("are not shared: each user's menu is drawn with that user's own design", async () => {
     await storage.forOwner(bob.id).setMenuDesign(b.menu.id!, 'print', { version: 1, footer: { show: true, text: 'Bob only' } });
-    const alicePage = await request(app).get(`/menus/${a.menu.id}?format=print`);
-    const bobPage = await request(app).get(`/menus/${b.menu.id}?format=print`);
-    expect(alicePage.text).toContain('Alice only');
-    expect(alicePage.text).not.toContain('Bob only');
-    expect(bobPage.text).toContain('Bob only');
-    expect(bobPage.text).not.toContain('Alice only');
+    const alicePage = plainText((await getPdf(app, `/menus/${a.menu.id}?format=print`)).pdf);
+    const bobPage = plainText((await getPdf(app, `/menus/${b.menu.id}?format=print`)).pdf);
+    expect(alicePage).toContain('Alice only');
+    expect(alicePage).not.toContain('Bob only');
+    expect(bobPage).toContain('Bob only');
+    expect(bobPage).not.toContain('Alice only');
   });
 
   it("show a user their own, and not the other user's, through the API", async () => {

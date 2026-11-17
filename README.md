@@ -314,8 +314,8 @@ everywhere. Replace `menu.yourbrewery.com` with your address (`localhost` on you
   `https://menu.yourbrewery.com/menus/<menuId>?format=digital` gives you all of them in a ZIP, and
   adding `&page=1` (or 2, 3 and so on) gives a single picture to put on a screen or in a slideshow. On a
   menu's screen in the admin app, "Menu board images" does the same.
-- **On paper.** Open `https://menu.yourbrewery.com/menus/<menuId>?format=print` (or "Print view" on the
-  menu's screen) and print it from your browser.
+- **On paper.** Open `https://menu.yourbrewery.com/menus/<menuId>?format=print` (or "Print menu (PDF)" on the
+  menu's screen). It is a PDF, so it prints the same from any browser; your browser's own PDF viewer shows it.
 
 Each section can be left off any of these (on the section's screen), for example a "Non-Alcoholic Beers"
 section that only goes on the TV. The [technical reference](#public-menu-urls) lists every address.
@@ -498,7 +498,7 @@ Menu IDs are visible in the admin app's URLs (`/admin/menus/<menuId>`).
 | --- | ------- |
 | `/menus/<menuId>` or `?format=json` | The menu as JSON |
 | `/menus/<menuId>?format=widget` | Nested JSON (sections and items, with no pour sizes or prices) for the Wix widget |
-| `/menus/<menuId>?format=print` | Printable HTML menu |
+| `/menus/<menuId>?format=print` | Printable menu as a PDF (shown in the browser's PDF viewer) |
 | `/menus/<menuId>?format=digital` | Menu board for the TV: a ZIP of PNG images, one per page (1080×1920) |
 | `/menus/<menuId>?format=digital&page=<n>` | Just page `n` (starting at 1) of the menu board, as a PNG |
 
@@ -518,15 +518,20 @@ leaves out. A menu with no saved design looks like the default. The designer sav
 changing the defaults later doesn't change a menu that has been saved. Fonts come from a fixed list the
 server hosts itself (`models/fonts.ts`, files and licences in `public/fonts`).
 
-- **Print** (`models/menuDesign.ts`, drawn by `print/render.ts` as an HTML page): fonts, sizes, colors,
-  which fields appear in which columns, page size and margins, a footer. The default is the Modern preset.
+- **Print** (`models/menuDesign.ts`, drawn by `print/pdf.ts` with pdfkit as a PDF, so it looks the same
+  in every browser and on every printer): fonts, sizes, colors, which fields appear in which columns,
+  page size and margins, a footer. The default is the Modern preset. Items are never split across pages,
+  a section's heading stays with its first item, and when the design limits the pages the text is shrunk
+  to fit. Fonts are the static regular and bold files in `public/fonts/board` (so only weights 400 and 700,
+  and a slanted version where the font has one); the "Standard" serif and sans-serif fonts are the PDF
+  viewer's own Times and Helvetica. Only PNG and JPEG pictures are drawn.
 - **Board** (`models/boardDesign.ts`, drawn by `board/render.ts` as a PDF that is turned into one PNG per
   screenful): background and safe margin, the logo and an optional title at the top, section bars, and
   item rows made of a picture and lines of text built from the item's fields. The default is the Bold
   preset (big condensed capitals on deep blue with red bars); Dark and Light are the other presets. Every size is in pixels of the 1080×1920 picture,
   and the board shows no prices. pdfkit can't use the web fonts, so the board draws with static
   regular/bold files in `public/fonts/board` (and `FiraSans-Regular.ttf`); a font is offered on the
-  board only if it has them (`boardFiles` in `models/fonts.ts`).
+  board only if it has them (`files` in `models/fonts.ts`).
 
 The admin API (all under `/api`, signed in), where `<view>` is `print` or `board`:
 
@@ -536,7 +541,7 @@ The admin API (all under `/api`, signed in), where `<view>` is `print` or `board
 | `GET /menus/<menuId>/design/<view>` | The menu's design, or the default (`isDefault: true`) |
 | `PUT /menus/<menuId>/design/<view>` with `{ "design": {...} }` | Validates and saves it (400 with `issues`, one per bad field, if not) |
 | `DELETE /menus/<menuId>/design/<view>` | Goes back to the default |
-| `POST /menus/<menuId>/design/<view>/preview` with `{ "design": {...} }` | Draws the view with that design, without saving: the print menu as HTML, the board as `{ "pages": [PNG data URLs] }` at half size |
+| `POST /menus/<menuId>/design/<view>/preview` with `{ "design": {...} }` | Draws the view with that design, without saving: each page of the print menu PDF as a PNG (`{ "pages": [PNG data URLs], "info": {...}, "marks": [...] }`, where `marks` say where the parts of the menu are, so a click can pick its controls), the board as `{ "pages": [PNG data URLs] }` at half size |
 
 These are public and need no login. The menu board and print formats are rate limited (10 requests per minute per IP).
 The admin API under `/api` always requires a signed-in user.

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
 import { json, mockApi, renderApp, status } from '../utils';
-import { containers, defaultDesignState, designFonts, menu, previewPage, printDesign } from '../fixtures';
+import { containers, defaultDesignState, designFonts, menu, previewResult, printDesign } from '../fixtures';
 import { Column, FieldsColumn, PricesColumn, PrintDesign, setIn, ThumbnailColumn } from '../../src/design';
 
 type Mock = ReturnType<typeof mockApi>;
@@ -17,7 +17,7 @@ function designer(design: PrintDesign, extra: Record<string, Parameters<typeof m
     'GET /api/design/fonts': json(designFonts),
     'GET /api/containers': json(containers),
     'GET /api/menus/m1/design/print': json({ ...defaultDesignState, design }),
-    'POST /api/menus/m1/design/print/preview': { text: previewPage },
+    'POST /api/menus/m1/design/print/preview': json(previewResult),
     ...extra,
   });
 }
@@ -32,7 +32,7 @@ const lastPrices = (server: Mock) => lastColumns(server)[1] as PricesColumn;
 async function open(design: PrintDesign = printDesign, group = 'Columns', extra?: Record<string, Parameters<typeof mockApi>[0][string]>) {
   const server = designer(design, extra);
   const view = renderApp('/menus/m1/design/print');
-  await screen.findByTitle('Print menu preview');
+  await screen.findByRole('group', { name: 'Print menu preview' });
   await view.user.click(screen.getByRole('button', { name: group }));
   return { server, ...view };
 }

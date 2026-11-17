@@ -76,7 +76,7 @@ export function MenuPage() {
                   <DesignIcon />Design print menu
                 </Link>
                 <a className="chip" href={`/menus/${menuId}?format=print`} target="_blank" rel="noopener">
-                  <PrintIcon />Print view
+                  <PrintIcon />Print menu (PDF)
                 </a>
               </ChipSection>
               <ChipSection title="Digital menu">

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import fs from 'fs';
 import path from 'path';
 import { defaultPrintDesign, designFonts, DESIGN_VIEWS, isDesignView, MAX_DESIGN_BYTES, parsePrintDesign, PrintDesign, printDesignPresets } from '../../models/menuDesign';
-import { describeFonts, FONTS, fontFaceCss, fontStack, getFont } from '../../models/fonts';
+import { describeFonts, FONTS, getFont } from '../../models/fonts';
 
 const repoRoot = path.resolve(import.meta.dirname, '../..');
 
@@ -216,39 +216,22 @@ describe('the font catalog', () => {
     }
   });
 
-  it('gives each font a stack ending in a generic family, and system fonts no files', () => {
-    expect(fontStack('roboto')).toBe("'Roboto Variable', sans-serif");
-    expect(fontStack('system-serif')).toBe('serif');
-    expect(() => fontStack('nope')).toThrow();
-    expect(fontFaceCss(['system-serif', 'system-sans'])).toBe('');
-  });
-
-  it('writes @font-face rules only for the fonts asked for, once each', () => {
-    const css = fontFaceCss(['roboto', 'roboto', 'bebas-neue']);
-    expect(css.match(/@font-face/g)).toHaveLength(3); // roboto normal + italic, bebas
-    expect(css).toContain("font-family:'Roboto Variable'");
-    expect(css).toContain('font-weight:100 900');
-    expect(css).toContain('src:url(/fonts/bebas-neue-latin-400-normal.woff2) format(\'woff2\')');
-    expect(css).not.toContain('Fira Sans');
-  });
-
   it('describes the fonts for the admin client without file names', () => {
     const fonts = describeFonts();
-    expect(fonts.find((font) => font.id === 'roboto')).toEqual({ id: 'roboto', label: 'Roboto', category: 'sans', weights: [100, 200, 300, 400, 500, 600, 700, 800, 900], italic: true });
-    expect(JSON.stringify(fonts)).not.toContain('.woff2');
+    expect(fonts.find((font) => font.id === 'roboto')).toEqual({ id: 'roboto', label: 'Roboto', category: 'sans', weights: [400, 700], italic: true });
+    expect(JSON.stringify(fonts)).not.toContain('.woff');
   });
 
   it('lists only the weights a font really has, so none has to be faked', () => {
     const byId = Object.fromEntries(describeFonts().map((font) => [font.id, font]));
-    // Separate files at 400, 500 and 700
-    expect(byId['fira-sans'].weights).toEqual([400, 500, 700]);
+    // The PDF embeds a regular and a bold file of each font
+    expect(byId['fira-sans'].weights).toEqual([400, 700]);
+    expect(byId['oswald'].weights).toEqual([400, 700]);
+    expect(byId['lora']).toMatchObject({ weights: [400, 700], italic: true });
     // One file, one weight
     expect(byId['bebas-neue']).toMatchObject({ weights: [400], italic: false });
     expect(byId['pacifico'].weights).toEqual([400]);
-    // A variable font stops at the end of its range
-    expect(byId['oswald'].weights).toEqual([200, 300, 400, 500, 600, 700]);
-    expect(byId['lora']).toMatchObject({ weights: [400, 500, 600, 700], italic: true });
-    // Browser fonts: regular and bold
+    // The standard PDF fonts: regular and bold, and a slanted version of each
     expect(byId['system-serif']).toMatchObject({ weights: [400, 700], italic: true });
   });
 

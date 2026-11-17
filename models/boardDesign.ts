@@ -17,7 +17,7 @@ A menu with no saved design is drawn with the default (the Bold preset, see defa
 export const BOARD_WIDTH = 1080;
 export const BOARD_HEIGHT = 1920;
 
-// The fonts a board can use are the ones with static files (see FontEntry.boardFiles)
+// The fonts a board can use are the ones with static files (see FontEntry.files)
 const boardFontId = z.string().refine(isBoardFontId, 'Not one of the fonts available on the board');
 
 export const boardTextStyleSchema = z.strictObject({
